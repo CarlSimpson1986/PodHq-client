@@ -106,16 +106,21 @@ export function BookingGrid({
             <span className="text-sm tabular-nums">{formatHour(slot)}</span>
 
             {isMine ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-accent">Your booking</span>
-                {inUnlockWindow && (
-                  <button
-                    onClick={unlock}
-                    disabled={unlocking}
-                    className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
-                  >
-                    {unlocking ? "Unlocking..." : "Unlock"}
-                  </button>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-accent">Your booking</span>
+                  {inUnlockWindow && (
+                    <button
+                      onClick={unlock}
+                      disabled={unlocking}
+                      className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+                    >
+                      {unlocking ? "Unlocking..." : "Unlock"}
+                    </button>
+                  )}
+                </div>
+                {inUnlockWindow && unlockMessage && (
+                  <p className="text-xs text-accent">{unlockMessage}</p>
                 )}
               </div>
             ) : isTaken ? (
@@ -134,7 +139,6 @@ export function BookingGrid({
           </div>
         );
       })}
-      {unlockMessage && <p className="mt-2 text-sm text-accent">{unlockMessage}</p>}
     </div>
   );
 }

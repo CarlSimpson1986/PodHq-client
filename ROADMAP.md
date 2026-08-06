@@ -30,7 +30,10 @@ Aylesbury Berryfields only — not multi-gym yet.
 
    **Known open items, not yet resolved:**
    - One unlock attempt failed with no log entry (this was *before* the try/catch fix above, so the real cause was never captured). Never reproduced since the pod was occupied both times we could have retried. Try again once clear — if it fails again, `pod_access_events` will now show the actual reason instead of nothing.
-   - Kisi's per-lock "unlock duration" (how long the door stays unlocked before re-locking, default 3s, configurable up to 30s in the Kisi dashboard under the door's Relays settings) was being changed to 10s — confirm it actually got set and saved.
+
+   **Resolved 2026-08-06: unlock duration is 15s, not the intended 10s.** Kisi's own activity log for a real test unlock (see below) showed "unlocked" at 4:33:04 PM and "was locked" (auto re-lock) at 4:33:19 PM — 15 seconds, not the 10s the Relays setting was supposedly changed to. Either that change didn't save or something else is overriding it — worth re-checking the Kisi dashboard's Relays setting directly rather than assuming it's still pending.
+
+   **Kisi key rotation verified live 2026-08-06** (see also the Security note below): after rotating `KISI_API_KEY`, ran a full real test through the actual UI — logged in as the pilot member (password reset via a one-off admin script, since it wasn't known), booked the then-current hour slot, clicked the real Unlock button, and cross-checked two independent sources: this app's `pod_access_events` (`success=true`, `kisi_response="200 OK"`, timestamped 16:33:04 local) and Kisi's own activity log pasted directly by the user (unlock at 4:33:04 PM, auto re-lock at 4:33:19 PM) — timestamps agree exactly. Confirms the rotated key works end-to-end, not just that it was pasted into the right place. Noted in passing: Kisi's log attributes the unlock to "Carl Simpson (admin@myfitpod.co.uk)" — the Kisi account that owns the API key — not the actual member who triggered it via the app; `pod_access_events` (`member_id`/`booking_id`) is the real source of truth for per-member attribution, Kisi's own log can't provide that.
 
 2. **Auth hardening** — login lockout + rate-limiting, reusing podHq's already-debugged patterns rather than re-discovering the same bugs (see podHq ROADMAP Stage 2's MFA/hydration/CSP history for what to watch for). **Mandatory MFA deliberately dropped** (decided 2026-08-06): GymFlow itself has no MFA for members, and requiring it on every gym visit would be real friction for a consumer app, unlike podHq's staff/financial-data context where it's justified. Accepted tradeoff: a compromised password alone is enough to book a slot and unlock the door — nothing else stands in the way — so lockout/rate-limiting (blocking brute-force/credential-stuffing, the more realistic threat than a targeted takeover) stays load-bearing here in MFA's absence, not optional.
 
@@ -67,8 +70,8 @@ actual key value anywhere (only the non-secret `kisi_place_id`/
 `kisi_lock_id` numeric IDs are committed, in `0009_pod_booking.sql`).
 Regardless of whether the original claim was accurate, the user rotated
 the key in the Kisi dashboard and updated `KISI_API_KEY` in `.env.local`
-as a precaution (2026-08-06) — not independently verified here, since
-`.env.local` is hard-blocked from ever being read (see both projects'
-`.claude/settings.json`). Worth a live unlock test next time the app is
-used, to confirm the new key actually works end-to-end and not just that
-it was pasted into the right place.
+as a precaution (2026-08-06). The rotated key's actual value was never
+read here (`.env.local` is hard-blocked, see both projects'
+`.claude/settings.json`), but its function was verified live the same
+day — see Stage 1's "Kisi key rotation verified live" note above. Fully
+closed.
