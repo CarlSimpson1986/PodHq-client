@@ -29,18 +29,13 @@ export default async function BookPage() {
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 p-4 pb-12">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">{member.gym}</h1>
-          <p className="text-sm text-muted-foreground">Hi {member.name}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-2xl font-semibold tabular-nums text-accent">{credits}</p>
-          <p className="text-xs text-muted-foreground">credits</p>
-        </div>
-      </header>
-
-      <BookingGrid gym={member.gym} memberId={member.id} initialBookings={todaysBookings} />
+      <BookingGrid
+        gym={member.gym}
+        memberName={member.name}
+        memberId={member.id}
+        initialCredits={credits}
+        initialBookings={todaysBookings}
+      />
     </main>
   );
 }

@@ -22,14 +22,19 @@ function formatHour(d: Date) {
 
 export function BookingGrid({
   gym,
+  memberName,
   memberId,
+  initialCredits,
   initialBookings,
 }: {
   gym: string;
+  memberName: string;
   memberId: number;
+  initialCredits: number;
   initialBookings: Booking[];
 }) {
   const [bookings, setBookings] = useState(initialBookings);
+  const [credits, setCredits] = useState(initialCredits);
   const [pendingSlot, setPendingSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -60,6 +65,7 @@ export function BookingGrid({
         ...prev,
         { id: body.bookingId, member_id: memberId, gym, slot_start: slot.toISOString(), status: "booked" },
       ]);
+      setCredits((prev) => prev - 1);
       setSuccess(`Booked ${formatHour(slot)} — 1 credit used.`);
       setTimeout(() => setSuccess(null), 4000);
     } catch {
@@ -88,6 +94,16 @@ export function BookingGrid({
 
   return (
     <div className="space-y-2">
+      <header className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">{gym}</h1>
+          <p className="text-sm text-muted-foreground">Hi {memberName}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-semibold tabular-nums text-accent">{credits}</p>
+          <p className="text-xs text-muted-foreground">credits</p>
+        </div>
+      </header>
       {error && <p className="text-sm text-danger">{error}</p>}
       {success && <p className="text-sm text-success">{success}</p>}
       {slots.map((slot) => {
