@@ -57,15 +57,18 @@ yet. One Kisi place, "Thomley," doesn't correspond to any of the 9 gym
 names — unresolved, possibly Oxford East under a different name, not
 verified.
 
-## Security note — disputed, unresolved
+## Security note — resolved 2026-08-06
 
 A prior session's note here claimed the Kisi API key was accidentally
-pasted into chat during this project's setup and recommended rotating it.
-The user disputes that this happened (2026-08-06) — no Claude session
-present for that conversation can verify it either way, and a search of
-this codebase found no trace of the actual key value anywhere (only the
-non-secret `kisi_place_id`/`kisi_lock_id` numeric IDs are committed, in
-`0009_pod_booking.sql`). Rotating the key costs little and this credential
-controls a physical door, so it's worth doing as a precaution regardless
-of how this note originated — but the claim itself should be treated as
-unconfirmed, not fact.
+pasted into chat during this project's setup. The user disputed that this
+happened, and no Claude session present for that conversation could
+verify it either way — a search of this codebase found no trace of the
+actual key value anywhere (only the non-secret `kisi_place_id`/
+`kisi_lock_id` numeric IDs are committed, in `0009_pod_booking.sql`).
+Regardless of whether the original claim was accurate, the user rotated
+the key in the Kisi dashboard and updated `KISI_API_KEY` in `.env.local`
+as a precaution (2026-08-06) — not independently verified here, since
+`.env.local` is hard-blocked from ever being read (see both projects'
+`.claude/settings.json`). Worth a live unlock test next time the app is
+used, to confirm the new key actually works end-to-end and not just that
+it was pasted into the right place.
