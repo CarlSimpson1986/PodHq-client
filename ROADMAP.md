@@ -43,15 +43,18 @@ Aylesbury Berryfields only — not multi-gym yet.
 
 3. **CSP** — own nonce setup, verified against this app's actual script/style needs rather than a blind copy of podHq's `proxy.ts` (podHq's CSP required real, non-obvious debugging work — see its ROADMAP Stage 2 hardening note for the failure mode to watch for: inline hydration scripts silently blocked with zero console warning).
 
+   **Done and live-verified 2026-08-07.** `src/proxy.ts` now generates a fresh nonce per request, threads it via the `x-nonce` header Next reads automatically, and sets a strict CSP on every response path (public, redirect, and authenticated). Simpler than podHq's: no Turnstile/captcha, and no client-side Supabase calls exist in this app (confirmed — no `createBrowserClient`/`NEXT_PUBLIC_SUPABASE*` anywhere), so `connect-src`/`frame-src` need no extra allowances beyond `'self'`. `next.config.ts` picked up the same static security headers (HSTS, X-Frame-Options, etc.) podHq already proved out, and `layout.tsx` got `export const dynamic = "force-dynamic"` so the nonce embedded in Next's inline hydration scripts always matches the one in that request's CSP header. Verified live in Chrome against the actual `/login` page, specifically checking for podHq's exact failure mode: all 11 inline hydration scripts carry the matching nonce, no CSP violations in the console, and the password field genuinely updates on keystroke (proof the `onChange` handler is live, not just server-rendered markup).
+
 4. **Stripe integration** — replaces manual credit grants with real payment-driven credit purchases.
 
-5. **Real member onboarding** — replaces the single hand-created pilot account with an actual signup/invite flow.
+5. **Real member onboarding** — replaces the single hand-created pilot account with an actual signup/invite flow, and adds a self-service password-reset flow (closes Stage 2's hard-lock recovery gap below).
 
 6. **Deploy to Vercel** — separate deployment from podHq; not yet configured.
 
 ## Deliberate pilot-scope simplifications still open (Stages 2-6 above close these)
 
 - Single pod, single gym — no multi-pod capacity logic exists. Out of scope even after Stages 2-6 (target is still Aylesbury-only, not multi-gym) — revisit only if the target scope changes.
+- No password-reset flow, so no self-service recovery from a Stage 2 hard lockout (10 failures since last success) — clearing one today means deleting the account's `login_failure` rows from `auth_events` directly in Supabase. Low risk at pilot scale (one member, one of us watching for it). Closed by Stage 5.
 
 ## Kisi ↔ gym-name mapping gotcha (see gym_kisi_mapping)
 
