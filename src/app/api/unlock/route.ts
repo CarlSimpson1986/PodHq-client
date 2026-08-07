@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberByAuthUserId } from "@/lib/data/member";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
 const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
@@ -14,6 +15,11 @@ export async function POST() {
 
   if (!user) {
     return NextResponse.json({ status: "error", message: "Not signed in." }, { status: 401 });
+  }
+
+  const rateLimit = await checkRateLimit(user.id, "/api/unlock");
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ status: "error", message: "Too many requests. Slow down." }, { status: 429 });
   }
 
   const kisiKey = process.env.KISI_API_KEY;

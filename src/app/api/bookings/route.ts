@@ -3,6 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { createBookingSchema } from "@/lib/validation/booking";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   const session = await createSessionClient();
@@ -12,6 +13,11 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ status: "error", message: "Not signed in." }, { status: 401 });
+  }
+
+  const rateLimit = await checkRateLimit(user.id, "/api/bookings");
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ status: "error", message: "Too many requests. Slow down." }, { status: 429 });
   }
 
   let body: unknown;
