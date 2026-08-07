@@ -9,12 +9,40 @@ function isPublicPath(pathname: string) {
   return PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+const isDev = process.env.NODE_ENV === "development";
+
+// Nonce-based CSP, same approach as podHq's proxy.ts (see that file for
+// the full 'unsafe-inline' vs nonce rationale: 'unsafe-inline' was the
+// only thing standing between a broken, unhydrated login page and a
+// working one there, because Next's own inline hydration scripts were
+// getting silently blocked with no console warning). Simpler than podHq's
+// here — no Turnstile/captcha widget, and this app makes no client-side
+// Supabase calls (CLAUDE.md: all Supabase access goes through API routes),
+// so there's no need for extra script-src/connect-src/frame-src allowances.
+function buildCsp(nonce: string) {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+}
+
 // Pilot-scope simplification vs. podHq's proxy.ts: no MFA, no lockout, no
-// forced-password-change gate, no CSP — a single throwaway test account,
-// not real member onboarding. Revisit before this handles real members.
+// forced-password-change gate — a single throwaway test account, not real
+// member onboarding. Revisit before this handles real members.
 // Named `proxy` (not `middleware`) per Next 16's renamed convention —
 // `middleware.ts` still works but is deprecated as of this version.
 export async function proxy(request: NextRequest) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  request.headers.set("x-nonce", nonce);
+
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.SUPABASE_URL;
@@ -51,18 +79,24 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = isPublicPath(pathname);
 
+  let response: NextResponse;
   if (!user) {
-    if (isPublic) return supabaseResponse;
-    return NextResponse.redirect(new URL("/login", request.url));
+    response = isPublic ? supabaseResponse : NextResponse.redirect(new URL("/login", request.url));
+  } else if (pathname.startsWith("/login")) {
+    response = NextResponse.redirect(new URL("/book", request.url));
+  } else {
+    response = supabaseResponse;
   }
 
-  if (pathname.startsWith("/login")) {
-    return NextResponse.redirect(new URL("/book", request.url));
-  }
-
-  return supabaseResponse;
+  response.headers.set("Content-Security-Policy", buildCsp(nonce));
+  return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    // Exclude static-asset extensions so an unauthenticated request for
+    // e.g. a PWA icon or manifest doesn't get 307'd to /login the way
+    // podHq's logo did before this same fix there (see its proxy.ts).
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|webp|avif|svg|ico|webmanifest)$).*)",
+  ],
 };
