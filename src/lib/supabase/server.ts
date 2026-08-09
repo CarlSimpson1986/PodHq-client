@@ -28,7 +28,9 @@ export async function createSessionClient() {
               ...options,
               httpOnly: true,
               secure: true,
-              sameSite: "strict",
+              // "lax", not "strict" — see proxy.ts for why (Stripe Checkout's
+              // cross-site return redirect needs the cookie present).
+              sameSite: "lax",
             });
           });
         } catch {

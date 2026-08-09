@@ -5,6 +5,10 @@ const SOFT_LOCK_WINDOW_MINUTES = 15;
 const SOFT_LOCK_THRESHOLD = 5;
 const HARD_LOCK_THRESHOLD = 10;
 
+const AUTH_ACTION_WINDOW_MINUTES = 15;
+const AUTH_ACTION_PER_EMAIL_LIMIT = 3;
+const AUTH_ACTION_PER_IP_LIMIT = 10;
+
 const LOGIN_IP_WINDOW_MINUTES = 15;
 const LOGIN_IP_LIMIT = 20;
 
@@ -14,11 +18,11 @@ export type LockoutState =
 
 /**
  * Same soft/hard lockout model as podHq's checkLoginLockout, minus the
- * MFA/magic-link variants this app doesn't have. No admin_lockout_reset
- * event here — this app has no admin UI, so a hard lock (10 failures since
- * last success) currently has no self-service recovery path; clearing one
- * means deleting the account's login_failure rows from auth_events
- * directly until Stage 5 (real onboarding) adds account recovery.
+ * MFA/magic-link variants this app doesn't have. Stage 5 closed the old
+ * hard-lock recovery gap: a completed self-service password reset now
+ * counts as a reset point for the failure count, same role podHq's
+ * admin_lockout_reset event plays there — the difference is this one's
+ * member-triggered, not admin-triggered, since this app has no admin UI.
  */
 export async function checkLoginLockout(email: string, ip?: string | null): Promise<LockoutState> {
   const admin = createAdminClient();
@@ -54,7 +58,7 @@ export async function checkLoginLockout(email: string, ip?: string | null): Prom
     .from("auth_events")
     .select("created_at")
     .eq("user_email", email)
-    .eq("event_type", "login_success")
+    .in("event_type", ["login_success", "password_reset_completed"])
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -77,4 +81,45 @@ export async function checkLoginLockout(email: string, ip?: string | null): Prom
   }
 
   return { locked: false };
+}
+
+/**
+ * Per-email and per-IP caps for signup/password-reset requests — these
+ * happen before any account/session exists, so the user_id-keyed
+ * rate_limits table (which FKs to auth.users) can't be used here. Same
+ * auth_events-counting shape as podHq's checkMagicLinkRateLimit.
+ */
+export async function checkAuthActionRateLimit(
+  eventType: "signup" | "password_reset_requested",
+  email: string,
+  ip: string | null
+): Promise<{ allowed: boolean }> {
+  const admin = createAdminClient();
+  const since = new Date(Date.now() - AUTH_ACTION_WINDOW_MINUTES * 60_000).toISOString();
+
+  const { count: emailCount } = await admin
+    .from("auth_events")
+    .select("*", { count: "exact", head: true })
+    .eq("user_email", email)
+    .eq("event_type", eventType)
+    .gte("created_at", since);
+
+  if ((emailCount ?? 0) >= AUTH_ACTION_PER_EMAIL_LIMIT) {
+    return { allowed: false };
+  }
+
+  if (ip) {
+    const { count: ipCount } = await admin
+      .from("auth_events")
+      .select("*", { count: "exact", head: true })
+      .eq("ip_address", ip)
+      .eq("event_type", eventType)
+      .gte("created_at", since);
+
+    if ((ipCount ?? 0) >= AUTH_ACTION_PER_IP_LIMIT) {
+      return { allowed: false };
+    }
+  }
+
+  return { allowed: true };
 }

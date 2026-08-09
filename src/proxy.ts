@@ -1,8 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
-const PUBLIC_API_PREFIXES = ["/api/auth/"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback"];
+// /api/webhooks/ is called by Stripe's servers, not a member's browser —
+// there's no session cookie to check, so the auth gate below must not
+// redirect it to /login (the route authenticates via Stripe's own
+// signature instead, see src/app/api/webhooks/stripe/route.ts).
+const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/webhooks/"];
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
@@ -65,7 +69,12 @@ export async function proxy(request: NextRequest) {
             ...options,
             httpOnly: true,
             secure: true,
-            sameSite: "strict",
+            // "lax", not "strict" — the Stripe Checkout success redirect
+            // (Stage 4) is a cross-site top-level GET navigation back into
+            // this app, and Strict cookies are withheld from exactly that
+            // request, which silently logged the member out on return.
+            // Lax still blocks cross-site POST/CSRF, just not this GET.
+            sameSite: "lax",
           })
         );
       },
@@ -82,7 +91,7 @@ export async function proxy(request: NextRequest) {
   let response: NextResponse;
   if (!user) {
     response = isPublic ? supabaseResponse : NextResponse.redirect(new URL("/login", request.url));
-  } else if (pathname.startsWith("/login")) {
+  } else if (pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/forgot-password")) {
     response = NextResponse.redirect(new URL("/book", request.url));
   } else {
     response = supabaseResponse;

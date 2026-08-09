@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
@@ -102,6 +103,9 @@ export function BookingGrid({
         <div className="text-right">
           <p className="text-2xl font-semibold tabular-nums text-accent">{credits}</p>
           <p className="text-xs text-muted-foreground">credits</p>
+          <Link href="/buy-credits" className="text-xs text-accent hover:underline">
+            Buy more
+          </Link>
         </div>
       </header>
       {error && <p className="text-sm text-danger">{error}</p>}
