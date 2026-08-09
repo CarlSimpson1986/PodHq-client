@@ -1,7 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type AuthEventType = "login_success" | "login_failure" | "account_locked";
+export type AuthEventType =
+  | "login_success"
+  | "login_failure"
+  | "account_locked"
+  | "signup"
+  | "password_reset_requested"
+  | "password_reset_completed";
 
 interface LogAuthEventInput {
   email: string;

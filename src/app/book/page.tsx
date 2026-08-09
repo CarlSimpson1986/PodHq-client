@@ -3,7 +3,11 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getCreditBalance, getTodaysBookings } from "@/lib/data/member";
 import { BookingGrid } from "@/components/booking-grid";
 
-export default async function BookPage() {
+export default async function BookPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ purchase?: string }>;
+}) {
   const session = await createSessionClient();
   const {
     data: { user },
@@ -12,6 +16,8 @@ export default async function BookPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const params = await searchParams;
 
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
@@ -29,6 +35,9 @@ export default async function BookPage() {
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 p-4 pb-12">
+      {params.purchase === "success" && (
+        <p className="mb-4 text-sm text-success">Payment received — credits added.</p>
+      )}
       <BookingGrid
         gym={member.gym}
         memberName={member.name}
