@@ -2,21 +2,25 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordInput } from "@/components/password-input";
 
-const inputClass =
-  "w-full rounded-md border border-card-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none";
 const buttonClass =
   "w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/auth/set-password", {
@@ -44,23 +48,21 @@ export default function ResetPasswordPage() {
         <h1 className="mb-1 text-lg font-semibold">Set a new password</h1>
         <p className="mb-6 text-sm text-muted-foreground">My Fit Pod — book your session.</p>
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="password" className="mb-1 block text-xs text-muted-foreground">
-              New password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              className={inputClass}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              At least 8 characters, with an uppercase letter, lowercase letter, and a number.
-            </p>
-          </div>
+          <PasswordInput
+            id="password"
+            label="New password"
+            autoComplete="new-password"
+            value={password}
+            onChange={setPassword}
+            hint="At least 8 characters, with an uppercase letter, lowercase letter, and a number."
+          />
+          <PasswordInput
+            id="confirmPassword"
+            label="Confirm new password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+          />
           {error && <p className="text-sm text-danger">{error}</p>}
           <button type="submit" disabled={loading} className={buttonClass}>
             {loading ? "Saving..." : "Save password"}

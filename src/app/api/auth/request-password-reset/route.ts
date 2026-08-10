@@ -35,8 +35,13 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createSessionClient();
   const origin = request.nextUrl.origin;
+  // type=recovery has to be embedded in redirectTo itself — Supabase only
+  // forwards `code` onto our redirect URL, not the `type` it used
+  // internally for its own /verify step, so without this the callback
+  // page can't tell a recovery link apart from a signup confirmation and
+  // sends the user straight to /book without ever changing their password.
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback`,
+    redirectTo: `${origin}/auth/callback?type=recovery`,
   });
 
   await logAuthEvent({

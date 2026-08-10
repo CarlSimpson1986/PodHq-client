@@ -50,9 +50,6 @@ export async function POST(request: NextRequest) {
   });
 
   if (error || !data.user) {
-    // TEMP debug logging (server-side only, never sent to the client) while
-    // diagnosing the Brevo SMTP setup — remove once signup is confirmed working.
-    console.error("[signup] DEBUG signUp failed", { message: error?.message, status: error?.status });
     return NextResponse.json({ status: "ok", message: GENERIC_MESSAGE });
   }
 

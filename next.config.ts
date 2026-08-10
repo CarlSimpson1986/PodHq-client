@@ -13,8 +13,10 @@ const securityHeaders = [
   { key: "X-XSS-Protection", value: "1; mode=block" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
+    // geolocation=(self), not (): the pod-unlock location gate (Stage 7)
+    // needs it for our own origin. camera/microphone stay disabled, unused.
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=()",
+    value: "camera=(), microphone=(), geolocation=(self)",
   },
 ];
 
