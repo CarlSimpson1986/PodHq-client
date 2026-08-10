@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { PasswordInput } from "@/components/password-input";
 
 const inputClass =
   "w-full rounded-md border border-card-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none";
@@ -77,23 +78,14 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            <div>
-              <label htmlFor="password" className="mb-1 block text-xs text-muted-foreground">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                className={inputClass}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                At least 8 characters, with an uppercase letter, lowercase letter, and a number.
-              </p>
-            </div>
+            <PasswordInput
+              id="password"
+              label="Password"
+              autoComplete="new-password"
+              value={password}
+              onChange={setPassword}
+              hint="At least 8 characters, with an uppercase letter, lowercase letter, and a number."
+            />
             {error && <p className="text-sm text-danger">{error}</p>}
             <button type="submit" disabled={loading} className={buttonClass}>
               {loading ? "Creating account..." : "Create account"}

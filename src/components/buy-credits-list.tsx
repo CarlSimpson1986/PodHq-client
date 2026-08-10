@@ -35,10 +35,11 @@ export function BuyCreditsList({ packages }: { packages: CreditPackage[] }) {
     <div className="space-y-2">
       {error && <p className="text-sm text-danger">{error}</p>}
       {packages.map((pkg) => (
-        <div key={pkg.id} className="card-glass flex items-center justify-between p-3">
+        <div key={pkg.id} className="card-glass flex items-center justify-between p-4">
           <div>
-            <p className="text-sm font-semibold">{pkg.label}</p>
-            <p className="text-xs text-muted-foreground">£{pkg.priceGBP.toFixed(2)}</p>
+            <p className="text-sm font-semibold">{pkg.name}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-accent">£{pkg.priceGBP.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground">{pkg.label}</p>
           </div>
           <button
             onClick={() => buy(pkg.id)}

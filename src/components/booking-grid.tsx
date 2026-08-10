@@ -80,7 +80,32 @@ export function BookingGrid({
     setUnlockMessage(null);
     setUnlocking(true);
     try {
-      const res = await fetch("/api/unlock", { method: "POST" });
+      // Matches GymFlow's own requirement for general door access — you
+      // must be at the gym, with location on, to unlock. Requested here
+      // (not skipped on failure) so the server sees a definite absence
+      // rather than us silently omitting it.
+      let position: GeolocationPosition | null = null;
+      try {
+        position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error("Geolocation not supported"));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+        });
+      } catch {
+        setUnlockMessage("Turn on location services to unlock the door.");
+        return;
+      }
+
+      const res = await fetch("/api/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }),
+      });
       const body = await res.json();
       setUnlockMessage(body.status === "ok" ? "Unlocked — door should open now." : body.message);
     } catch {
@@ -91,7 +116,16 @@ export function BookingGrid({
   }
 
   const now = Date.now();
-  const slots = hourSlots();
+  // Past slots that aren't the member's own booking are hidden rather than
+  // shown greyed-out — a flat 24-row list meant scrolling past 10+ dead
+  // "Past" rows every time to reach anything bookable, real friction on
+  // every single visit. A past slot that IS the member's own stays visible
+  // (still relevant briefly after a booking, e.g. mid-unlock-window).
+  const slots = hourSlots().filter((slot) => {
+    const isPast = slot.getTime() + 60 * 60 * 1000 < now;
+    if (!isPast) return true;
+    return bookings.some((b) => new Date(b.slot_start).getTime() === slot.getTime() && b.member_id === memberId);
+  });
 
   return (
     <div className="space-y-2">
@@ -114,15 +148,11 @@ export function BookingGrid({
         const existing = bookings.find((b) => new Date(b.slot_start).getTime() === slot.getTime());
         const isMine = existing?.member_id === memberId;
         const isTaken = !!existing && !isMine;
-        const isPast = slot.getTime() + 60 * 60 * 1000 < now;
         const inUnlockWindow =
           isMine && now >= slot.getTime() - WINDOW_BEFORE_MS && now <= slot.getTime() + WINDOW_AFTER_MS;
 
         return (
-          <div
-            key={slot.toISOString()}
-            className={`card-glass flex items-center justify-between p-3 ${isPast && !isMine ? "opacity-40" : ""}`}
-          >
+          <div key={slot.toISOString()} className="card-glass flex items-center justify-between p-3">
             <span className="text-sm tabular-nums">{formatHour(slot)}</span>
 
             {isMine ? (
@@ -145,8 +175,6 @@ export function BookingGrid({
               </div>
             ) : isTaken ? (
               <span className="text-xs text-muted-foreground">Booked</span>
-            ) : isPast ? (
-              <span className="text-xs text-muted-foreground">Past</span>
             ) : (
               <button
                 onClick={() => bookSlot(slot)}

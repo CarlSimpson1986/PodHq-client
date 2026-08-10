@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { PasswordInput } from "@/components/password-input";
 
 const inputClass =
   "w-full rounded-md border border-card-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none";
@@ -60,20 +61,13 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <div>
-            <label htmlFor="password" className="mb-1 block text-xs text-muted-foreground">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className={inputClass}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+          <PasswordInput
+            id="password"
+            label="Password"
+            autoComplete="current-password"
+            value={password}
+            onChange={setPassword}
+          />
           {error && <p className="text-sm text-danger">{error}</p>}
           <button type="submit" disabled={loading} className={buttonClass}>
             {loading ? "Signing in..." : "Sign in"}
