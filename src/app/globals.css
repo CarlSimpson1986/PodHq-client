@@ -12,6 +12,15 @@
   --danger: #e5484d;
   --warning: #d29922;
   --success: #3ba55d;
+  /* White content cards against the dark page chrome — a deliberate
+     black+white mix (2026-08-10), not a light-mode toggle: the page shell,
+     hero banners, and gold accent stay dark-themed throughout, only inner
+     content surfaces (forms, list rows) go white, matching GymFlow's own
+     white-card-on-dark-header layout. */
+  --card-light: #ffffff;
+  --card-light-border: rgba(10, 10, 11, 0.1);
+  --card-light-foreground: #0a0a0b;
+  --card-light-muted: #6b7280;
 }
 
 @theme inline {
@@ -26,6 +35,10 @@
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-success: var(--success);
+  --color-card-light: var(--card-light);
+  --color-card-light-border: var(--card-light-border);
+  --color-card-light-foreground: var(--card-light-foreground);
+  --color-card-light-muted: var(--card-light-muted);
   --font-sans: var(--font-inter);
   --radius-card: 16px;
 }
@@ -58,6 +71,13 @@ body {
   box-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
     0 24px 48px -28px rgba(0, 0, 0, 0.8);
+}
+
+.card-light {
+  border-radius: var(--radius-card);
+  background: var(--card-light);
+  color: var(--card-light-foreground);
+  box-shadow: 0 24px 48px -28px rgba(0, 0, 0, 0.6);
 }
 
 .card-glass::before {

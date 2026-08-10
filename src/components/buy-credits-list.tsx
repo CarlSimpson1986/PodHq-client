@@ -32,25 +32,27 @@ export function BuyCreditsList({ packages }: { packages: CreditPackage[] }) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {error && <p className="text-sm text-danger">{error}</p>}
       {packages.map((pkg) => (
-        <div key={pkg.id} className="card-glass flex items-center justify-between p-4">
+        <div key={pkg.id} className="flex items-center justify-between rounded-xl border border-card-light-border p-5">
           <div>
-            <p className="text-sm font-semibold">{pkg.name}</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums text-accent">£{pkg.priceGBP.toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">{pkg.label}</p>
+            <p className="text-base font-semibold">{pkg.name}</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-card-light-foreground">
+              £{pkg.priceGBP.toFixed(2)}
+            </p>
+            <p className="text-sm text-card-light-muted">{pkg.label}</p>
           </div>
           <button
             onClick={() => buy(pkg.id)}
             disabled={!!pendingId}
-            className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+            className="rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
             {pendingId === pkg.id ? "Redirecting..." : "Buy"}
           </button>
         </div>
       ))}
-      <Link href="/book" className="mt-2 inline-block text-xs text-muted-foreground hover:text-accent">
+      <Link href="/book" className="mt-2 inline-block text-sm text-card-light-muted hover:text-card-light-foreground">
         Back to booking
       </Link>
     </div>
