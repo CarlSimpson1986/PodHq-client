@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
+import { CalendarIcon, LockIcon } from "@/components/icons";
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
 const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
@@ -27,12 +28,14 @@ export function BookingGrid({
   memberId,
   initialCredits,
   initialBookings,
+  purchaseSuccess,
 }: {
   gym: string;
   memberName: string;
   memberId: number;
   initialCredits: number;
   initialBookings: Booking[];
+  purchaseSuccess: boolean;
 }) {
   const [bookings, setBookings] = useState(initialBookings);
   const [credits, setCredits] = useState(initialCredits);
@@ -128,65 +131,85 @@ export function BookingGrid({
   });
 
   return (
-    <div className="space-y-2">
-      <header className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">{gym}</h1>
-          <p className="text-sm text-muted-foreground">Hi {memberName}</p>
+    <>
+      <div className="bg-card px-6 pb-8 pt-12 sm:pt-16">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">{gym}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Hi {memberName}</p>
+          </div>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground">
+            <CalendarIcon className="h-7 w-7" />
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-semibold tabular-nums text-accent">{credits}</p>
-          <p className="text-xs text-muted-foreground">credits</p>
-          <Link href="/buy-credits" className="text-xs text-accent hover:underline">
+        <div className="mx-auto mt-6 flex w-full max-w-md items-center justify-between rounded-xl border border-card-border px-4 py-3">
+          <div>
+            <p className="text-2xl font-semibold tabular-nums text-foreground">{credits}</p>
+            <p className="text-xs text-muted-foreground">credits available</p>
+          </div>
+          <Link
+            href="/buy-credits"
+            className="rounded-lg border border-card-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-foreground hover:text-background"
+          >
             Buy more
           </Link>
         </div>
-      </header>
-      {error && <p className="text-sm text-danger">{error}</p>}
-      {success && <p className="text-sm text-success">{success}</p>}
-      {slots.map((slot) => {
-        const existing = bookings.find((b) => new Date(b.slot_start).getTime() === slot.getTime());
-        const isMine = existing?.member_id === memberId;
-        const isTaken = !!existing && !isMine;
-        const inUnlockWindow =
-          isMine && now >= slot.getTime() - WINDOW_BEFORE_MS && now <= slot.getTime() + WINDOW_AFTER_MS;
+      </div>
 
-        return (
-          <div key={slot.toISOString()} className="card-glass flex items-center justify-between p-3">
-            <span className="text-sm tabular-nums">{formatHour(slot)}</span>
+      <div className="card-light flex-1 space-y-3 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md space-y-3">
+          {purchaseSuccess && <p className="text-sm text-success">Payment received — credits added.</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {success && <p className="text-sm text-success">{success}</p>}
+          {slots.map((slot) => {
+            const existing = bookings.find((b) => new Date(b.slot_start).getTime() === slot.getTime());
+            const isMine = existing?.member_id === memberId;
+            const isTaken = !!existing && !isMine;
+            const inUnlockWindow =
+              isMine && now >= slot.getTime() - WINDOW_BEFORE_MS && now <= slot.getTime() + WINDOW_AFTER_MS;
 
-            {isMine ? (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-accent">Your booking</span>
-                  {inUnlockWindow && (
-                    <button
-                      onClick={unlock}
-                      disabled={unlocking}
-                      className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
-                    >
-                      {unlocking ? "Unlocking..." : "Unlock"}
-                    </button>
-                  )}
-                </div>
-                {inUnlockWindow && unlockMessage && (
-                  <p className="text-xs text-accent">{unlockMessage}</p>
+            return (
+              <div
+                key={slot.toISOString()}
+                className="flex items-center justify-between rounded-xl border border-card-light-border p-4"
+              >
+                <span className="text-base font-medium tabular-nums">{formatHour(slot)}</span>
+
+                {isMine ? (
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-card-light-foreground">Your booking</span>
+                      {inUnlockWindow && (
+                        <button
+                          onClick={unlock}
+                          disabled={unlocking}
+                          className="flex items-center gap-1.5 rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          <LockIcon className="h-4 w-4" />
+                          {unlocking ? "Unlocking..." : "Unlock"}
+                        </button>
+                      )}
+                    </div>
+                    {inUnlockWindow && unlockMessage && (
+                      <p className="text-xs text-card-light-muted">{unlockMessage}</p>
+                    )}
+                  </div>
+                ) : isTaken ? (
+                  <span className="text-sm text-card-light-muted">Booked</span>
+                ) : (
+                  <button
+                    onClick={() => bookSlot(slot)}
+                    disabled={!!pendingSlot}
+                    className="rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
+                  >
+                    {pendingSlot === slot.toISOString() ? "Booking..." : "Book"}
+                  </button>
                 )}
               </div>
-            ) : isTaken ? (
-              <span className="text-xs text-muted-foreground">Booked</span>
-            ) : (
-              <button
-                onClick={() => bookSlot(slot)}
-                disabled={!!pendingSlot}
-                className="rounded-md border border-card-border px-3 py-1.5 text-xs font-semibold hover:border-accent hover:text-accent disabled:opacity-50"
-              >
-                {pendingSlot === slot.toISOString() ? "Booking..." : "Book"}
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }

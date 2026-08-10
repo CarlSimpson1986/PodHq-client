@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 
+// Styled for use inside a white card-light content area (auth pages,
+// 2026-08-10 redesign) — dark text/border on a light background, not the
+// dark-page tokens used elsewhere in the app.
 const inputClass =
-  "w-full rounded-md border border-card-border bg-background px-3 py-2 pr-16 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none";
+  "w-full rounded-lg border border-card-light-border bg-white px-4 py-3 pr-16 text-base text-card-light-foreground placeholder:text-card-light-muted focus:border-card-light-foreground focus:outline-none";
 
 export function PasswordInput({
   id,
@@ -24,7 +27,7 @@ export function PasswordInput({
 
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs text-muted-foreground">
+      <label htmlFor={id} className="mb-1.5 block text-sm text-card-light-muted">
         {label}
       </label>
       <div className="relative">
@@ -40,13 +43,13 @@ export function PasswordInput({
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
-          className="absolute inset-y-0 right-0 px-3 text-xs text-muted-foreground hover:text-accent"
+          className="absolute inset-y-0 right-0 flex items-center px-4 text-sm text-card-light-muted hover:text-card-light-foreground"
           aria-label={visible ? "Hide password" : "Show password"}
         >
           {visible ? "Hide" : "Show"}
         </button>
       </div>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-card-light-muted">{hint}</p>}
     </div>
   );
 }

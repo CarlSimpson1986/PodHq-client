@@ -34,16 +34,14 @@ export default async function BookPage({
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 p-4 pb-12">
-      {params.purchase === "success" && (
-        <p className="mb-4 text-sm text-success">Payment received — credits added.</p>
-      )}
+    <main className="flex min-h-full flex-1 flex-col">
       <BookingGrid
         gym={member.gym}
         memberName={member.name}
         memberId={member.id}
         initialCredits={credits}
         initialBookings={todaysBookings}
+        purchaseSuccess={params.purchase === "success"}
       />
     </main>
   );

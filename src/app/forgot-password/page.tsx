@@ -2,11 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { PageHero } from "@/components/page-hero";
+import { LockIcon } from "@/components/icons";
 
 const inputClass =
-  "w-full rounded-md border border-card-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none";
+  "w-full rounded-lg border border-card-light-border bg-white px-4 py-3 text-base text-card-light-foreground placeholder:text-card-light-muted focus:border-card-light-foreground focus:outline-none";
 const buttonClass =
-  "w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50";
+  "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -39,41 +41,40 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-full flex-1 items-center justify-center p-4">
-      <div className="card-glass w-full max-w-sm p-6">
-        <h1 className="mb-1 text-lg font-semibold">Reset your password</h1>
-        <p className="mb-6 text-sm text-muted-foreground">
-          Enter your email and we&apos;ll send you a reset link.
-        </p>
-        {message ? (
-          <p className="text-sm text-success">{message}</p>
-        ) : (
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="email" className="mb-1 block text-xs text-muted-foreground">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                className={inputClass}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            {error && <p className="text-sm text-danger">{error}</p>}
-            <button type="submit" disabled={loading} className={buttonClass}>
-              {loading ? "Sending..." : "Send reset link"}
-            </button>
-          </form>
-        )}
-        <p className="mt-6 text-sm text-muted-foreground">
-          <Link href="/login" className="text-accent hover:underline">
-            Back to sign in
-          </Link>
-        </p>
+    <main className="flex min-h-full flex-1 flex-col">
+      <PageHero title="Reset your password" subtitle="Enter your email and we'll send you a reset link." icon={LockIcon} />
+      <div className="card-light flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md">
+          {message ? (
+            <p className="text-sm text-success">{message}</p>
+          ) : (
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="email" className="mb-1.5 block text-sm text-card-light-muted">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className={inputClass}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              {error && <p className="text-sm text-danger">{error}</p>}
+              <button type="submit" disabled={loading} className={buttonClass}>
+                {loading ? "Sending..." : "Send reset link"}
+              </button>
+            </form>
+          )}
+          <p className="mt-6 text-sm text-card-light-muted">
+            <Link href="/login" className="text-card-light-foreground hover:underline">
+              Back to sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </main>
   );

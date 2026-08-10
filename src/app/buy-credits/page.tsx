@@ -3,6 +3,8 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { CREDIT_PACKAGES } from "@/lib/credit-packages";
 import { BuyCreditsList } from "@/components/buy-credits-list";
+import { PageHero } from "@/components/page-hero";
+import { CoinIcon } from "@/components/icons";
 
 export default async function BuyCreditsPage() {
   const session = await createSessionClient();
@@ -24,9 +26,13 @@ export default async function BuyCreditsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 p-4 pb-12">
-      <h1 className="mb-4 text-lg font-semibold">Buy credits</h1>
-      <BuyCreditsList packages={CREDIT_PACKAGES} />
+    <main className="flex min-h-full flex-1 flex-col">
+      <PageHero title="Buy credits" subtitle="Top up to book more pod sessions." icon={CoinIcon} />
+      <div className="card-light flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md">
+          <BuyCreditsList packages={CREDIT_PACKAGES} />
+        </div>
+      </div>
     </main>
   );
 }
