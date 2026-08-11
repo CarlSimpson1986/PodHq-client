@@ -151,6 +151,41 @@ New shared components: `src/components/page-hero.tsx` (banner used by every auth
 
 Applied across `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/book`, `/buy-credits`. Not done: GymFlow's bottom nav bar and native app chrome (Home/Book/Shop/Profile tabs) — this app only has the two real destinations (`/book`, `/buy-credits`) behind auth, so a persistent tab bar wasn't part of what was asked for.
 
+## Cross-app account collision — found and partially fixed 2026-08-11
+
+Signing into podhq-client with `carlsimpson83@yahoo.co.uk` (a real podHq
+staff/admin login) succeeded at the Supabase Auth level — both apps share
+one Auth project — but hit a bare "No member profile found for this
+account." dead end, since that email had never been through podhq-client's
+own signup. Separately, trying to fix that by signing up again with the
+same email sent no confirmation email at all: Supabase's anti-enumeration
+behaviour for `signUp()` against an email that already exists **anywhere**
+in the shared project returns a masked "success" and sends nothing — the
+Stage 5 signup-crash fix (23503 handling) already documented this exact
+email as the collision case, but only stopped it from erroring, never gave
+a path to actually become a member.
+
+**Fixed (UX):** the dead-end message (copy-pasted across `/book`,
+`/buy-credits`, `/buy-membership`) replaced with a shared
+`NoMemberProfile` component that explains the likely cause and links to
+`/signup`.
+
+**Deliberately not fixed (signup auto-link):** considered making signup
+detect "email already exists elsewhere" and silently attach a member
+profile to it instead of no-op'ing — rejected. Supabase sends no
+confirmation for that case, so auto-linking would mean anyone who merely
+knows someone's email address (not their password) could get a member
+profile linked to that person's real account with zero verification.
+
+**Admin-mediated fix instead**, same category as `reset-pilot-password.mjs`:
+`podHq/link-existing-account-as-member.mjs <email> [name]` looks up an
+existing auth user by email and inserts the `members` row directly (no new
+credentials, no email sent) — used live to link
+`carlsimpson83@yahoo.co.uk` (`member_id` 12). Fine at pilot scale (one or
+two known collision cases); would need a real verified-link flow (e.g. a
+confirmation email specifically for "link this existing account to a
+member profile") before this could happen at real signup volume.
+
 ## Deliberate pilot-scope simplifications still open (Stages 2-6 above close these)
 
 - Single pod, single gym — no multi-pod capacity logic exists. Out of scope even after Stages 2-6 (target is still Aylesbury-only, not multi-gym) — revisit only if the target scope changes.
