@@ -182,8 +182,8 @@ matters if there's ever an HTML-injection point elsewhere.
 attempt, both apps) had no index at all on `ip_address` and an existing
 index that didn't cover the `event_type` filter every query applies — a
 growing full-table-scan risk. `podHq/supabase/migrations/0015_auth_events_perf_indexes.sql`
-written, **not yet applied** (same manual SQL-editor step as prior
-migrations — no standing DB write access, by design, see the earlier
+**applied 2026-08-11** via Supabase's SQL editor, same manual step as prior
+migrations (no standing DB write access, by design, see the earlier
 "safety issue with giving up access to Supabase" discussion).
 
 ## Cross-app account collision — found and partially fixed 2026-08-11
