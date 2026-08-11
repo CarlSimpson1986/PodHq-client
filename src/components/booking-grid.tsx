@@ -57,6 +57,49 @@ export function BookingGrid({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const selectedDayRef = useRef<HTMLAnchorElement>(null);
+  const dayStripRef = useRef<HTMLDivElement>(null);
+  // Touch/trackpad already scroll the strip natively via overflow-x-auto —
+  // this only covers a plain mouse (no touchscreen, no trackpad swipe),
+  // which otherwise had no way to reach day 30 once the scrollbar itself
+  // was hidden. `moved` past a small threshold suppresses the click that
+  // would otherwise fire on the day Link right after a drag.
+  const dragState = useRef({ down: false, startX: 0, startScroll: 0, moved: false });
+
+  function onDayStripPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "mouse") return;
+    const el = dayStripRef.current;
+    if (!el) return;
+    dragState.current = { down: true, startX: e.clientX, startScroll: el.scrollLeft, moved: false };
+    el.setPointerCapture(e.pointerId);
+  }
+
+  function onDayStripPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const el = dayStripRef.current;
+    if (!el || !dragState.current.down) return;
+    const dx = e.clientX - dragState.current.startX;
+    if (Math.abs(dx) > 3) dragState.current.moved = true;
+    el.scrollLeft = dragState.current.startScroll - dx;
+  }
+
+  function onDayStripPointerUp() {
+    dragState.current.down = false;
+    // The click that follows a drag-release lands synchronously, before
+    // this timeout fires, so onDayLinkClick still sees `moved: true` and
+    // suppresses it. Deferring the reset (rather than only clearing it
+    // inside that click handler) matters when the drag ends over the
+    // strip's padding instead of a day pill — no click fires there to
+    // consume the flag, so without this it would stay stale true and
+    // wrongly swallow the next, unrelated click.
+    setTimeout(() => {
+      dragState.current.moved = false;
+    }, 0);
+  }
+
+  function onDayLinkClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (dragState.current.moved) {
+      e.preventDefault();
+    }
+  }
 
   // Landing directly on a date outside today's default view (e.g. from
   // Home's upcoming-booking link, or a bookmarked ?date= URL) would
@@ -157,7 +200,15 @@ export function BookingGrid({
         <p className="mx-auto mt-6 w-full max-w-md text-sm font-semibold text-muted-foreground">
           {formatMonthYear(selectedDayDate)}
         </p>
-        <div className="scrollbar-hide mx-auto mt-2 flex w-full max-w-md gap-2 overflow-x-auto pb-1">
+        <div
+          ref={dayStripRef}
+          onPointerDown={onDayStripPointerDown}
+          onPointerMove={onDayStripPointerMove}
+          onPointerUp={onDayStripPointerUp}
+          onPointerLeave={onDayStripPointerUp}
+          onPointerCancel={onDayStripPointerUp}
+          className="scrollbar-hide mx-auto mt-2 flex w-full max-w-md cursor-grab gap-2 overflow-x-auto pb-1 active:cursor-grabbing"
+        >
           {windowDates.map((day) => {
             const dayStr = formatDateParam(day);
             const isSelected = dayStr === selectedDate;
@@ -166,7 +217,8 @@ export function BookingGrid({
                 key={dayStr}
                 ref={isSelected ? selectedDayRef : undefined}
                 href={dayStr === todayStr ? "/book" : `/book?date=${dayStr}`}
-                className={`flex shrink-0 flex-col items-center rounded-lg px-3 py-2 text-center ${
+                onClick={onDayLinkClick}
+                className={`flex shrink-0 select-none flex-col items-center rounded-lg px-3 py-2 text-center ${
                   isSelected ? "bg-foreground text-background" : "text-muted-foreground hover:bg-card-border"
                 }`}
               >
