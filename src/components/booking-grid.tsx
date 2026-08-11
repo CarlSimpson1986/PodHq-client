@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
 import { LockIcon, UserIcon } from "@/components/icons";
@@ -58,6 +58,17 @@ export function BookingGrid({
   const [success, setSuccess] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockMessage, setUnlockMessage] = useState<string | null>(null);
+  const selectedDayRef = useRef<HTMLAnchorElement>(null);
+
+  // Landing directly on a date outside today's default view (e.g. from
+  // Home's upcoming-booking link, or a bookmarked ?date= URL) would
+  // otherwise leave the strip showing its unscrolled start with the real
+  // selection off-screen — nothing visibly indicates you need to scroll to
+  // find it. "center" rather than "nearest" so it's not just barely
+  // visible at the very edge.
+  useEffect(() => {
+    selectedDayRef.current?.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
+  }, [selectedDate]);
 
   async function bookSlot(slot: Date) {
     // Guards against any request being in flight, not just this slot's own —
@@ -194,6 +205,7 @@ export function BookingGrid({
             return (
               <Link
                 key={dayStr}
+                ref={isSelected ? selectedDayRef : undefined}
                 href={dayStr === todayStr ? "/book" : `/book?date=${dayStr}`}
                 className={`flex shrink-0 flex-col items-center rounded-lg px-3 py-2 text-center ${
                   isSelected ? "bg-foreground text-background" : "text-muted-foreground hover:bg-card-border"
