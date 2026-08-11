@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, getCreditBalance, getBookingsForDate, isAccessComplete } from "@/lib/data/member";
+import { getMemberByAuthUserId, getCreditBalance, getBookingsForDate } from "@/lib/data/member";
 import { parseDateParam, formatDateParam } from "@/lib/booking-dates";
 import { BookingGrid } from "@/components/booking-grid";
 import { NoMemberProfile } from "@/components/no-member-profile";
@@ -44,7 +44,6 @@ export default async function BookPage({
         selectedDate={formatDateParam(selectedDate)}
         purchaseSuccess={params.purchase === "success"}
         membershipSuccess={params.membership === "success"}
-        accessComplete={isAccessComplete(member)}
       />
     </main>
   );

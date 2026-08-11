@@ -545,6 +545,23 @@ pre-existing, unrelated `Date.now()` purity lint warning in
 database (needs the user to run it via Supabase's SQL editor) before this
 can be tested end-to-end against the pilot account.
 
+**Unlock relocated to /bookings, 2026-08-11** — asked directly where the
+Unlock control should live once Access existed as a separate section
+("the access bit or through your bookings"); user picked Bookings. Moved
+the entire Unlock flow (geolocation request, `/api/unlock` call, Access-
+gate prompt) from `booking-grid.tsx`'s inline day-grid onto
+`bookings-view.tsx`'s Upcoming tab, next to the actual booking it belongs
+to, rather than mixed into the day-grid used for creating new bookings.
+`/book` now just shows a "Unlock from Bookings" link on your own slot
+during its unlock window, no button. Also fixed a related gap while moving
+this: the Upcoming/Past split previously flipped a booking to "past" the
+moment its slot's start time passed — meaning it vanished from Upcoming
+(and therefore from any chance to unlock) right as a member arrived for
+their session. Now a booking stays "upcoming" through the end of its own
+65-minute unlock window, matching the actual window `/api/unlock` enforces
+server-side, not just the raw slot start. `/api/unlock` itself is
+unchanged — it never cared which page called it.
+
 ## Deliberate pilot-scope simplifications still open (Stages 2-6 above close these)
 
 - Single pod, single gym — no multi-pod capacity logic exists. Out of scope even after Stages 2-6 (target is still Aylesbury-only, not multi-gym) — revisit only if the target scope changes.

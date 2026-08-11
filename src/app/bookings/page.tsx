@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, getAllMemberBookings } from "@/lib/data/member";
+import { getMemberByAuthUserId, getAllMemberBookings, isAccessComplete } from "@/lib/data/member";
 import { PageHero } from "@/components/page-hero";
 import { CalendarIcon } from "@/components/icons";
 import { NoMemberProfile } from "@/components/no-member-profile";
@@ -28,7 +28,7 @@ export default async function BookingsPage() {
       <PageHero title="Bookings" subtitle="Your upcoming and past sessions." icon={CalendarIcon} iconHref="/profile" />
       <div className="card-light flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
-          <BookingsView bookings={bookings} />
+          <BookingsView bookings={bookings} accessComplete={isAccessComplete(member)} />
         </div>
       </div>
     </main>
