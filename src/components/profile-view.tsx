@@ -3,18 +3,9 @@
 import { useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { Membership, CreditHistoryRow } from "@/lib/data/member";
+import type { Membership } from "@/lib/data/member";
 import { BottomNav } from "@/components/bottom-nav";
 import { CoinIcon, IdCardIcon, GiftIcon, DumbbellIcon, ChevronRightIcon, LogoutIcon, PinIcon } from "@/components/icons";
-
-const REASON_LABELS: Record<CreditHistoryRow["reason"], string> = {
-  manual_grant: "Manual grant",
-  booking_used: "Booking",
-  booking_refund: "Booking refund",
-  purchase: "Credit pack purchase",
-  membership: "Membership renewal",
-  gift_voucher: "Gift voucher redeemed",
-};
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -55,12 +46,10 @@ export function ProfileView({
   memberName,
   gym,
   membership,
-  creditHistory,
 }: {
   memberName: string;
   gym: string;
   membership: Membership | null;
-  creditHistory: CreditHistoryRow[];
 }) {
   const router = useRouter();
   const [membershipState, setMembershipState] = useState(membership);
@@ -163,29 +152,8 @@ export function ProfileView({
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Booking</h2>
             <div className="rounded-xl border border-card-light-border">
-              <ListRow href="/book" label="Bookings" icon={DumbbellIcon} />
+              <ListRow href="/bookings" label="Bookings" icon={DumbbellIcon} />
             </div>
-          </section>
-
-          <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Activity</h2>
-            {creditHistory.length === 0 ? (
-              <p className="text-sm text-card-light-muted">No activity yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {creditHistory.map((row) => (
-                  <div key={row.id} className="flex items-center justify-between rounded-xl border border-card-light-border px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium">{REASON_LABELS[row.reason]}</p>
-                      <p className="text-xs text-card-light-muted">{formatDate(row.created_at)}</p>
-                    </div>
-                    <span className={`text-sm font-semibold tabular-nums ${row.amount >= 0 ? "text-success" : "text-card-light-muted"}`}>
-                      {row.amount >= 0 ? `+${row.amount}` : row.amount}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </section>
 
           <button

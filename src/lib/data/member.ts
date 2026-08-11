@@ -27,13 +27,6 @@ export interface Membership {
   current_period_end: string | null;
 }
 
-export interface CreditHistoryRow {
-  id: number;
-  amount: number;
-  reason: "manual_grant" | "booking_used" | "booking_refund" | "purchase" | "membership" | "gift_voucher";
-  created_at: string;
-}
-
 // Verify the session with the caller's own client first (already done by
 // every route/page that calls this), then query via the service-role
 // client — matches podHq's documented lesson: never rely on RLS's
@@ -72,22 +65,6 @@ export async function getActiveMembership(memberId: number): Promise<Membership 
   return data;
 }
 
-// Most recent first, capped — an append-only ledger has no natural upper
-// bound otherwise, and Profile only needs enough to show recent activity,
-// not a full accounting export.
-export async function getCreditHistory(memberId: number, limit = 20): Promise<CreditHistoryRow[]> {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("credits")
-    .select("id, amount, reason, created_at")
-    .eq("member_id", memberId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) throw new Error(error.message);
-  return data ?? [];
-}
-
 export async function getNextUpcomingBooking(memberId: number): Promise<Booking | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -102,6 +79,22 @@ export async function getNextUpcomingBooking(memberId: number): Promise<Booking 
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+// Every booking this member has ever made, most recent slot first — small
+// enough at pilot scale to fetch in one go and split into upcoming/past
+// client-side, rather than two separate queries with fragile PostgREST
+// filter-string construction for the "past" side's OR condition.
+export async function getAllMemberBookings(memberId: number): Promise<Booking[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("bookings")
+    .select("*")
+    .eq("member_id", memberId)
+    .order("slot_start", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 export async function getBookingsForDate(gym: string, date: Date): Promise<Booking[]> {
