@@ -189,6 +189,57 @@ growing full-table-scan risk. `podHq/supabase/migrations/0015_auth_events_perf_i
 migrations (no standing DB write access, by design, see the earlier
 "safety issue with giving up access to Supabase" discussion).
 
+## Profile redesign + calendar fixes — 2026-08-11
+
+Two rounds of direct feedback on the work above, addressed the same
+session.
+
+**Profile didn't match GymFlow's actual layout** ("doesn't look anything
+like GymFlow's") — the first pass only matched the general dark-header/
+light-content pattern used everywhere else in this app, not GymFlow's real
+Profile structure. Rebuilt to match: an avatar-initials + name/gym card,
+then grouped icon+chevron list sections mirroring GymFlow's own ACCOUNT/
+BOOKING pattern (Account: Memberships/Credit Packs/Gift Voucher; Booking:
+Bookings). Deliberately did **not** fabricate rows for GymFlow features
+this app has no backing functionality for (Wallet, Payment Methods,
+Invoices, Notifications, Language, Waiver & Terms, Access, Change Club,
+Appointments) just to look more complete — a dead link would be worse
+than an honestly shorter menu. Credit history (real content this app has
+that GymFlow's own Profile menu doesn't show) kept as an additional
+"Activity" section. Log Out restyled to GymFlow's red icon+text treatment.
+Also fixed a real bug caught while touching this file: `credits.reason`'s
+TypeScript union was missing `'gift_voucher'` (added to the DB migration
+and webhook in the gift-voucher work but never added to this shared
+type) — `tsc` caught it immediately once the redesign referenced it.
+Live-verified against production: avatar/name/gym card, membership CTA,
+all list rows, and Log Out all render and match correctly.
+
+**Calendar feedback, sent mid-session while the above was still being
+verified**: "the weekly calendar needs to be scrollable and needs to have
+some sort of month identifier." Both were real gaps — at 8 days the strip
+never actually overflowed its container on a normal screen width, so
+"scrollable" had nothing to scroll to, and there was no month label
+anywhere near the strip itself (only buried in the day-heading below).
+Fixed: extended `BOOKING_WINDOW_DAYS` from 8 to 30 (book up to a month
+ahead), added a month/year label above the strip computed from the
+*selected* day (not a static "today's month" label) so it correctly
+updates if the 30-day window is scrolled across a month boundary. Found
+one more real gap live-testing this fix: landing directly on a date
+outside the strip's default view (e.g. a bookmarked `?date=` URL, or
+Home's own upcoming-booking link) left the strip showing its unscrolled
+start with the actual selection off-screen to the right, no visual hint
+you needed to scroll to find it — fixed with an auto-scroll-into-view
+effect keyed on `selectedDate`.
+
+**Live-verified**: confirmed via direct JS inspection that the strip
+genuinely overflows now (`scrollWidth` 1702px vs `clientWidth` 448px —
+previously the 8-day version fit inside its container with nothing to
+scroll), navigated to `2026-09-05` and confirmed the month label correctly
+read "September 2026" (not stuck on August), and confirmed the auto-scroll
+fix by re-testing the same URL after deploying it — the strip now lands
+centered on "SAT 5" instead of showing the unscrolled Aug 11-18 view with
+the real selection invisible off-screen.
+
 ## Bottom nav, membership upgrade/downgrade, gift vouchers — 2026-08-11
 
 Requested together, worked on together, while the user was away from a
