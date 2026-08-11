@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId } from "@/lib/data/member";
+import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
 import { MEMBERSHIP_TIERS } from "@/lib/membership-tiers";
@@ -44,27 +43,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
   }
 
-  // One active membership at a time — a member switching tiers cancels the
-  // old subscription in Stripe first (out of scope here: no cancel/upgrade
-  // flow yet, matches this app's pilot-scope pattern of building what's
-  // asked for first).
-  const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from("memberships")
-    .select("status")
-    .eq("member_id", member.id)
-    .eq("status", "active")
-    .maybeSingle();
+  const stripe = getStripeClient();
 
+  // One active membership at a time. Same tier again is just a no-op
+  // resubscribe attempt — block it. A genuinely different tier is a real
+  // upgrade/downgrade: cancel the old subscription first, then let the
+  // new Checkout Session below start the new one. Immediate cancellation,
+  // not cancel_at_period_end — same behaviour as Profile's own Cancel
+  // button, no proration/credit for the unused portion of the old tier's
+  // period. The memberships row itself isn't updated here; the existing
+  // customer.subscription.deleted webhook handler does that once Stripe
+  // confirms the cancellation, same as every other Stripe-driven state
+  // change in this app.
+  const existing = await getActiveMembership(member.id);
   if (existing) {
-    return NextResponse.json(
-      { status: "error", message: "You already have an active membership." },
-      { status: 409 }
-    );
+    if (existing.tier_id === tier.id) {
+      return NextResponse.json({ status: "error", message: "You're already on this plan." }, { status: 409 });
+    }
+    try {
+      await stripe.subscriptions.cancel(existing.stripe_subscription_id);
+    } catch (err) {
+      console.error("[checkout-membership] failed to cancel existing subscription for switch", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { status: "error", message: "Could not switch plans. Try again." },
+        { status: 500 }
+      );
+    }
   }
 
   const origin = request.nextUrl.origin;
-  const stripe = getStripeClient();
   const checkoutSession = await stripe.checkout.sessions.create({
     mode: "subscription",
     payment_method_types: ["card"],
