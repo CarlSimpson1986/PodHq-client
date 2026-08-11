@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
-import { LockIcon, UserIcon } from "@/components/icons";
+import { UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { BottomNav } from "@/components/bottom-nav";
 
@@ -41,7 +41,6 @@ export function BookingGrid({
   selectedDate,
   purchaseSuccess,
   membershipSuccess,
-  accessComplete,
 }: {
   gym: string;
   memberName: string;
@@ -51,15 +50,12 @@ export function BookingGrid({
   selectedDate: string;
   purchaseSuccess: boolean;
   membershipSuccess: boolean;
-  accessComplete: boolean;
 }) {
   const [bookings, setBookings] = useState(initialBookings);
   const [credits, setCredits] = useState(initialCredits);
   const [pendingSlot, setPendingSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [unlocking, setUnlocking] = useState(false);
-  const [unlockMessage, setUnlockMessage] = useState<string | null>(null);
   const selectedDayRef = useRef<HTMLAnchorElement>(null);
 
   // Landing directly on a date outside today's default view (e.g. from
@@ -103,45 +99,6 @@ export function BookingGrid({
       setError("Something went wrong. Try again.");
     } finally {
       setPendingSlot(null);
-    }
-  }
-
-  async function unlock() {
-    setUnlockMessage(null);
-    setUnlocking(true);
-    try {
-      // Matches GymFlow's own requirement for general door access — you
-      // must be at the gym, with location on, to unlock. Requested here
-      // (not skipped on failure) so the server sees a definite absence
-      // rather than us silently omitting it.
-      let position: GeolocationPosition | null = null;
-      try {
-        position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          if (!navigator.geolocation) {
-            reject(new Error("Geolocation not supported"));
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
-        });
-      } catch {
-        setUnlockMessage("Turn on location services to unlock the door.");
-        return;
-      }
-
-      const res = await fetch("/api/unlock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        }),
-      });
-      const body = await res.json();
-      setUnlockMessage(body.status === "ok" ? "Unlocked — door should open now." : body.message);
-    } catch {
-      setUnlockMessage("Something went wrong. Try again.");
-    } finally {
-      setUnlocking(false);
     }
   }
 
@@ -246,33 +203,11 @@ export function BookingGrid({
 
                 {isMine ? (
                   <div className="flex flex-col items-end gap-1.5">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold text-card-light-foreground">Your booking</span>
-                      {inUnlockWindow &&
-                        (accessComplete ? (
-                          <button
-                            onClick={unlock}
-                            disabled={unlocking}
-                            className="flex items-center gap-1.5 rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                          >
-                            <LockIcon className="h-4 w-4" />
-                            {unlocking ? "Unlocking..." : "Unlock"}
-                          </button>
-                        ) : (
-                          <Link
-                            href="/access"
-                            className="flex items-center gap-1.5 rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
-                          >
-                            <LockIcon className="h-4 w-4" />
-                            Complete Access
-                          </Link>
-                        ))}
-                    </div>
-                    {inUnlockWindow && !accessComplete && (
-                      <p className="text-xs text-card-light-muted">Finish your Access details in Profile to unlock the door.</p>
-                    )}
-                    {inUnlockWindow && accessComplete && unlockMessage && (
-                      <p className="text-xs text-card-light-muted">{unlockMessage}</p>
+                    <span className="text-sm font-semibold text-card-light-foreground">Your booking</span>
+                    {inUnlockWindow && (
+                      <Link href="/bookings" className="text-xs text-card-light-muted underline hover:text-card-light-foreground">
+                        Unlock from Bookings
+                      </Link>
                     )}
                   </div>
                 ) : isTaken ? (
