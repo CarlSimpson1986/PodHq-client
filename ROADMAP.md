@@ -634,8 +634,31 @@ doesn't have this problem — it reads the hour from a `Date` constructed
 in the member's own browser via `setHours()`, which is already correctly
 timezone-aware for whoever's holding the phone.
 
-**Not yet live-tested** — pending the migration being applied via
-Supabase's SQL editor (same blocker as podHq's Stage 15).
+**Fully live-tested 2026-08-11 against production**, after the user
+applied the migration. Set Aylesbury Berryfields' hours to a deliberately
+narrow 10:00–12:00 window and logged in as the pilot member: `/book`
+correctly rendered only the 10:00 and 11:00 slots (nothing outside the
+window shown at all, not just disabled); a direct `fetch` to `/api/bookings`
+for a 14:00 slot (bypassing the UI filter entirely) was correctly rejected
+server-side (400, "That time is outside booking hours") — confirms the
+`Europe/London` timezone fix actually works correctly in production during
+real BST, not just in theory; booking the in-window 10:00 slot succeeded
+normally. Reset hours back to the default (all-day) and re-tested a normal
+booking to confirm no regression: all 24 hourly slots rendered as before,
+and a 09:00 booking succeeded exactly as it always has. All test bookings
+and their credit rows deleted afterward, gym config reset to defaults.
+
+Capacity enforcement and its concurrency-safety were verified DB-side
+directly against the shared `create_booking()` RPC — see podHq's
+ROADMAP.md Stage 15 for that testing (default capacity correctly blocks a
+second booking, raising it to 2 allows one more and blocks a third, and
+two simultaneous booking attempts for the same slot at capacity 1 correctly
+resolve to exactly one winner, not both). The self-service day-grid's
+capacity-aware rendering (`booking-grid.tsx`) wasn't separately re-tested
+against a live capacity>1 gym in the UI — no real gym has been configured
+above the default of 1 yet — but it's the same `bookings` data already
+exercised by every other live booking test this session, just filtered
+differently.
 
 ## Access onboarding (mobile/gender, address, waiver) — 2026-08-11
 
