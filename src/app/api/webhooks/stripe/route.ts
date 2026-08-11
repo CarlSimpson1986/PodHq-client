@@ -75,19 +75,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "error", message: "Missing metadata." }, { status: 400 });
     }
 
-    const { error } = await admin.from("memberships").insert({
-      member_id: memberId,
-      tier_id: tierId,
-      tier_name: tierName,
-      credits_per_period: creditsPerPeriod,
-      stripe_subscription_id: subscription.id,
-      status: normalizeStatus(subscription.status),
-      current_period_end: periodEndIso(subscription),
-    });
+    // Upsert on member_id, not a plain insert: member_id is unique (one row
+    // per member), so a member's *new* subscription after a previous one
+    // was canceled has the same conflict shape as a *retried* webhook
+    // delivery — a plain insert can't tell those apart and would silently
+    // drop the new subscription entirely (found live 2026-08-11: a second
+    // real subscription's credits were granted correctly by the invoice
+    // handler below, but this table kept showing the old canceled tier,
+    // since the insert's 23505 was swallowed as "just a retry").
+    const { error } = await admin.from("memberships").upsert(
+      {
+        member_id: memberId,
+        tier_id: tierId,
+        tier_name: tierName,
+        credits_per_period: creditsPerPeriod,
+        stripe_subscription_id: subscription.id,
+        status: normalizeStatus(subscription.status),
+        current_period_end: periodEndIso(subscription),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "member_id" }
+    );
 
-    // Same retry tolerance as the credits insert above — stripe_subscription_id
-    // is unique, so a redelivered event is a no-op, not a duplicate row.
-    if (error && error.code !== "23505") {
+    if (error) {
       console.error("[stripe-webhook] failed to record membership", { error: error.message });
       return NextResponse.json({ status: "error", message: "Could not record membership." }, { status: 500 });
     }
