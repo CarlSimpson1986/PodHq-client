@@ -189,6 +189,34 @@ growing full-table-scan risk. `podHq/supabase/migrations/0015_auth_events_perf_i
 migrations (no standing DB write access, by design, see the earlier
 "safety issue with giving up access to Supabase" discussion).
 
+## Activity removed, real Bookings page added — 2026-08-11
+
+Direct, blunt feedback on the redesign above: the credit-history
+"Activity" section was "made up and shit," and Profile's "Bookings" row
+should lead to a real bookings list — upcoming sessions plus a past-
+sessions selector — not just dump the member back on `/book`'s day-picker
+(which is for creating a *new* booking, not reviewing existing ones).
+
+Removed Activity entirely, including the now-unused `getCreditHistory`/
+`CreditHistoryRow` from the data layer (Profile was their only consumer —
+no dead code left behind). New `/bookings` (Profile's "Bookings" row now
+points here instead of `/book`): an Upcoming/Past toggle, each listing the
+member's own sessions with date and time, past ones also showing status
+(Completed/Cancelled/No-show — falls back to the DB's literal "Booked"
+status for a past slot nothing ever explicitly changed, an honest
+reflection of what's actually stored rather than inventing a "Completed"
+assumption). New `getAllMemberBookings(memberId)` fetches every booking
+in one query and splits it into upcoming/past client-side by time and
+status, rather than building a fragile PostgREST OR-filter string for a
+second query.
+
+**Live-verified**: Activity confirmed gone from Profile; `/bookings`
+Upcoming tab correctly showed "No upcoming sessions" (accurate — the pilot
+account's real bookings are all from earlier in the week); Past tab
+correctly listed all 7 real historical bookings (5-10 Aug, correct dates/
+times, newest first, all labelled "Booked" since none were ever
+cancelled/no-showed).
+
 ## Profile redesign + calendar fixes — 2026-08-11
 
 Two rounds of direct feedback on the work above, addressed the same
