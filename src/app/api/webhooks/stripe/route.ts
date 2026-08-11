@@ -38,6 +38,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" });
     }
 
+    if (checkoutSession.metadata?.type === "gift_voucher") {
+      const code = checkoutSession.metadata.code;
+      const amountGBP = Number(checkoutSession.metadata.amount_gbp);
+      const voucherCredits = Number(checkoutSession.metadata.credits);
+      const purchaserMemberId = Number(checkoutSession.metadata.purchaser_member_id);
+
+      if (!code || !amountGBP || !voucherCredits || !purchaserMemberId) {
+        console.error("[stripe-webhook] completed voucher session missing metadata", { sessionId: checkoutSession.id });
+        return NextResponse.json({ status: "error", message: "Missing metadata." }, { status: 400 });
+      }
+
+      const { error } = await admin.from("gift_vouchers").insert({
+        code,
+        amount_gbp: amountGBP,
+        credits: voucherCredits,
+        purchaser_member_id: purchaserMemberId,
+        stripe_event_id: event.id,
+      });
+
+      // Same retry tolerance as every other webhook-driven insert here —
+      // a redelivered event is a no-op (23505 on stripe_event_id), not a
+      // second voucher for one payment.
+      if (error && error.code !== "23505") {
+        console.error("[stripe-webhook] failed to record gift voucher", { error: error.message });
+        return NextResponse.json({ status: "error", message: "Could not record voucher." }, { status: 500 });
+      }
+
+      return NextResponse.json({ status: "ok" });
+    }
+
     const memberId = Number(checkoutSession.metadata?.member_id);
     const credits = Number(checkoutSession.metadata?.credits);
 
