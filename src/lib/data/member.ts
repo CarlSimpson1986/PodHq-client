@@ -41,9 +41,9 @@ export async function getCreditBalance(memberId: number): Promise<number> {
   return (data ?? []).reduce((sum, row) => sum + row.amount, 0);
 }
 
-export async function getTodaysBookings(gym: string): Promise<Booking[]> {
+export async function getBookingsForDate(gym: string, date: Date): Promise<Booking[]> {
   const admin = createAdminClient();
-  const startOfDay = new Date();
+  const startOfDay = new Date(date);
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(startOfDay);
   endOfDay.setDate(endOfDay.getDate() + 1);

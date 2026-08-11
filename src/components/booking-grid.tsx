@@ -4,12 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
 import { CalendarIcon, LockIcon } from "@/components/icons";
+import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
 const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
 
-function hourSlots(): Date[] {
-  const startOfDay = new Date();
+function hourSlots(day: Date): Date[] {
+  const startOfDay = new Date(day);
   startOfDay.setHours(0, 0, 0, 0);
   return Array.from({ length: 24 }, (_, hour) => {
     const d = new Date(startOfDay);
@@ -22,12 +23,17 @@ function formatHour(d: Date) {
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatDayHeading(d: Date) {
+  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+}
+
 export function BookingGrid({
   gym,
   memberName,
   memberId,
   initialCredits,
   initialBookings,
+  selectedDate,
   purchaseSuccess,
   membershipSuccess,
 }: {
@@ -36,6 +42,7 @@ export function BookingGrid({
   memberId: number;
   initialCredits: number;
   initialBookings: Booking[];
+  selectedDate: string;
   purchaseSuccess: boolean;
   membershipSuccess: boolean;
 }) {
@@ -121,12 +128,20 @@ export function BookingGrid({
   }
 
   const now = Date.now();
+  const windowDates = bookingWindowDates();
+  const todayStr = formatDateParam(windowDates[0]);
+  const isToday = selectedDate === todayStr;
+  const selectedDayDate = windowDates.find((d) => formatDateParam(d) === selectedDate) ?? windowDates[0];
+
   // Past slots that aren't the member's own booking are hidden rather than
   // shown greyed-out — a flat 24-row list meant scrolling past 10+ dead
   // "Past" rows every time to reach anything bookable, real friction on
   // every single visit. A past slot that IS the member's own stays visible
-  // (still relevant briefly after a booking, e.g. mid-unlock-window).
-  const slots = hourSlots().filter((slot) => {
+  // (still relevant briefly after a booking, e.g. mid-unlock-window). Only
+  // applies when viewing today — every slot on a future day is, by
+  // definition, still ahead of "now".
+  const slots = hourSlots(selectedDayDate).filter((slot) => {
+    if (!isToday) return true;
     const isPast = slot.getTime() + 60 * 60 * 1000 < now;
     if (!isPast) return true;
     return bookings.some((b) => new Date(b.slot_start).getTime() === slot.getTime() && b.member_id === memberId);
@@ -161,10 +176,29 @@ export function BookingGrid({
             Get a monthly membership instead
           </Link>
         </div>
+        <div className="mx-auto mt-6 flex w-full max-w-md gap-2 overflow-x-auto pb-1">
+          {windowDates.map((day) => {
+            const dayStr = formatDateParam(day);
+            const isSelected = dayStr === selectedDate;
+            return (
+              <Link
+                key={dayStr}
+                href={dayStr === todayStr ? "/book" : `/book?date=${dayStr}`}
+                className={`flex shrink-0 flex-col items-center rounded-lg px-3 py-2 text-center ${
+                  isSelected ? "bg-foreground text-background" : "text-muted-foreground hover:bg-card-border"
+                }`}
+              >
+                <span className="text-xs uppercase">{day.toLocaleDateString("en-GB", { weekday: "short" })}</span>
+                <span className="text-base font-semibold tabular-nums">{day.getDate()}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       <div className="card-light flex-1 space-y-3 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-3">
+          <p className="text-sm font-semibold text-card-light-muted">{formatDayHeading(selectedDayDate)}</p>
           {purchaseSuccess && <p className="text-sm text-success">Payment received — credits added.</p>}
           {membershipSuccess && (
             <p className="text-sm text-success">Membership active — your monthly credits will land shortly.</p>
