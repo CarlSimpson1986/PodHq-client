@@ -2,8 +2,10 @@
 // the client day-toggle strip (builds the same window and Link targets) —
 // both need to agree on exactly the same day range and string format.
 
-// Matches GymFlow's own booking screen: today + the next 7 days.
-export const BOOKING_WINDOW_DAYS = 8;
+// A full month ahead, not just the next 7 days like the first pass — with
+// only 8 days the strip never actually overflowed its container on a
+// normal screen, so "scroll to see more days" had nothing to scroll to.
+export const BOOKING_WINDOW_DAYS = 30;
 
 export function formatDateParam(date: Date): string {
   const year = date.getFullYear();
@@ -18,7 +20,7 @@ function startOfToday(): Date {
   return today;
 }
 
-/** The 8 bookable days, today first, as local-midnight Dates. */
+/** The bookable days, today first, as local-midnight Dates. */
 export function bookingWindowDates(): Date[] {
   const today = startOfToday();
   return Array.from({ length: BOOKING_WINDOW_DAYS }, (_, i) => {

@@ -28,6 +28,10 @@ function formatDayHeading(d: Date) {
   return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
 }
 
+function formatMonthYear(d: Date) {
+  return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
 export function BookingGrid({
   gym,
   memberName,
@@ -180,7 +184,10 @@ export function BookingGrid({
             Get a monthly membership instead
           </Link>
         </div>
-        <div className="mx-auto mt-6 flex w-full max-w-md gap-2 overflow-x-auto pb-1">
+        <p className="mx-auto mt-6 w-full max-w-md text-sm font-semibold text-muted-foreground">
+          {formatMonthYear(selectedDayDate)}
+        </p>
+        <div className="mx-auto mt-2 flex w-full max-w-md gap-2 overflow-x-auto pb-1">
           {windowDates.map((day) => {
             const dayStr = formatDateParam(day);
             const isSelected = dayStr === selectedDate;
