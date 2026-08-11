@@ -157,7 +157,7 @@ export function BookingGrid({
         <p className="mx-auto mt-6 w-full max-w-md text-sm font-semibold text-muted-foreground">
           {formatMonthYear(selectedDayDate)}
         </p>
-        <div className="mx-auto mt-2 flex w-full max-w-md gap-2 overflow-x-auto pb-1">
+        <div className="scrollbar-hide mx-auto mt-2 flex w-full max-w-md gap-2 overflow-x-auto pb-1">
           {windowDates.map((day) => {
             const dayStr = formatDateParam(day);
             const isSelected = dayStr === selectedDate;

@@ -64,6 +64,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Keeps the element natively scrollable (touch swipe, trackpad, drag) —
+   just hides the visible scrollbar track, so the day strip reads as a
+   swipeable row rather than a UI element with its own scrollbar. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 .card-glass {
   position: relative;
   border-radius: var(--radius-card);
