@@ -530,6 +530,59 @@ two known collision cases); would need a real verified-link flow (e.g. a
 confirmation email specifically for "link this existing account to a
 member profile") before this could happen at real signup volume.
 
+**Real verified-link flow built and live-verified 2026-08-11**, closing
+the gap above. `/api/auth/signup` now checks `admin.auth.admin.listUsers()`
+for the email *before* calling `signUp()` (same lookup the manual scripts
+already used). A genuinely new email takes the unchanged normal signup
+path. A colliding email instead calls `supabase.auth.signInWithOtp({
+email, options: { shouldCreateUser: false, emailRedirectTo } })` — this
+sends a real magic-link email even for an existing user (unlike `signUp`'s
+silent anti-enumeration path), so clicking it proves the requester
+actually controls that inbox before anything is linked; `shouldCreateUser:
+false` guarantees this branch never mints a new `auth.users` row. The
+client-facing response (`GENERIC_MESSAGE`) is byte-identical in both
+branches — no new enumeration vector, only the real server-side action
+differs. New `POST /api/auth/link-existing-account`, called from
+`/auth/callback` once the magic link has established a session, creates
+the `members` row (idempotent — a repeat click is a no-op, checked live).
+
+**Real bug found and fixed during live-testing**: the callback page
+originally read its own routing marker via `hashParams.get("type") ??
+searchParams.get("type")` — but Supabase always stamps its own `type`
+into the hash on every magic-link callback (e.g. `"magiclink"`), which
+silently shadowed the query string's `type=link_existing` before the
+check ever ran, so the link-existing-account step never fired. Password
+recovery only ever worked by coincidence: Supabase's own hash type for
+*that* flow happens to literally be `"recovery"`, matching the app's own
+marker by accident. Fixed by moving this flow onto a dedicated `mode`
+query param that Supabase never touches, instead of overloading `type`.
+
+**Live-verified end-to-end against production**: created a throwaway auth
+user (`podhq-client-link-test@example.com`, not yet a podhq-client member
+— simulating a real podHq-side account), called the real `/api/auth/signup`
+endpoint with that email and confirmed (a) the generic message came back
+unchanged and (b) no member row was created yet; confirmed via
+`auth_events` that the collision branch fired (`link_existing_requested`).
+Since there's no real inbox to click from this environment, generated a
+valid magic-link token via `admin.auth.admin.generateLink()` and completed
+the round-trip manually (Supabase's own `redirect_to` handling on that
+admin-generated link proved unreliable to script against directly — it
+kept falling back to the project's default Site URL regardless of what was
+passed — so the resulting valid access/refresh tokens were carried by hand
+to the real production callback URL instead, exercising 100% of the actual
+application code, just not Supabase's own email-redirect construction
+specifically). Landed on `/book` as "Hi Flow Test"; confirmed directly
+against Supabase that the `members` row was created correctly
+(`auth_user_id`, `gym: 'Aylesbury Berryfields'`, `name: 'Flow Test'`) and
+`account_linked` was logged. Re-called `link-existing-account` a second
+time and confirmed exactly one member row still existed — idempotency
+holds. All test fixtures (auth user, member row, audit events) deleted
+afterward.
+
+`podHq/link-existing-account-as-member.mjs` stays in place as a manual
+fallback for edge cases the self-service flow can't reach (e.g. an email
+that needs linking but genuinely never receives the magic link).
+
 ## Access onboarding (mobile/gender, address, waiver) — 2026-08-11
 
 Built at the user's request: a new "Access" row under Profile's ACCOUNT
@@ -548,11 +601,11 @@ this project's standing rule, migrations are user-applied via Supabase's
 SQL editor, not run by Claude directly. Documented on both sides per the
 shared-schema-duplication rule: this file and podHq's own ROADMAP.md.
 
-**Gating scope — my own default, not explicitly confirmed by the user**:
+**Gating scope confirmed by the user 2026-08-11**: Unlock-only, as built —
 only the physical door Unlock is gated on completion (`isAccessComplete()`
 in `src/lib/data/member.ts`); booking a slot and buying credits/membership
-remain unaffected. Flagging this again here in case the intended scope was
-actually broader (e.g. blocking booking too).
+remain unaffected. No code change needed, this closes the earlier open
+flag.
 
 **Waiver content is real, not placeholder** — transcribed in full from the
 user's own PDF (`My Fit Pod Ts & Cs (2).pdf`, provided directly for this
