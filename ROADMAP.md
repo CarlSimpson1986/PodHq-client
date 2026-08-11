@@ -541,9 +541,38 @@ physical door.
 pre-existing, unrelated `Date.now()` purity lint warning in
 `booking-grid.tsx` predates this change).
 
-**Not yet live-tested** — pending the migration being applied to the live
-database (needs the user to run it via Supabase's SQL editor) before this
-can be tested end-to-end against the pilot account.
+**Fully live-tested 2026-08-11 against production**, after the user applied
+the migration via Supabase's SQL editor. Real bug found and fixed during
+this test: the UK mobile number regex only accounted for 10 digits after
+the leading 0, one short of a genuine UK mobile (`07xxx xxxxxx` = 11
+digits total) — every real number was rejected as invalid until fixed
+(strips whitespace, checks digit count directly). Ran the complete flow
+through the actual UI (via claude-in-chrome against
+`podhq-client.vercel.app`, form values set through React's native input
+setter + dispatched `input`/`click` events since programmatic clicks on
+this page needed a render tick before state changes were visible —
+verified directly against the DOM rather than trusting screenshots, which
+glitched repeatedly this session same as during the bottom-nav build):
+Step 1 (mobile + Male) → Step 2 (address) → Step 3 (full waiver text
+rendered — confirmed all 25 clauses present including Clause 18 WAIVER —
+signed "Pilot Test Member", checkbox agreed) → redirected to
+`/profile?access=complete`, Access row flipped from "Action needed" to
+"Complete". Confirmed directly against Supabase: all 8 fields correctly
+persisted on the pilot member's row, not just reflected in the UI.
+
+Then booked the current hour and unlocked for real from `/bookings`
+(browser's `navigator.geolocation.getCurrentPosition` overridden to
+Aylesbury Berryfields' real coordinates in devtools — the same
+spoofing technique this app's own location gate is explicitly documented
+as unable to stop, used here deliberately to test the app rather than
+defeat it): `pod_access_events` shows `success:true`,
+`kisi_response:"200 OK"`, `distance_meters:0`, confirming the Access gate
+correctly let a fully-onboarded member's real Kisi unlock through rather
+than blocking it. The negative path (blocking an access-incomplete member)
+wasn't separately live-fired to avoid touching the pilot account's now-
+complete state, but the code is the same `isAccessComplete()` boolean gate
+already proven live in the location-gate's identical pattern, checked
+before ever reaching Kisi.
 
 **Unlock relocated to /bookings, 2026-08-11** — asked directly where the
 Unlock control should live once Access existed as a separate section
