@@ -660,6 +660,65 @@ above the default of 1 yet — but it's the same `bookings` data already
 exercised by every other live booking test this session, just filtered
 differently.
 
+## Load/scaling review — 2026-08-11
+
+Prompted by the user's stated goal of eventually replacing GymFlow
+entirely, not just running the Aylesbury pilot — asked directly what
+could go wrong under real load and whether that was worth worrying about
+yet ("its not like amazon is it"). Agreed the actual traffic shape here
+is bursty-but-bounded (gym rush hours across up to 9 gyms), not
+continuous high-volume traffic, so the useful checks are the specific
+contention points this app actually has, not generic load-testing
+infrastructure. Three checks run:
+
+1. **Concurrency at the one real contention point** — the shared
+   advisory lock in `create_booking()` (Stage 15). Fired 25 simultaneous
+   `create_booking()` calls at the same slot (capacity 1): exactly 1
+   succeeded, 24 correctly got `slot_full`, confirmed against the DB
+   (exactly 1 `booked` row, not more), 703ms total for all 25 to resolve.
+2. **Raw throughput/connection handling** — 50 simultaneous
+   `create_booking()` calls across 50 different slots (no lock
+   contention): all 50 succeeded, zero connection/timeout errors, 1268ms
+   total. No access to Supabase's actual billing-plan connection cap from
+   here, but this is a more useful empirical signal anyway — a burst well
+   beyond any single gym's real rush hour produced no pool exhaustion.
+3. **Code-level pass for the boring-but-real scaling killers** — checked
+   every data-layer query in `src/lib/data/member.ts` (plus the new
+   `src/lib/data/pods.ts` in podHq) for unbounded row fetches, the same
+   class of bug podHq's own ROADMAP already documents as a real
+   historical incident (PostgREST silently truncates any single request
+   past 1000 rows, no error). Found two:
+   - `getCreditBalance()` fetched every row of a member's credit ledger
+     and summed in JS — `credits` is append-only (one row per booking/
+     purchase/renewal), so a multi-year active member's row count isn't
+     bounded, and a silent truncation here means a **wrong balance**, not
+     just an incomplete list. **Fixed**: moved the sum into Postgres via
+     a new `get_credit_balance()` RPC (`podHq/supabase/migrations/
+     0019_get_credit_balance_function.sql`, applied 2026-08-11) — same
+     pattern `create_booking()` already used internally for its own
+     balance check, returns one number regardless of ledger size.
+   - `getAllMemberBookings()` (the `/bookings` history page) had the same
+     unbounded pattern. Lower stakes — an incomplete list, not wrong
+     money — fixed with a `.limit(500)` cap (most-recent-first, already
+     the query's sort order), well beyond what the current flat-list UI
+     is realistically useful for browsing.
+   - Flagged but not fixed: `getMembersForGym` (podHq's new `/pods`
+     manual-booking member picker) has the same unbounded shape, per gym
+     rather than per member. Real risk is much further off (needs ~1000+
+     members at a *single* gym) and the impact if it ever hit would be a
+     dropdown missing entries, not a financial bug — a searchable/
+     paginated picker is a real UX change to make once member counts
+     actually approach that, not now.
+
+**Live-verified**: `get_credit_balance()` applied via Supabase's SQL
+editor; confirmed via a direct RPC call against the pilot member's real
+ledger that the returned balance matches the same figure `/book`/
+`/profile` already show. All load-test fixtures (75 throwaway members/
+users across both concurrency tests) deleted afterward; the real gym's
+`pod_capacity`/`open_hour`/`close_hour` config was untouched by this
+review (only touched during the earlier hours-enforcement test, already
+reset then).
+
 ## Access onboarding (mobile/gender, address, waiver) — 2026-08-11
 
 Built at the user's request: a new "Access" row under Profile's ACCOUNT

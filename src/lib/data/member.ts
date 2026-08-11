@@ -66,12 +66,20 @@ export async function getMemberByAuthUserId(authUserId: string): Promise<Member 
   return data;
 }
 
+// Summed in Postgres via get_credit_balance() rather than pulling every
+// ledger row and summing in JS — credits is append-only (one row per
+// booking/purchase/renewal), so a long-tenured member's row count isn't
+// bounded, and PostgREST silently truncates any single request past 1000
+// rows. A truncated ledger fetch would mean a genuinely wrong balance,
+// not just an incomplete list — this RPC returns one number regardless
+// of how large the ledger gets, same pattern create_booking() already
+// uses internally for its own balance check.
 export async function getCreditBalance(memberId: number): Promise<number> {
   const admin = createAdminClient();
-  const { data, error } = await admin.from("credits").select("amount").eq("member_id", memberId);
+  const { data, error } = await admin.rpc("get_credit_balance", { p_member_id: memberId });
 
   if (error) throw new Error(error.message);
-  return (data ?? []).reduce((sum, row) => sum + row.amount, 0);
+  return data ?? 0;
 }
 
 export async function getActiveMembership(memberId: number): Promise<Membership | null> {
@@ -106,14 +114,21 @@ export async function getNextUpcomingBooking(memberId: number): Promise<Booking 
 // Every booking this member has ever made, most recent slot first — small
 // enough at pilot scale to fetch in one go and split into upcoming/past
 // client-side, rather than two separate queries with fragile PostgREST
-// filter-string construction for the "past" side's OR condition.
+// filter-string construction for the "past" side's OR condition. Capped
+// at 500 (most recent) rather than genuinely unbounded — a member visiting
+// 3x/week for 3+ years would eventually approach PostgREST's silent
+// 1000-row truncation cap otherwise. 500 is well beyond what this page's
+// flat Upcoming/Past list is actually useful for browsing; a member who
+// needs true full history beyond that is a real-pagination UI change, not
+// a one-line fix.
 export async function getAllMemberBookings(memberId: number): Promise<Booking[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("bookings")
     .select("*")
     .eq("member_id", memberId)
-    .order("slot_start", { ascending: false });
+    .order("slot_start", { ascending: false })
+    .limit(500);
 
   if (error) throw new Error(error.message);
   return data ?? [];
