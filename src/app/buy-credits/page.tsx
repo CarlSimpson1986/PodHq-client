@@ -5,6 +5,7 @@ import { CREDIT_PACKAGES } from "@/lib/credit-packages";
 import { BuyCreditsList } from "@/components/buy-credits-list";
 import { PageHero } from "@/components/page-hero";
 import { CoinIcon } from "@/components/icons";
+import { NoMemberProfile } from "@/components/no-member-profile";
 
 export default async function BuyCreditsPage() {
   const session = await createSessionClient();
@@ -18,11 +19,7 @@ export default async function BuyCreditsPage() {
 
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
-    return (
-      <main className="mx-auto max-w-md p-6">
-        <p className="text-sm text-danger">No member profile found for this account.</p>
-      </main>
-    );
+    return <NoMemberProfile />;
   }
 
   return (
