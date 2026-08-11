@@ -711,13 +711,15 @@ infrastructure. Three checks run:
      actually approach that, not now.
 
 **Live-verified**: `get_credit_balance()` applied via Supabase's SQL
-editor; confirmed via a direct RPC call against the pilot member's real
-ledger that the returned balance matches the same figure `/book`/
-`/profile` already show. All load-test fixtures (75 throwaway members/
-users across both concurrency tests) deleted afterward; the real gym's
-`pod_capacity`/`open_hour`/`close_hour` config was untouched by this
-review (only touched during the earlier hours-enforcement test, already
-reset then).
+editor; called it directly against the pilot member's real ledger (member
+1, 20 real rows) and confirmed it returned 67, exactly matching what the
+old JS-summed method computed from the same rows — correct now, not just
+"correct at scale" in theory. Deployed the code change and confirmed
+production `/book` still shows 67 credits through the new RPC-backed path,
+not the old one. All load-test fixtures (75 throwaway members/users across
+both concurrency tests) deleted afterward; the real gym's `pod_capacity`/
+`open_hour`/`close_hour` config was untouched by this review (only touched
+during the earlier hours-enforcement test, already reset then).
 
 ## Access onboarding (mobile/gender, address, waiver) — 2026-08-11
 
