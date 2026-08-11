@@ -5,10 +5,7 @@ import { signupSchema } from "@/lib/validation/auth";
 import { logAuthEvent } from "@/lib/audit";
 import { checkAuthActionRateLimit } from "@/lib/auth/lockout";
 import { getRequestIp } from "@/lib/request-ip";
-
-// Single-gym pilot scope (ROADMAP.md: "Aylesbury Berryfields only — not
-// multi-gym yet") — every self-signup lands here until that scope changes.
-const PILOT_GYM = "Aylesbury Berryfields";
+import { PILOT_GYM } from "@/lib/gym";
 
 // Never reveals whether the email was already registered — same
 // no-enumeration principle as podHq's magic-link GENERIC_MESSAGE.
@@ -43,6 +40,51 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createSessionClient();
   const origin = request.nextUrl.origin;
+  const admin = createAdminClient();
+
+  // Check for a pre-existing auth user BEFORE calling signUp() — signUp()'s
+  // own anti-enumeration behaviour silently no-ops for an email that
+  // already exists anywhere in this shared project (e.g. a podHq staff
+  // login) and sends no email at all, leaving no path to ever link that
+  // account. Same listUsers()+find() lookup as the admin-mediated fallback
+  // scripts (reset-pilot-password.mjs, link-existing-account-as-member.mjs)
+  // used before this flow existed. The response below stays byte-identical
+  // either way — only the real server-side action differs.
+  const { data: usersPage, error: listError } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  if (listError) {
+    console.error("[signup] failed to list users", { error: listError.message });
+    return NextResponse.json({ status: "error", message: "Something went wrong. Try again." }, { status: 500 });
+  }
+  const existingUser = usersPage.users.find((u) => u.email === email);
+
+  if (existingUser) {
+    // Verify the requester actually controls this inbox via a real
+    // magic-link email — signInWithOtp sends one even for an existing user
+    // (unlike signUp's silent path), so clicking it proves ownership before
+    // /api/auth/link-existing-account ever creates a member row. Only ever
+    // signs an *existing* user in (shouldCreateUser: false) — this branch
+    // never mints a new auth.users row.
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${origin}/auth/callback?type=link_existing&name=${encodeURIComponent(name)}`,
+      },
+    });
+    if (otpError) {
+      console.error("[signup] failed to send link-existing magic link", { error: otpError.message });
+    } else {
+      await logAuthEvent({
+        email,
+        userId: existingUser.id,
+        eventType: "signup",
+        ipAddress: ip,
+        detail: "link_existing_requested",
+      });
+    }
+    return NextResponse.json({ status: "ok", message: GENERIC_MESSAGE });
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -53,18 +95,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok", message: GENERIC_MESSAGE });
   }
 
-  const admin = createAdminClient();
   const { error: memberError } = await admin
     .from("members")
     .insert({ auth_user_id: data.user.id, gym: PILOT_GYM, name });
 
   // 23505 = auth_user_id already has a members row (repeat signup attempt
   // for an email that already has a confirmed member account). 23503 = the
-  // returned user.id has no matching auth.users row at all — Supabase's
-  // anti-enumeration behavior for signUp() against an email that's already
-  // registered under *any* account in this shared project (e.g. a podHq
-  // staff login) returns a masked "success" whose id was never persisted.
-  // Both cases mean "not actually a new member" — not an error to surface.
+  // returned user.id has no matching auth.users row at all — the collision
+  // case above now catches this ahead of time, but kept as defense in depth
+  // against a race (someone else's signUp() completing between our
+  // listUsers() check and this insert). Both mean "not actually a new
+  // member" — not an error to surface.
   if (memberError && !["23505", "23503"].includes(memberError.code)) {
     console.error("[signup] failed to create member row", { error: memberError.message });
     return NextResponse.json({ status: "error", message: "Something went wrong. Try again." }, { status: 500 });

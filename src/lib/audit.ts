@@ -7,7 +7,8 @@ export type AuthEventType =
   | "account_locked"
   | "signup"
   | "password_reset_requested"
-  | "password_reset_completed";
+  | "password_reset_completed"
+  | "account_linked";
 
 interface LogAuthEventInput {
   email: string;

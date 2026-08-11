@@ -49,9 +49,25 @@ function AuthCallbackInner() {
 
         if (type === "recovery") {
           router.push("/reset-password");
-        } else {
-          router.push("/book");
+          return;
         }
+
+        if (type === "link_existing") {
+          // The magic link itself already proved ownership of this inbox —
+          // this just creates the member row now that a session exists.
+          const linkRes = await fetch("/api/auth/link-existing-account", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: searchParams.get("name") ?? "" }),
+          });
+          const linkBody = await linkRes.json();
+          if (linkBody.status !== "ok") {
+            setError(true);
+            return;
+          }
+        }
+
+        router.push("/book");
       } catch {
         setError(true);
       }
