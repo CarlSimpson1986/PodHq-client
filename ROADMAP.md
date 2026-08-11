@@ -189,6 +189,108 @@ growing full-table-scan risk. `podHq/supabase/migrations/0015_auth_events_perf_i
 migrations (no standing DB write access, by design, see the earlier
 "safety issue with giving up access to Supabase" discussion).
 
+## Bottom nav, membership upgrade/downgrade, gift vouchers — 2026-08-11
+
+Requested together, worked on together, while the user was away from a
+laptop — built and deployed incrementally (commit → push → deploy →
+verify → next), same discipline as every other stage, just without a
+live pause for confirmation between each one.
+
+**Bottom nav (Home/Book/Shop/Profile).** New `BottomNav` component, fixed,
+active-state highlighting, added to Home/Book/Shop/Profile only (not the
+auth pages, not the buy-credits/buy-membership/gift-voucher sub-pages
+reached through Shop — those keep the existing "Back to X" link pattern).
+New Home page (`/`) replaces the old plain redirect-to-`/book`: greeting,
+"Get Your Membership" CTA when none active, next upcoming booking (new
+`getNextUpcomingBooking` data helper) or a book-now shortcut. New Shop
+page (`/shop`) mirrors GymFlow's own Shop screen exactly (Memberships /
+Credit Packs / Gift Voucher cards). The header icons on `/book`,
+`/buy-credits`, `/buy-membership` (the ones flagged as "don't do
+anything" earlier) now link to `/profile`.
+
+*Verification note*: screenshot capture repeatedly glitched during this
+build (viewport height reported inconsistently across calls — 772/726/702/
+638px — and once showed a stray black bar mid-scroll). Rather than trust a
+possibly-broken screenshot, checked the nav's actual computed styles
+directly via JS (`position: fixed`, `bottom: 0px`, bounding rect correctly
+spanning to `window.innerHeight`, no `transform` on any ancestor breaking
+the fixed-positioning containing block) and its accessibility tree (all 4
+links present with correct `href`s) — both confirmed it was built
+correctly; the screenshot tool just wasn't rendering it visibly in this
+particular automation environment. Home and Shop pages did render
+correctly in screenshots and were visually confirmed.
+
+**Membership upgrade/downgrade.** `/api/checkout-membership` now
+distinguishes re-selecting the *same* tier (still blocked, 409 "You're
+already on this plan") from a genuinely *different* tier (a real switch):
+cancels the existing subscription immediately via
+`stripe.subscriptions.cancel()` — same behaviour as Profile's own Cancel
+button, no proration/credit for the unused period — then proceeds to
+create the new Checkout Session exactly as a fresh subscribe would. The
+`memberships` row itself isn't touched directly by this route; the
+existing `customer.subscription.deleted` webhook handler remains the sole
+writer for that state change. `BuyMembershipList` shows "Current plan"
+(no button) on the active tier and "Switch to this plan" on the others.
+
+**Live-verified end-to-end** through the actual UI: subscribed to Smart
+Save, then clicked "Switch to this plan" on 10 Sessions — confirmed via
+Supabase that the old subscription was cancelled *before* the new
+Checkout Session was even created (not just eventually), then completed
+the new payment and confirmed the same `memberships` row (not a
+duplicate) updated to the new tier/subscription/credits, `status: active`.
+UI correctly showed "Current plan" on the new tier afterward, with the
+same-tier 409 path now structurally unreachable through the UI (no button
+rendered for the tier you're already on). Test subscription cancelled
+afterward.
+
+**Gift vouchers.** New Shop item matching GymFlow's own Gift Voucher
+screen: preset amounts (£20/50/100/150, matching GymFlow's exactly) plus
+a custom amount (£10–£500 range, guards the dynamic Stripe price against
+trivial/absurd amounts). The code (`XXXX-XXXX`, alphabet excludes
+visually-ambiguous characters since it's read off a screen and typed back
+in) is generated at Checkout-creation time — before payment — so the
+success page can show it immediately with no race against the webhook,
+but it's only ever written to the new `gift_vouchers` table once the
+webhook confirms payment (`checkout.session.completed`); an abandoned
+checkout leaves nothing spendable behind. Redemption
+(`POST /api/vouchers/redeem`, UI on `/buy-credits` — the closest thematic
+fit) claims the voucher via an atomic conditional update
+(`.is("redeemed_by_member_id", null)`) so two simultaneous redemption
+attempts for one code can't both succeed, then grants credits.
+
+**Deliberate simplifications, flagged rather than silently applied:**
+- **No email sending.** This app has no outbound-email infrastructure of
+  its own (Supabase Auth's emails are a separate system, confirm/reset
+  only). Unlike GymFlow's own flow, the code isn't emailed to the
+  purchaser — it's shown directly on the success page with a copy button,
+  and passing it on to whoever the gift is for is the purchaser's own
+  job. A real fix needs a decision on email infrastructure (which
+  provider, API key) not made here.
+- **£10 = 1 credit conversion rate**, chosen as the best (cheapest) rate
+  across the current PAYG packs in the absence of a single canonical
+  £-per-credit rate to derive it from — worth confirming with the
+  business rather than treating as final.
+- **Redemption is two separate writes** (claim the voucher, then insert
+  the credits row), not one atomic transaction/RPC like `create_booking`
+  has. The claim step is itself race-safe, but if the credits insert
+  failed right after a successful claim, the voucher would show
+  redeemed with no credits granted — a low-probability, not-yet-seen
+  edge case, not a security hole (can't double-grant), just a
+  worth-knowing gap in front of real usage.
+
+**Not yet applied**: `podHq/supabase/migrations/0016_pod_gift_vouchers.sql`
+(the `gift_vouchers` table + widens `credits.reason`) — same manual
+SQL-editor step as every prior migration, no standing DB write access by
+design. **Verified what's possible without it**: `/gift-voucher` renders
+correctly (presets, custom amount, live credit-equivalent calculation)
+and clicking "Go to Checkout" creates a real, correctly-priced Stripe
+Checkout Session (confirmed "Gift Voucher — £20.00" on Stripe's own page)
+— that part doesn't touch the DB at all. Deliberately did **not** complete
+a real payment before the migration exists, since the webhook would just
+fail (retried automatically by Stripe once the migration's applied,
+harmless, but not a useful test right now). **Full purchase → code →
+redeem loop still needs live verification** once the migration is run.
+
 ## Profile page — 2026-08-11
 
 Prompted by a full GymFlow app walkthrough (Home, Classes, Shop, Profile
