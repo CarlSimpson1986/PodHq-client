@@ -25,6 +25,12 @@ function AuthCallbackInner() {
       const hashParams = new URLSearchParams(window.location.hash.slice(1));
       const hashError = hashParams.get("error");
       const type = hashParams.get("type") ?? searchParams.get("type");
+      // Our own app-level routing intent, kept in a param Supabase never
+      // sets itself — "type" isn't safe for this: Supabase always stamps
+      // its own value into the hash (e.g. "magiclink" for every magic-link
+      // callback, ours or not), which shadows a same-named query param via
+      // the `??` above before our check ever runs.
+      const mode = searchParams.get("mode");
       const code = searchParams.get("code");
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
@@ -52,7 +58,7 @@ function AuthCallbackInner() {
           return;
         }
 
-        if (type === "link_existing") {
+        if (mode === "link_existing") {
           // The magic link itself already proved ownership of this inbox —
           // this just creates the member row now that a session exists.
           const linkRes = await fetch("/api/auth/link-existing-account", {
