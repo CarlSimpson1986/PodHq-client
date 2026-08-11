@@ -493,6 +493,58 @@ two known collision cases); would need a real verified-link flow (e.g. a
 confirmation email specifically for "link this existing account to a
 member profile") before this could happen at real signup volume.
 
+## Access onboarding (mobile/gender, address, waiver) — 2026-08-11
+
+Built at the user's request: a new "Access" row under Profile's ACCOUNT
+section, forcing a 3-step flow before the physical door Unlock is usable —
+`/access` (mobile number + gender) → `/access/address` (home address) →
+`/access/waiver` (My Fit Pod's real Terms & Conditions, House Rules, and
+the Waiver clause, with a typed-name signature).
+
+**Migration**: `podHq/supabase/migrations/0017_pod_member_access.sql` adds
+8 nullable columns to `public.members` (`mobile_number`, `gender`,
+`address_line1/2`, `address_city`, `address_postcode`,
+`waiver_signed_name`, `waiver_signed_at`) — no CHECK constraint on gender,
+validated at the app layer via a fixed option list instead, same pattern
+as podHq's `gym_outgoings.category`. **Written but not yet applied** — per
+this project's standing rule, migrations are user-applied via Supabase's
+SQL editor, not run by Claude directly. Documented on both sides per the
+shared-schema-duplication rule: this file and podHq's own ROADMAP.md.
+
+**Gating scope — my own default, not explicitly confirmed by the user**:
+only the physical door Unlock is gated on completion (`isAccessComplete()`
+in `src/lib/data/member.ts`); booking a slot and buying credits/membership
+remain unaffected. Flagging this again here in case the intended scope was
+actually broader (e.g. blocking booking too).
+
+**Waiver content is real, not placeholder** — transcribed in full from the
+user's own PDF (`My Fit Pod Ts & Cs (2).pdf`, provided directly for this
+purpose) into `src/lib/waiver-terms.ts`: General, Eligibility, PT Terms,
+Account Registration, House Rules (YOU WILL / YOU WILL NOT), Access
+Details Policy, Damages, Payment Terms, Memberships, Cancellation Policy,
+Licensing/Copyright, User Content, IP, Application License, SMS Messaging,
+Third-Party Services, Indemnity, Disclaimer, the Waiver clause itself,
+Limitation of Liability, Facility Rating, Promotion Terms, Notices,
+Governing Law, Termination, General — rendered in full on `/access/waiver`
+above the signature field, not summarised or truncated.
+
+**Defense in depth on the door, same pattern as the Stage 7 location
+gate**: `booking-grid.tsx`'s Unlock button is replaced with a "Complete
+Access" link to `/access` when incomplete (client-side UX), and
+`/api/unlock` independently re-checks `isAccessComplete()` server-side and
+logs a `pod_access_events` row (`success:false`,
+`"blocked: access onboarding incomplete"`) before ever reaching the
+location gate or Kisi — never trusts the client-side check alone for the
+physical door.
+
+`npx tsc --noEmit` and `eslint` pass on all new/changed files (one
+pre-existing, unrelated `Date.now()` purity lint warning in
+`booking-grid.tsx` predates this change).
+
+**Not yet live-tested** — pending the migration being applied to the live
+database (needs the user to run it via Supabase's SQL editor) before this
+can be tested end-to-end against the pilot account.
+
 ## Deliberate pilot-scope simplifications still open (Stages 2-6 above close these)
 
 - Single pod, single gym — no multi-pod capacity logic exists. Out of scope even after Stages 2-6 (target is still Aylesbury-only, not multi-gym) — revisit only if the target scope changes.

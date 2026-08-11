@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Membership } from "@/lib/data/member";
 import { BottomNav } from "@/components/bottom-nav";
-import { CoinIcon, IdCardIcon, GiftIcon, DumbbellIcon, ChevronRightIcon, LogoutIcon, PinIcon } from "@/components/icons";
+import { CoinIcon, IdCardIcon, GiftIcon, DumbbellIcon, ChevronRightIcon, LogoutIcon, PinIcon, LockIcon } from "@/components/icons";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -25,10 +25,12 @@ function ListRow({
   href,
   label,
   icon: Icon,
+  badge,
 }: {
   href: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
+  badge?: { text: string; tone: "pending" | "done" };
 }) {
   return (
     <Link
@@ -37,6 +39,13 @@ function ListRow({
     >
       <Icon className="h-5 w-5 shrink-0 text-card-light-muted" />
       <span className="flex-1 text-sm font-medium">{label}</span>
+      {badge && (
+        <span
+          className={`text-xs font-semibold ${badge.tone === "pending" ? "text-danger" : "text-card-light-muted"}`}
+        >
+          {badge.text}
+        </span>
+      )}
       <ChevronRightIcon className="h-4 w-4 shrink-0 text-card-light-muted" />
     </Link>
   );
@@ -46,10 +55,12 @@ export function ProfileView({
   memberName,
   gym,
   membership,
+  accessComplete,
 }: {
   memberName: string;
   gym: string;
   membership: Membership | null;
+  accessComplete: boolean;
 }) {
   const router = useRouter();
   const [membershipState, setMembershipState] = useState(membership);
@@ -146,6 +157,12 @@ export function ProfileView({
               <ListRow href="/buy-membership" label="Memberships" icon={IdCardIcon} />
               <ListRow href="/buy-credits" label="Credit Packs" icon={CoinIcon} />
               <ListRow href="/gift-voucher" label="Gift Voucher" icon={GiftIcon} />
+              <ListRow
+                href="/access"
+                label="Access"
+                icon={LockIcon}
+                badge={accessComplete ? { text: "Complete", tone: "done" } : { text: "Action needed", tone: "pending" }}
+              />
             </div>
           </section>
 

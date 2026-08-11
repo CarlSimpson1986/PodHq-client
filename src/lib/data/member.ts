@@ -6,6 +6,28 @@ export interface Member {
   auth_user_id: string;
   gym: string;
   name: string;
+  mobile_number: string | null;
+  gender: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  address_city: string | null;
+  address_postcode: string | null;
+  waiver_signed_name: string | null;
+  waiver_signed_at: string | null;
+}
+
+// Gate for the physical door Unlock only (not booking/credits) — a member
+// can still browse and book while completing this, but can't unlock until
+// all three onboarding steps (contact, address, waiver) are done.
+export function isAccessComplete(member: Member): boolean {
+  return Boolean(
+    member.mobile_number &&
+      member.gender &&
+      member.address_line1 &&
+      member.address_city &&
+      member.address_postcode &&
+      member.waiver_signed_at
+  );
 }
 
 export interface Booking {

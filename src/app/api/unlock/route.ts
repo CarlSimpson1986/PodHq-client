@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId } from "@/lib/data/member";
+import { getMemberByAuthUserId, isAccessComplete } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { unlockSchema } from "@/lib/validation/unlock";
 import { distanceMeters } from "@/lib/geo";
@@ -69,6 +69,22 @@ export async function POST(request: NextRequest) {
 
   if (!active) {
     return NextResponse.json({ status: "error", message: "No active booking right now." }, { status: 403 });
+  }
+
+  // Server-side mirror of the client-side gate in booking-grid.tsx —
+  // never trust a client-side-only check for the physical door, same
+  // reasoning as the location gate below.
+  if (!isAccessComplete(member)) {
+    await admin.from("pod_access_events").insert({
+      booking_id: active.id,
+      member_id: member.id,
+      success: false,
+      kisi_response: "blocked: access onboarding incomplete",
+    });
+    return NextResponse.json(
+      { status: "error", message: "Finish your Access details in Profile to unlock the door." },
+      { status: 403 }
+    );
   }
 
   const { data: mapping, error: mapError } = await admin

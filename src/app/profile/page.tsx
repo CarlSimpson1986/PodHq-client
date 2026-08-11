@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
+import { getMemberByAuthUserId, getActiveMembership, isAccessComplete } from "@/lib/data/member";
 import { ProfileView } from "@/components/profile-view";
 import { NoMemberProfile } from "@/components/no-member-profile";
 
@@ -21,5 +21,12 @@ export default async function ProfilePage() {
 
   const membership = await getActiveMembership(member.id);
 
-  return <ProfileView memberName={member.name} gym={member.gym} membership={membership} />;
+  return (
+    <ProfileView
+      memberName={member.name}
+      gym={member.gym}
+      membership={membership}
+      accessComplete={isAccessComplete(member)}
+    />
+  );
 }

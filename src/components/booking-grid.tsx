@@ -41,6 +41,7 @@ export function BookingGrid({
   selectedDate,
   purchaseSuccess,
   membershipSuccess,
+  accessComplete,
 }: {
   gym: string;
   memberName: string;
@@ -50,6 +51,7 @@ export function BookingGrid({
   selectedDate: string;
   purchaseSuccess: boolean;
   membershipSuccess: boolean;
+  accessComplete: boolean;
 }) {
   const [bookings, setBookings] = useState(initialBookings);
   const [credits, setCredits] = useState(initialCredits);
@@ -246,18 +248,30 @@ export function BookingGrid({
                   <div className="flex flex-col items-end gap-1.5">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-card-light-foreground">Your booking</span>
-                      {inUnlockWindow && (
-                        <button
-                          onClick={unlock}
-                          disabled={unlocking}
-                          className="flex items-center gap-1.5 rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                        >
-                          <LockIcon className="h-4 w-4" />
-                          {unlocking ? "Unlocking..." : "Unlock"}
-                        </button>
-                      )}
+                      {inUnlockWindow &&
+                        (accessComplete ? (
+                          <button
+                            onClick={unlock}
+                            disabled={unlocking}
+                            className="flex items-center gap-1.5 rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                          >
+                            <LockIcon className="h-4 w-4" />
+                            {unlocking ? "Unlocking..." : "Unlock"}
+                          </button>
+                        ) : (
+                          <Link
+                            href="/access"
+                            className="flex items-center gap-1.5 rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
+                          >
+                            <LockIcon className="h-4 w-4" />
+                            Complete Access
+                          </Link>
+                        ))}
                     </div>
-                    {inUnlockWindow && unlockMessage && (
+                    {inUnlockWindow && !accessComplete && (
+                      <p className="text-xs text-card-light-muted">Finish your Access details in Profile to unlock the door.</p>
+                    )}
+                    {inUnlockWindow && accessComplete && unlockMessage && (
                       <p className="text-xs text-card-light-muted">{unlockMessage}</p>
                     )}
                   </div>
