@@ -50,6 +50,47 @@ export function UserIcon({ className }: IconProps) {
   );
 }
 
+export function HomeIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" />
+    </svg>
+  );
+}
+
+export function DumbbellIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M2 10v4M22 10v4" />
+      <path d="M5 8v8M19 8v8" />
+      <rect x="4" y="9" width="2" height="6" rx="0.5" />
+      <rect x="18" y="9" width="2" height="6" rx="0.5" />
+      <path d="M8 12h8" />
+    </svg>
+  );
+}
+
+export function ShopIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M5 8h14l-1 12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 8Z" />
+      <path d="M8 8V6a4 4 0 0 1 8 0v2" />
+    </svg>
+  );
+}
+
+export function GiftIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <rect x="3.5" y="9" width="17" height="4" rx="0.5" />
+      <path d="M5 13h14v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8Z" />
+      <path d="M12 9v13" />
+      <path d="M12 9c-1.5-4-6.5-4-6.5-1S8.5 9 12 9ZM12 9c1.5-4 6.5-4 6.5-1S15.5 9 12 9Z" />
+    </svg>
+  );
+}
+
 export function IdCardIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
