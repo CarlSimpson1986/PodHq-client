@@ -189,6 +189,46 @@ growing full-table-scan risk. `podHq/supabase/migrations/0015_auth_events_perf_i
 migrations (no standing DB write access, by design, see the earlier
 "safety issue with giving up access to Supabase" discussion).
 
+## Week-day toggle on /book — 2026-08-11
+
+Requested with a real reference screenshot this time (GymFlow's "Classes"
+screen: a horizontal Tue 11 → Tue 18 day strip, today highlighted, above a
+day-scoped session list). Closed a real gap this surfaced: `/book` had
+never supported viewing or booking any day but today — Stage 1 only ever
+built a same-day grid.
+
+Built to match: `src/lib/booking-dates.ts` (shared date-window logic —
+today + the next 7 days, matching the reference), `getTodaysBookings`
+renamed to `getBookingsForDate(gym, date)` and parameterized instead of
+hardcoded, `/book?date=YYYY-MM-DD` drives which day's slots the server page
+fetches. `BookingGrid` gained the day-strip UI (Link-based, not client
+fetching, so the existing session-verified server-render path handles
+auth/data the same way it always has) and a day heading ("Wednesday 12
+Aug"). `key={formatDateParam(selectedDate)}` on `<BookingGrid>` forces a
+clean remount on day change — without it, the client component's
+`useState(initialBookings)` would only ever pick up its *first* mount's
+data and go stale across a same-route search-param navigation, a real
+Next.js App Router pitfall caught before it shipped, not after.
+
+The existing past-slot-hiding and unlock-window logic already compared
+against absolute timestamps rather than "today" specifically, so both
+generalized to future days for free — a future day's slot is never
+"past," and an existing booking on a future day correctly shows no active
+Unlock button until its actual time window arrives. `parseDateParam`
+clamps any hand-edited `?date=` outside the real 8-day window back to
+today, so the URL can't be used to request a date the UI itself never
+offered.
+
+**Live-verified** (local dev, via claude-in-chrome): day strip renders
+matching the reference exactly; clicking Wed 12 correctly navigated,
+re-fetched, and displayed all 24 hours from 00:00 with no past-hiding
+(confirming the future-day logic) and the correct "Wednesday 12 Aug"
+heading; credits balance held steady across the navigation (no state
+loss). Deployed to production and sanity-checked there too. Booking
+*creation* itself wasn't touched — only which day's slots are displayed —
+so it wasn't re-tested end-to-end; the underlying `create_booking` RPC and
+credit-deduction path are unchanged from their existing Stage 1 testing.
+
 ## Cross-app account collision — found and partially fixed 2026-08-11
 
 Signing into podhq-client with `carlsimpson83@yahoo.co.uk` (a real podHq
