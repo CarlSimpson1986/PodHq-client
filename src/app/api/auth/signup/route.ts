@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       email,
       options: {
         shouldCreateUser: false,
-        emailRedirectTo: `${origin}/auth/callback?type=link_existing&name=${encodeURIComponent(name)}`,
+        emailRedirectTo: `${origin}/auth/callback?mode=link_existing&name=${encodeURIComponent(name)}`,
       },
     });
     if (otpError) {
