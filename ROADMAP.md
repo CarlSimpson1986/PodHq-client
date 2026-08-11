@@ -151,6 +151,41 @@ New shared components: `src/components/page-hero.tsx` (banner used by every auth
 
 Applied across `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/book`, `/buy-credits`. Not done: GymFlow's bottom nav bar and native app chrome (Home/Book/Shop/Profile tabs) — this app only has the two real destinations (`/book`, `/buy-credits`) behind auth, so a persistent tab bar wasn't part of what was asked for.
 
+## Security review + live pentest — 2026-08-11
+
+At the user's request: a code-level review of every API route plus careful
+live testing against production (`podhq-client.vercel.app`), deliberately
+bounded to avoid any real-world side effect — no attempt to actually
+trigger a Kisi unlock or lock out a real account, given the physical door
+and shared-account stakes.
+
+**Nothing exploitable found.** Verified live: every protected page/API
+route correctly blocks unauthenticated access (middleware redirect before
+app logic runs); a forged Stripe webhook (fake signature, and no signature
+at all) is rejected outright, nothing processed; no service-role/Stripe/
+Kisi secret anywhere in client-visible output; sensitive paths
+(`/.env`, `/.git/config`, `/api/admin`) just redirect, nothing served; no
+`Access-Control-Allow-Origin` header (no cross-origin API access); login
+returns the identical generic error for a nonexistent email as for a real
+one with a wrong password (no enumeration); malformed JSON handled
+gracefully, no stack traces leaked; HSTS/nonce-CSP/`X-Frame-Options: DENY`/
+`nosniff`/restrictive `Permissions-Policy` all correctly present.
+`/api/unlock` is structurally IDOR-proof — it never accepts a client-
+supplied member/booking ID, always derives the caller's own active booking
+from their session.
+
+One low-severity, not-worth-fixing-yet note: `style-src` in the CSP allows
+`'unsafe-inline'` (a common Tailwind tradeoff) — real risk is low, only
+matters if there's ever an HTML-injection point elsewhere.
+
+**Performance:** found `auth_events` (queried on every login/signup/reset
+attempt, both apps) had no index at all on `ip_address` and an existing
+index that didn't cover the `event_type` filter every query applies — a
+growing full-table-scan risk. `podHq/supabase/migrations/0015_auth_events_perf_indexes.sql`
+written, **not yet applied** (same manual SQL-editor step as prior
+migrations — no standing DB write access, by design, see the earlier
+"safety issue with giving up access to Supabase" discussion).
+
 ## Cross-app account collision — found and partially fixed 2026-08-11
 
 Signing into podhq-client with `carlsimpson83@yahoo.co.uk` (a real podHq
