@@ -2,15 +2,17 @@ import { z } from "zod";
 
 export const GENDER_OPTIONS = ["Male", "Female", "Prefer not to say", "Other"] as const;
 
-// UK mobile only (this is a single-gym UK pilot) — loose enough to accept
-// spaces/dashes as typed, but requires a recognisable 07xxx / +447xxx shape.
-const MOBILE_REGEX = /^(?:\+44\s?7|0)7\d{2}\s?\d{3}\s?\d{3}$/;
+// UK mobile only (this is a single-gym UK pilot) — 11 digits total
+// (07xxxxxxxxx) or the +44 equivalent. Spaces are stripped before checking
+// so however the member groups the digits when typing is fine.
+const MOBILE_REGEX = /^(?:\+447\d{9}|07\d{9})$/;
 
 export const accessContactSchema = z.object({
   mobileNumber: z
     .string()
     .trim()
-    .regex(MOBILE_REGEX, "Enter a valid UK mobile number."),
+    .transform((v) => v.replace(/\s+/g, ""))
+    .pipe(z.string().regex(MOBILE_REGEX, "Enter a valid UK mobile number.")),
   gender: z.enum(GENDER_OPTIONS),
 });
 
