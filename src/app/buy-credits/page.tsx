@@ -24,7 +24,7 @@ export default async function BuyCreditsPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col">
-      <PageHero title="Buy credits" subtitle="Top up to book more pod sessions." icon={CoinIcon} />
+      <PageHero title="Buy credits" subtitle="Top up to book more pod sessions." icon={CoinIcon} iconHref="/profile" />
       <div className="card-light flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
           <BuyCreditsList packages={CREDIT_PACKAGES} />

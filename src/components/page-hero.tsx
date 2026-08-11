@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import Link from "next/link";
 
 // Full-width dark banner at the top of a page, flowing directly into a
 // flat white content area below (no rounded overlap) — matches GymFlow's
@@ -12,11 +13,20 @@ export function PageHero({
   title,
   subtitle,
   icon: Icon,
+  iconHref,
 }: {
   title: string;
   subtitle: string;
   icon: ComponentType<{ className?: string }>;
+  // Only pass this on pages behind auth — the icon becomes a link to
+  // /profile. Left unset on the auth pages (login/signup/forgot-password)
+  // that also use this component, since there's no profile to link to
+  // before signing in.
+  iconHref?: string;
 }) {
+  const iconCircleClass =
+    "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground";
+
   return (
     <div className="bg-card px-6 pb-8 pt-12 sm:pt-16">
       <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4">
@@ -24,9 +34,15 @@ export function PageHero({
           <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground">
-          <Icon className="h-7 w-7" />
-        </div>
+        {iconHref ? (
+          <Link href={iconHref} className={`${iconCircleClass} hover:bg-card-border`}>
+            <Icon className="h-7 w-7" />
+          </Link>
+        ) : (
+          <div className={iconCircleClass}>
+            <Icon className="h-7 w-7" />
+          </div>
+        )}
       </div>
     </div>
   );
