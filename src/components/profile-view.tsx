@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Membership, CreditHistoryRow } from "@/lib/data/member";
+import { BottomNav } from "@/components/bottom-nav";
 
 const REASON_LABELS: Record<CreditHistoryRow["reason"], string> = {
   manual_grant: "Manual grant",
@@ -74,7 +75,7 @@ export function ProfileView({
         </div>
       </div>
 
-      <div className="card-light flex-1 space-y-6 px-6 pb-10 pt-8">
+      <div className="card-light flex-1 space-y-6 px-6 pb-24 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <section>
             <h2 className="text-sm font-semibold text-card-light-muted">Membership</h2>
@@ -142,6 +143,7 @@ export function ProfileView({
           </Link>
         </div>
       </div>
+      <BottomNav />
     </main>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
 import { LockIcon, UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
+import { BottomNav } from "@/components/bottom-nav";
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
 const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
@@ -199,7 +200,7 @@ export function BookingGrid({
         </div>
       </div>
 
-      <div className="card-light flex-1 space-y-3 px-6 pb-10 pt-8">
+      <div className="card-light flex-1 space-y-3 px-6 pb-24 pt-8">
         <div className="mx-auto w-full max-w-md space-y-3">
           <p className="text-sm font-semibold text-card-light-muted">{formatDayHeading(selectedDayDate)}</p>
           {purchaseSuccess && <p className="text-sm text-success">Payment received — credits added.</p>}
@@ -257,6 +258,7 @@ export function BookingGrid({
           })}
         </div>
       </div>
+      <BottomNav />
     </>
   );
 }

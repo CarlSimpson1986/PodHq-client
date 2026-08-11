@@ -88,6 +88,22 @@ export async function getCreditHistory(memberId: number, limit = 20): Promise<Cr
   return data ?? [];
 }
 
+export async function getNextUpcomingBooking(memberId: number): Promise<Booking | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("bookings")
+    .select("*")
+    .eq("member_id", memberId)
+    .eq("status", "booked")
+    .gte("slot_start", new Date().toISOString())
+    .order("slot_start", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function getBookingsForDate(gym: string, date: Date): Promise<Booking[]> {
   const admin = createAdminClient();
   const startOfDay = new Date(date);
