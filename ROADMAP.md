@@ -462,6 +462,39 @@ loss). Deployed to production and sanity-checked there too. Booking
 so it wasn't re-tested end-to-end; the underlying `create_booking` RPC and
 credit-deduction path are unchanged from their existing Stage 1 testing.
 
+**Day-strip scroll UX, 2026-08-11.** Two rounds of direct feedback:
+first, "get rid of the sliding bar and just have it so their fingers can
+scroll" — the strip was always natively touch/trackpad-scrollable via
+`overflow-x-auto`, but the visible scrollbar track read as its own UI
+element rather than a swipeable row. Added a `.scrollbar-hide` utility
+(`scrollbar-width: none` + WebKit's `::-webkit-scrollbar`) so it now
+behaves like a plain strip. Second, "needs to scroll upto a month in
+advance" — the 30-day window was already there (confirmed: 30 day pills,
+last one Sep 9, `scrollWidth` 1702 vs `clientWidth` 448), but hiding the
+scrollbar removed the only way a plain desktop mouse (no touchscreen, no
+trackpad swipe) could actually reach it — dragging the old scrollbar
+thumb no longer had anything to grab. Added pointer-based click-and-drag
+scrolling for mouse input specifically (touch/trackpad already work
+natively and are left alone), with the standard drag-then-click
+suppression so releasing a drag on top of a day pill doesn't accidentally
+navigate to whatever date it happened to end on.
+
+**Live-verified** (local dev, via claude-in-chrome, synthetic pointer
+events since there's no real mouse/touchscreen in this environment):
+confirmed `scrollbar-width: none` applied and the strip still scrolls
+(`scrollLeft` moves) with the bar hidden; confirmed a simulated mouse
+drag reaches the maximum `scrollLeft` (1254, the full 30-day range) from
+a cold start; confirmed a drag that ends on top of a day pill correctly
+suppresses that pill's navigating click (URL stays put); confirmed a
+separate, genuine click on a different pill immediately after still
+navigates normally (`?date=2026-08-26`) — the fix needed one iteration
+here: the first version cleared the drag-suppression flag only inside the
+click handler itself, which left it wrongly "stuck true" if a drag ended
+over the strip's padding instead of directly on a pill (no click fires
+there to consume it), silently swallowing the next unrelated click.
+Fixed by clearing the flag on a deferred timer after every pointer-up
+instead, so it always resets even when no click follows the drag.
+
 ## Cross-app account collision — found and partially fixed 2026-08-11
 
 Signing into podhq-client with `carlsimpson83@yahoo.co.uk` (a real podHq
