@@ -5,6 +5,7 @@ import { MEMBERSHIP_TIERS } from "@/lib/membership-tiers";
 import { BuyMembershipList } from "@/components/buy-membership-list";
 import { PageHero } from "@/components/page-hero";
 import { IdCardIcon } from "@/components/icons";
+import { NoMemberProfile } from "@/components/no-member-profile";
 
 export default async function BuyMembershipPage() {
   const session = await createSessionClient();
@@ -18,11 +19,7 @@ export default async function BuyMembershipPage() {
 
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
-    return (
-      <main className="mx-auto max-w-md p-6">
-        <p className="text-sm text-danger">No member profile found for this account.</p>
-      </main>
-    );
+    return <NoMemberProfile />;
   }
 
   return (

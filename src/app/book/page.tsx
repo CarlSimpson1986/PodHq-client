@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getCreditBalance, getTodaysBookings } from "@/lib/data/member";
 import { BookingGrid } from "@/components/booking-grid";
+import { NoMemberProfile } from "@/components/no-member-profile";
 
 export default async function BookPage({
   searchParams,
@@ -21,11 +22,7 @@ export default async function BookPage({
 
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
-    return (
-      <main className="mx-auto max-w-md p-6">
-        <p className="text-sm text-danger">No member profile found for this account.</p>
-      </main>
-    );
+    return <NoMemberProfile />;
   }
 
   const [credits, todaysBookings] = await Promise.all([
