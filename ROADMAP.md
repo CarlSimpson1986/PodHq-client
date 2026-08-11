@@ -357,18 +357,22 @@ attempts for one code can't both succeed, then grants credits.
   edge case, not a security hole (can't double-grant), just a
   worth-knowing gap in front of real usage.
 
-**Not yet applied**: `podHq/supabase/migrations/0016_pod_gift_vouchers.sql`
-(the `gift_vouchers` table + widens `credits.reason`) — same manual
-SQL-editor step as every prior migration, no standing DB write access by
-design. **Verified what's possible without it**: `/gift-voucher` renders
-correctly (presets, custom amount, live credit-equivalent calculation)
-and clicking "Go to Checkout" creates a real, correctly-priced Stripe
-Checkout Session (confirmed "Gift Voucher — £20.00" on Stripe's own page)
-— that part doesn't touch the DB at all. Deliberately did **not** complete
-a real payment before the migration exists, since the webhook would just
-fail (retried automatically by Stripe once the migration's applied,
-harmless, but not a useful test right now). **Full purchase → code →
-redeem loop still needs live verification** once the migration is run.
+**Migration applied and full loop live-verified 2026-08-11**, after the
+user ran `0016_pod_gift_vouchers.sql` via Supabase's SQL editor. Bought a
+real £20 voucher through `/gift-voucher` with the Stripe test card
+(`4242...`), redirected to the success page showing a real code
+(`MKBU-2RTN`) — confirmed against Supabase, not just the UI, that the
+webhook actually wrote the `gift_vouchers` row (`credits: 2`, correct
+£10-per-credit rate, unredeemed). Redeemed it on `/buy-credits`: voucher
+flipped to `redeemed_by_member_id` set, and a `credits` row landed
+(`+2`, `reason: 'gift_voucher'`) — balance confirmed via direct query.
+**Double-redeem also verified live**: replaying the same code against
+`/api/vouchers/redeem` correctly returned 409 ("already been redeemed")
+and the credits table still showed exactly one grant, confirming the
+atomic `.is("redeemed_by_member_id", null)` claim holds under a real
+repeat request, not just in theory. Stage 9 (gift vouchers) is now fully
+closed — Stripe checkout/webhook/redeem all confirmed working end-to-end
+against production.
 
 ## Profile page — 2026-08-11
 
