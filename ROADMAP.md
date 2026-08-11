@@ -189,6 +189,54 @@ growing full-table-scan risk. `podHq/supabase/migrations/0015_auth_events_perf_i
 migrations (no standing DB write access, by design, see the earlier
 "safety issue with giving up access to Supabase" discussion).
 
+## Profile page — 2026-08-11
+
+Prompted by a full GymFlow app walkthrough (Home, Classes, Shop, Profile
+screens) — asked directly what to prioritize given the size of the gap
+between podhq-client (three pages, no nav, no account hub) and GymFlow's
+full structure. Recommended Profile over a bottom nav: it closes real
+*functional* gaps, not just navigation — there was no way to log out from
+the UI at all (the `/api/auth/logout` route existed, nothing linked to
+it), and no way to see or cancel a membership once bought (flagged as a
+gap right after Stage 8 shipped).
+
+Built: `/profile` — membership status card (tier, credits/period, renewal
+date, Cancel button) or a "Get a membership" prompt if none active; last
+20 credit-ledger entries with friendly reason labels (Credit pack
+purchase / Membership renewal / Booking / etc.); a Log out button.
+`POST /api/membership/cancel` calls `stripe.subscriptions.cancel()`
+directly (immediate, not `cancel_at_period_end` — matches the exact
+behaviour already live-verified during Stage 8's own testing) — the
+`memberships` row itself isn't touched by this route; the existing
+`customer.subscription.deleted` webhook handler remains the sole writer
+for that state change, same pattern as every other Stripe-driven update
+in this app.
+
+**Also closed the icon complaint from earlier**: the decorative header
+icons on `/book`, `/buy-credits`, and `/buy-membership` (flagged as
+"don't do anything") now link to `/profile` — `/book`'s calendar icon
+swapped for a new `UserIcon` (calendar didn't represent "profile"
+meaningfully), and `PageHero` (shared with the *unauthenticated* auth
+pages) gained an optional `iconHref` left unset there, so login/signup/
+forgot-password keep their purely-decorative icon rather than linking
+into a profile that doesn't exist pre-login.
+
+**Live-verified** (local dev, via claude-in-chrome) — with a real
+detour: initial testing accidentally landed on a leftover session for
+`carlossimpson83+podtest2@gmail.com` (member "Pod Test", last signed in
+2026-08-10) still valid in the local Chrome profile's cookies, which
+`proxy.ts` was silently honouring — the *new* login attempts weren't
+actually failing, they were never being submitted at all, since the
+already-valid old session redirected `/login` straight to `/book` before
+the form mattered. Diagnosed by checking `members`/`auth.users` directly
+rather than assuming the new code was broken. Logged out properly first
+(a real functional test of the new Log Out button — worked, redirected
+to `/login` cleanly), then re-verified under the actual pilot account:
+correct name/gym, "No active membership" (accurately reflecting the
+Stage 8 cancellation testing), and the full, correctly-labelled,
+newest-first credit history matching every real transaction from
+today's testing. Deployed to production and sanity-checked there too.
+
 ## Week-day toggle on /book — 2026-08-11
 
 Requested with a real reference screenshot this time (GymFlow's "Classes"
