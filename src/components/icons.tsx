@@ -40,3 +40,13 @@ export function CoinIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IdCardIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="11" r="2" />
+      <path d="M6 16c0-1.4 1.1-2.5 2.5-2.5S11 14.6 11 16M14 9.5h5M14 13h5" />
+    </svg>
+  );
+}

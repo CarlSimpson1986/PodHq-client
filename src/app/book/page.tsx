@@ -6,7 +6,7 @@ import { BookingGrid } from "@/components/booking-grid";
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ purchase?: string }>;
+  searchParams: Promise<{ purchase?: string; membership?: string }>;
 }) {
   const session = await createSessionClient();
   const {
@@ -42,6 +42,7 @@ export default async function BookPage({
         initialCredits={credits}
         initialBookings={todaysBookings}
         purchaseSuccess={params.purchase === "success"}
+        membershipSuccess={params.membership === "success"}
       />
     </main>
   );

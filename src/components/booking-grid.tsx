@@ -29,6 +29,7 @@ export function BookingGrid({
   initialCredits,
   initialBookings,
   purchaseSuccess,
+  membershipSuccess,
 }: {
   gym: string;
   memberName: string;
@@ -36,6 +37,7 @@ export function BookingGrid({
   initialCredits: number;
   initialBookings: Booking[];
   purchaseSuccess: boolean;
+  membershipSuccess: boolean;
 }) {
   const [bookings, setBookings] = useState(initialBookings);
   const [credits, setCredits] = useState(initialCredits);
@@ -154,11 +156,19 @@ export function BookingGrid({
             Buy more
           </Link>
         </div>
+        <div className="mx-auto mt-3 w-full max-w-md">
+          <Link href="/buy-membership" className="text-sm text-muted-foreground underline hover:text-foreground">
+            Get a monthly membership instead
+          </Link>
+        </div>
       </div>
 
       <div className="card-light flex-1 space-y-3 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-3">
           {purchaseSuccess && <p className="text-sm text-success">Payment received — credits added.</p>}
+          {membershipSuccess && (
+            <p className="text-sm text-success">Membership active — your monthly credits will land shortly.</p>
+          )}
           {error && <p className="text-sm text-danger">{error}</p>}
           {success && <p className="text-sm text-success">{success}</p>}
           {slots.map((slot) => {
