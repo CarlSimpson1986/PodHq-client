@@ -141,6 +141,29 @@ yet. One Kisi place, "Thomley," doesn't correspond to any of the 9 gym
 names — unresolved, possibly Oxford East under a different name, not
 verified.
 
+## Tooling decision — 2026-08-11
+
+User pointed to two external Claude Code skill repos (`garrytan/gstack` and
+`nextlevelbuilder/ui-ux-pro-max-skill`) and asked whether they fit this
+project. Evaluated, **not installed**:
+
+- **gstack** — 23-skill sprint-pipeline framework (CEO/QA/security personas,
+  Playwright automation, its own persistent knowledge DB). Too much surface
+  for this project's existing tight staged-ROADMAP workflow with manual
+  live-verification per stage.
+- **ui-ux-pro-max-skill** — auto-generates a new design system per request
+  from industry presets; confirmed (from its own docs) to have no way to
+  constrain output to an existing theme and no clarifying-question step
+  before generating. Would fight this app's CLAUDE.md rules (dark-only, no
+  light mode, reuse podHq's existing tokens) and the actual UI work done
+  here, which is pixel-matching GymFlow's specific look, not generating a
+  novel palette.
+
+Kept only as a reference note (not installed, not auto-invoked) in case a
+future task genuinely needs one — e.g. a from-scratch design system with no
+existing theme to match, or heavier multi-agent orchestration than
+`/code-review`/`/security-review` already cover.
+
 ## Security note — resolved 2026-08-06
 
 A prior session's note here claimed the Kisi API key was accidentally
