@@ -30,7 +30,7 @@ export interface Membership {
 export interface CreditHistoryRow {
   id: number;
   amount: number;
-  reason: "manual_grant" | "booking_used" | "booking_refund" | "purchase" | "membership";
+  reason: "manual_grant" | "booking_used" | "booking_refund" | "purchase" | "membership" | "gift_voucher";
   created_at: string;
 }
 
