@@ -16,6 +16,24 @@ export interface Booking {
   status: "booked" | "cancelled" | "completed" | "no_show";
 }
 
+export interface Membership {
+  id: number;
+  member_id: number;
+  tier_id: string;
+  tier_name: string;
+  credits_per_period: number;
+  stripe_subscription_id: string;
+  status: "active" | "past_due" | "canceled";
+  current_period_end: string | null;
+}
+
+export interface CreditHistoryRow {
+  id: number;
+  amount: number;
+  reason: "manual_grant" | "booking_used" | "booking_refund" | "purchase" | "membership";
+  created_at: string;
+}
+
 // Verify the session with the caller's own client first (already done by
 // every route/page that calls this), then query via the service-role
 // client — matches podHq's documented lesson: never rely on RLS's
@@ -39,6 +57,35 @@ export async function getCreditBalance(memberId: number): Promise<number> {
 
   if (error) throw new Error(error.message);
   return (data ?? []).reduce((sum, row) => sum + row.amount, 0);
+}
+
+export async function getActiveMembership(memberId: number): Promise<Membership | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("memberships")
+    .select("*")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// Most recent first, capped — an append-only ledger has no natural upper
+// bound otherwise, and Profile only needs enough to show recent activity,
+// not a full accounting export.
+export async function getCreditHistory(memberId: number, limit = 20): Promise<CreditHistoryRow[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("credits")
+    .select("id, amount, reason, created_at")
+    .eq("member_id", memberId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 export async function getBookingsForDate(gym: string, date: Date): Promise<Booking[]> {

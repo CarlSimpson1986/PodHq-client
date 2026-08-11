@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
-import { CalendarIcon, LockIcon } from "@/components/icons";
+import { LockIcon, UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
@@ -155,9 +155,12 @@ export function BookingGrid({
             <h1 className="text-2xl font-semibold text-foreground">{gym}</h1>
             <p className="mt-1 text-sm text-muted-foreground">Hi {memberName}</p>
           </div>
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground">
-            <CalendarIcon className="h-7 w-7" />
-          </div>
+          <Link
+            href="/profile"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground hover:bg-card-border"
+          >
+            <UserIcon className="h-7 w-7" />
+          </Link>
         </div>
         <div className="mx-auto mt-6 flex w-full max-w-md items-center justify-between rounded-xl border border-card-border px-4 py-3">
           <div>
