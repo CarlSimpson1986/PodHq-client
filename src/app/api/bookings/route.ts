@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId } from "@/lib/data/member";
+import { getMemberByAuthUserId, getPodConfig } from "@/lib/data/member";
 import { createBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -37,6 +37,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
   }
 
+  // Self-service-only restriction — staff can knowingly book outside these
+  // hours from podHq's admin Pods page, but the member-facing booking flow
+  // respects whatever the gym has configured (defaults to all-day). Reads
+  // the hour via Europe/London specifically rather than the server's own
+  // local time — Vercel's serverless functions run in UTC regardless of
+  // the `lhr1` region pin, so a plain .getHours() would be off by an hour
+  // during BST (this gym's slots are always constructed from the member's
+  // browser in UK wall-clock time, so the check needs to use the same
+  // frame of reference to compare correctly against the configured hours).
+  const { openHour, closeHour } = await getPodConfig(member.gym);
+  const slotHour = Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", hourCycle: "h23" }).format(
+      new Date(parsed.data.slotStart)
+    )
+  );
+  if (slotHour < openHour || slotHour >= closeHour) {
+    return NextResponse.json({ status: "error", message: "That time is outside booking hours." }, { status: 400 });
+  }
+
   const admin = createAdminClient();
   const { data: bookingId, error } = await admin.rpc("create_booking", {
     p_member_id: member.id,
@@ -47,6 +66,9 @@ export async function POST(request: NextRequest) {
   if (error) {
     if (error.message.includes("insufficient_credits")) {
       return NextResponse.json({ status: "error", message: "Not enough credits to book this slot." }, { status: 409 });
+    }
+    if (error.message.includes("slot_full")) {
+      return NextResponse.json({ status: "error", message: "That slot is fully booked." }, { status: 409 });
     }
     if (error.message.includes("duplicate key") || error.code === "23505") {
       return NextResponse.json({ status: "error", message: "That slot is already booked." }, { status: 409 });

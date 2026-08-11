@@ -138,3 +138,19 @@ export async function getBookingsForDate(gym: string, date: Date): Promise<Booki
   if (error) throw new Error(error.message);
   return data ?? [];
 }
+
+// Pod capacity + self-service booking hours (podHq's admin "Pods" page
+// configures these per gym) — defaults to today's original behaviour
+// (capacity 1, open all day) if the gym has no gym_kisi_mapping row at
+// all, matching the DB column defaults.
+export async function getPodConfig(gym: string): Promise<{ openHour: number; closeHour: number; podCapacity: number }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("gym_kisi_mapping")
+    .select("open_hour, close_hour, pod_capacity")
+    .eq("gym", gym)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return { openHour: data?.open_hour ?? 0, closeHour: data?.close_hour ?? 24, podCapacity: data?.pod_capacity ?? 1 };
+}

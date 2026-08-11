@@ -583,6 +583,60 @@ afterward.
 fallback for edge cases the self-service flow can't reach (e.g. an email
 that needs linking but genuinely never receives the magic link).
 
+## Pod capacity + bookable hours (podHq admin backend) — 2026-08-11
+
+Requested alongside the account-linking flow above: staff need to
+manually book members and configure per-gym limits from podHq (the
+staff/admin app), not just via podhq-client's own self-service flow. Full
+build lives in podHq (`/pods` page, `src/lib/data/pods.ts`, `/api/pods/*`)
+— see its own ROADMAP.md Stage 15 for that side. This app's half is the
+self-service-side plumbing the new limits actually apply to.
+
+**`podHq/supabase/migrations/0018_pod_capacity_and_hours.sql` written
+2026-08-11, not yet applied** (per the shared-schema rule, documented on
+both sides): adds `pod_capacity`/`open_hour`/`close_hour` to
+`gym_kisi_mapping` and rewrites `create_booking()` to enforce capacity
+itself (serialized via `pg_advisory_xact_lock`) instead of the old
+partial unique index, which hard-capped every gym at exactly one
+concurrent booking. Every existing gym keeps `pod_capacity = 1` by
+default, so no real behaviour changes until this is applied and a gym is
+explicitly reconfigured via podHq's `/pods` page.
+
+**Confirmed with the user**: bookable hours are a self-service-only
+restriction (staff can override from `/pods`); capacity is a hard
+physical constraint that applies no matter who's booking.
+
+**Changes made here**: `src/lib/data/member.ts` gained `getPodConfig(gym)`
+(reads `open_hour`/`close_hour`/`pod_capacity`, defaulting to today's
+original behaviour — all-day, capacity 1 — if a gym has no
+`gym_kisi_mapping` row). `/api/bookings` now rejects a self-service
+booking outside the configured hours (400, "That time is outside booking
+hours") and handles the new `slot_full` RPC error (409, "That slot is
+fully booked") alongside the existing `insufficient_credits` case.
+`booking-grid.tsx`'s day-grid now filters out-of-hours slots entirely
+(members never see a slot they can't book) and is capacity-aware rather
+than binary taken/free — a slot only shows "Booked"/"Full" once its
+booking count reaches `podCapacity`, with an `n/capacity` count shown
+once capacity is above 1.
+
+**Real bug found and fixed before this shipped**: the hours check
+initially read the slot's hour via a plain `new Date(...).getHours()` on
+the server — but Vercel's serverless functions run in UTC internally
+regardless of the `lhr1` region pin (the region only controls *where* the
+function executes, not its OS timezone), so during BST (British Summer
+Time — in effect right now) this would have been off by exactly one hour
+against the UK wall-clock hours staff configure in podHq's `/pods`. A
+9am–9pm gym configuration would have silently opened/closed an hour late
+every day in summer. Fixed using `Intl.DateTimeFormat` with
+`timeZone: "Europe/London"` to read the hour correctly regardless of the
+server's own timezone. The client-side filter in `booking-grid.tsx`
+doesn't have this problem — it reads the hour from a `Date` constructed
+in the member's own browser via `setHours()`, which is already correctly
+timezone-aware for whoever's holding the phone.
+
+**Not yet live-tested** — pending the migration being applied via
+Supabase's SQL editor (same blocker as podHq's Stage 15).
+
 ## Access onboarding (mobile/gender, address, waiver) — 2026-08-11
 
 Built at the user's request: a new "Access" row under Profile's ACCOUNT

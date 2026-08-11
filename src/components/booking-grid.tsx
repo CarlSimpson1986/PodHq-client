@@ -41,6 +41,9 @@ export function BookingGrid({
   selectedDate,
   purchaseSuccess,
   membershipSuccess,
+  openHour,
+  closeHour,
+  podCapacity,
 }: {
   gym: string;
   memberName: string;
@@ -50,6 +53,9 @@ export function BookingGrid({
   selectedDate: string;
   purchaseSuccess: boolean;
   membershipSuccess: boolean;
+  openHour: number;
+  closeHour: number;
+  podCapacity: number;
 }) {
   const [bookings, setBookings] = useState(initialBookings);
   const [credits, setCredits] = useState(initialCredits);
@@ -159,6 +165,7 @@ export function BookingGrid({
   // applies when viewing today — every slot on a future day is, by
   // definition, still ahead of "now".
   const slots = hourSlots(selectedDayDate).filter((slot) => {
+    if (slot.getHours() < openHour || slot.getHours() >= closeHour) return false;
     if (!isToday) return true;
     const isPast = slot.getTime() + 60 * 60 * 1000 < now;
     if (!isPast) return true;
@@ -240,9 +247,13 @@ export function BookingGrid({
           {error && <p className="text-sm text-danger">{error}</p>}
           {success && <p className="text-sm text-success">{success}</p>}
           {slots.map((slot) => {
-            const existing = bookings.find((b) => new Date(b.slot_start).getTime() === slot.getTime());
-            const isMine = existing?.member_id === memberId;
-            const isTaken = !!existing && !isMine;
+            const slotBookings = bookings.filter((b) => new Date(b.slot_start).getTime() === slot.getTime());
+            const isMine = slotBookings.some((b) => b.member_id === memberId);
+            // Capacity is normally 1 (unchanged pilot default) — a gym
+            // configured for more than one concurrent booking (podHq's
+            // admin Pods page) just means "taken" now means "at capacity",
+            // not "anyone at all has this slot".
+            const isFull = !isMine && slotBookings.length >= podCapacity;
             const inUnlockWindow =
               isMine && now >= slot.getTime() - WINDOW_BEFORE_MS && now <= slot.getTime() + WINDOW_AFTER_MS;
 
@@ -262,8 +273,10 @@ export function BookingGrid({
                       </Link>
                     )}
                   </div>
-                ) : isTaken ? (
-                  <span className="text-sm text-card-light-muted">Booked</span>
+                ) : isFull ? (
+                  <span className="text-sm text-card-light-muted">
+                    {podCapacity > 1 ? `Full (${slotBookings.length}/${podCapacity})` : "Booked"}
+                  </span>
                 ) : (
                   <button
                     onClick={() => bookSlot(slot)}
