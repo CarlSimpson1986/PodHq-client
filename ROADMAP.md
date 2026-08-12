@@ -873,3 +873,56 @@ read here (`.env.local` is hard-blocked, see both projects'
 `.claude/settings.json`), but its function was verified live the same
 day — see Stage 1's "Kisi key rotation verified live" note above. Fully
 closed.
+
+## Cancel session, 2-hour policy — 2026-08-12
+
+Built at the user's request: members had no way to cancel a booking once
+made (`/bookings` only ever offered Unlock). Policy confirmed by the
+user directly: cancelling within 2 hours of the session forfeits the
+credit outright, no refund; cancelling earlier than that refunds it.
+
+**`podHq/supabase/migrations/0020_cancel_booking_function.sql` written and
+applied 2026-08-12** (per the shared-schema rule, flagged on both sides —
+see podHq's own ROADMAP.md Database schema section). New
+`cancel_booking(p_member_id, p_booking_id)`: locks the booking row
+(`for update`) so a rapid double-click can't race past the status check
+and double-refund, same atomicity concern `create_booking()` already
+solves with its advisory lock. Ownership is enforced by the query itself
+(`where id = p_booking_id and member_id = p_member_id`) — `p_member_id`
+is always the caller's own session-derived id, never client-supplied,
+same IDOR-proof pattern `/api/unlock` already uses. Refund uses
+`credits.reason = 'booking_refund'`, which has been in the allowed-reason
+check constraint since 0009_pod_booking.sql but was never actually used
+until now.
+
+**Built**: `POST /api/bookings/cancel` (session-authenticated,
+rate-limited under its own `/api/bookings/cancel` bucket, same pattern as
+every other route) maps `booking_not_found` → 404 and `already_cancelled`
+→ 409. `bookings-view.tsx`'s Upcoming tab gained a "Cancel session" link
+per booking that expands to an inline confirmation panel (no native
+`window.confirm` — this app avoids browser dialogs elsewhere too) stating
+up front whether this specific cancellation will refund or forfeit the
+credit, computed client-side from the same 2-hour cutoff the DB function
+enforces server-side (a hint only — the RPC is the real check). On
+confirm, the booking is optimistically hidden from Upcoming and
+`router.refresh()` re-fetches from the server, matching the existing
+optimistic-update pattern already used for membership cancellation on
+`/profile`.
+
+Migration applied 2026-08-12 via Supabase's SQL editor, same manual step
+as every prior migration in this project — first attempt hit a syntax
+error (`42601`, `if` unexpected on line 3) because only part of the
+function body made it into the editor on the first paste; re-pasting the
+full statement in one go (`create or replace function` through the final
+`$$;`) fixed it. `npx tsc --noEmit` and `eslint` pass on all new/changed
+files (the one pre-existing, unrelated `Date.now()` purity lint warning in
+`bookings-view.tsx` predates this change — confirmed via `git stash` that
+it was already present before any of today's edits).
+
+**Not yet live-tested through the actual app** — the migration is applied
+and the code is deployed-ready, but the full flow (book a slot far enough
+out to cancel with time to spare and confirm the credit balance goes back
+up; book and cancel a slot inside the 2-hour window and confirm the
+balance does *not* change; double-cancel the same booking and confirm it
+409s instead of double-processing anything) hasn't been run end-to-end
+yet against a real account.
