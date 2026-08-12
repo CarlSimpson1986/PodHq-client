@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
 import { formatDateParam } from "@/lib/booking-dates";
@@ -15,6 +16,11 @@ const STATUS_LABELS: Record<Booking["status"], string> = {
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
 const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
+// Cancellation policy: cancel more than 2 hours before slot_start and the
+// credit is refunded; inside that window it's forfeited. Mirrors the
+// server-side cutoff in cancel_booking() — this is just a hint shown
+// before confirming, the DB function is the real enforcement.
+const CANCELLATION_CUTOFF_MS = 2 * 60 * 60 * 1000;
 
 function formatSlot(iso: string) {
   const d = new Date(iso);
@@ -25,9 +31,40 @@ function formatSlot(iso: string) {
 }
 
 export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]; accessComplete: boolean }) {
+  const router = useRouter();
   const [view, setView] = useState<"upcoming" | "past">("upcoming");
   const [unlockingId, setUnlockingId] = useState<number | null>(null);
   const [unlockMessages, setUnlockMessages] = useState<Record<number, string>>({});
+  const [confirmingCancelId, setConfirmingCancelId] = useState<number | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [cancelledIds, setCancelledIds] = useState<Set<number>>(new Set());
+  const [cancelErrors, setCancelErrors] = useState<Record<number, string>>({});
+
+  async function confirmCancel(bookingId: number) {
+    setCancellingId(bookingId);
+    setCancelErrors((prev) => ({ ...prev, [bookingId]: "" }));
+    try {
+      const res = await fetch("/api/bookings/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId }),
+      });
+      const body = await res.json();
+      if (body.status !== "ok") {
+        setCancelErrors((prev) => ({ ...prev, [bookingId]: body.message ?? "Could not cancel booking." }));
+        return;
+      }
+      // Optimistic — hides the booking from Upcoming immediately rather
+      // than waiting on the server-component refetch below.
+      setCancelledIds((prev) => new Set(prev).add(bookingId));
+      setConfirmingCancelId(null);
+      router.refresh();
+    } catch {
+      setCancelErrors((prev) => ({ ...prev, [bookingId]: "Something went wrong. Try again." }));
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   async function unlock(bookingId: number) {
     setUnlockMessages((prev) => ({ ...prev, [bookingId]: "" }));
@@ -77,7 +114,10 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
   // otherwise it flipped to "past" right as a member arrived to unlock it.
   // Cancelled/completed/no-show is never "upcoming" regardless of timing.
   const upcoming = bookings.filter(
-    (b) => b.status === "booked" && new Date(b.slot_start).getTime() + WINDOW_AFTER_MS >= now
+    (b) =>
+      b.status === "booked" &&
+      !cancelledIds.has(b.id) &&
+      new Date(b.slot_start).getTime() + WINDOW_AFTER_MS >= now
   );
   const past = bookings.filter(
     (b) => !(b.status === "booked" && new Date(b.slot_start).getTime() + WINDOW_AFTER_MS >= now)
@@ -147,6 +187,43 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
                     ))}
                 </div>
                 {inUnlockWindow && message && <p className="mt-2 text-xs text-card-light-muted">{message}</p>}
+
+                {view === "upcoming" &&
+                  (confirmingCancelId === booking.id ? (
+                    <div className="mt-3 rounded-lg border border-card-light-border p-3">
+                      <p className="text-xs text-card-light-muted">
+                        {start - now > CANCELLATION_CUTOFF_MS
+                          ? "This is more than 2 hours away, so your credit will be refunded."
+                          : "This is within 2 hours of your session, so your credit will not be refunded — you'll lose it."}
+                      </p>
+                      {cancelErrors[booking.id] && (
+                        <p className="mt-2 text-xs text-danger">{cancelErrors[booking.id]}</p>
+                      )}
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => confirmCancel(booking.id)}
+                          disabled={cancellingId === booking.id}
+                          className="rounded-lg bg-danger px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          {cancellingId === booking.id ? "Cancelling..." : "Confirm cancellation"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmingCancelId(null)}
+                          disabled={cancellingId === booking.id}
+                          className="rounded-lg border border-card-light-border px-3 py-1.5 text-xs font-semibold text-card-light-muted hover:text-card-light-foreground"
+                        >
+                          Back
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingCancelId(booking.id)}
+                      className="mt-2 text-xs font-semibold text-card-light-muted hover:text-danger"
+                    >
+                      Cancel session
+                    </button>
+                  ))}
               </div>
             );
           })}

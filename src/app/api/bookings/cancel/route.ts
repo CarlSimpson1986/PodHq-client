@@ -1,0 +1,60 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createSessionClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getMemberByAuthUserId } from "@/lib/data/member";
+import { cancelBookingSchema } from "@/lib/validation/booking";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+export async function POST(request: NextRequest) {
+  const session = await createSessionClient();
+  const {
+    data: { user },
+  } = await session.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ status: "error", message: "Not signed in." }, { status: 401 });
+  }
+
+  const rateLimit = await checkRateLimit(user.id, "/api/bookings/cancel");
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ status: "error", message: "Too many requests. Slow down." }, { status: 429 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
+  }
+
+  const parsed = cancelBookingSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
+  }
+
+  const member = await getMemberByAuthUserId(user.id);
+  if (!member) {
+    return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
+  }
+
+  const admin = createAdminClient();
+  // p_member_id comes from the caller's own verified session, never from
+  // the request body — doubles as the ownership check, since cancel_booking
+  // only matches a row where both booking id and member id line up.
+  const { data: refunded, error } = await admin.rpc("cancel_booking", {
+    p_member_id: member.id,
+    p_booking_id: parsed.data.bookingId,
+  });
+
+  if (error) {
+    if (error.message.includes("booking_not_found")) {
+      return NextResponse.json({ status: "error", message: "Booking not found." }, { status: 404 });
+    }
+    if (error.message.includes("already_cancelled")) {
+      return NextResponse.json({ status: "error", message: "That booking can't be cancelled." }, { status: 409 });
+    }
+    return NextResponse.json({ status: "error", message: "Could not cancel booking." }, { status: 500 });
+  }
+
+  return NextResponse.json({ status: "ok", refunded });
+}
