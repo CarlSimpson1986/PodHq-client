@@ -919,10 +919,32 @@ files (the one pre-existing, unrelated `Date.now()` purity lint warning in
 `bookings-view.tsx` predates this change — confirmed via `git stash` that
 it was already present before any of today's edits).
 
-**Not yet live-tested through the actual app** — the migration is applied
-and the code is deployed-ready, but the full flow (book a slot far enough
-out to cancel with time to spare and confirm the credit balance goes back
-up; book and cancel a slot inside the 2-hour window and confirm the
-balance does *not* change; double-cancel the same booking and confirm it
-409s instead of double-processing anything) hasn't been run end-to-end
-yet against a real account.
+**Fully live-tested 2026-08-13 against local dev, cancel-session feature
+complete.** Ran the full flow through the actual UI (via claude-in-chrome
+against `localhost:3000`, pilot member's password reset via the same
+one-off script pattern as prior stages since it wasn't known) and
+cross-checked every result directly against Supabase, not just the UI:
+- Booked 08:00 (51 min out, inside the 2-hour cutoff) and 12:00 (well
+  outside it) on the pilot account, credits 66 → 65 → 64.
+- Cancelled 08:00: confirmation panel correctly read "This is within 2
+  hours of your session, so your credit will not be refunded — you'll
+  lose it," balance stayed at 64 after confirming — verified against
+  `credits` directly, only the original `booking_used` row exists for
+  that booking, no refund row.
+- Cancelled 12:00: confirmation panel correctly read "This is more than
+  2 hours away, so your credit will be refunded," balance went 64 → 65 —
+  verified a matching `booking_refund` (+1) row landed against that
+  booking's id.
+- Double-cancel: replayed `POST /api/bookings/cancel` for the same
+  now-cancelled 12:00 booking — correctly rejected 409 ("That booking
+  can't be cancelled"), balance held at 65 via `get_credit_balance()`,
+  confirming the row-lock guard holds against a real repeat request, not
+  just in theory.
+
+One rough edge hit during this test, not a bug in the app: clicking
+"Sign in"/"Book" via synthetic click events at fixed coordinates
+intermittently didn't fire the underlying React handler at all (no
+network request sent), matching this session's earlier note about
+programmatic clicks needing a render tick — switched to ref-based
+element clicks (`read_page` → click by ref) instead of raw coordinates,
+which worked reliably every time after that.
