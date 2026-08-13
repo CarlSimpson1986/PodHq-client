@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import type { Booking } from "@/lib/data/member";
+import type { Booking, ActiveReservation } from "@/lib/data/member";
 import { UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { BottomNav } from "@/components/bottom-nav";
@@ -44,6 +44,8 @@ export function BookingGrid({
   openHour,
   closeHour,
   podCapacity,
+  initialWaitlistSlots,
+  reservations,
 }: {
   gym: string;
   memberName: string;
@@ -56,12 +58,16 @@ export function BookingGrid({
   openHour: number;
   closeHour: number;
   podCapacity: number;
+  initialWaitlistSlots: string[];
+  reservations: ActiveReservation[];
 }) {
   const [bookings, setBookings] = useState(initialBookings);
   const [credits, setCredits] = useState(initialCredits);
   const [pendingSlot, setPendingSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [waitlistSlots, setWaitlistSlots] = useState<string[]>(initialWaitlistSlots);
+  const [pendingWaitlistSlot, setPendingWaitlistSlot] = useState<string | null>(null);
   const selectedDayRef = useRef<HTMLAnchorElement>(null);
   const dayStripRef = useRef<HTMLDivElement>(null);
   // Touch/trackpad already scroll the strip natively via overflow-x-auto —
@@ -148,6 +154,32 @@ export function BookingGrid({
       setError("Something went wrong. Try again.");
     } finally {
       setPendingSlot(null);
+    }
+  }
+
+  async function joinWaitlist(slot: Date) {
+    if (pendingWaitlistSlot) return;
+    setError(null);
+    setSuccess(null);
+    setPendingWaitlistSlot(slot.toISOString());
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slotStart: slot.toISOString() }),
+      });
+      const body = await res.json();
+      if (body.status !== "ok") {
+        setError(body.message ?? "Could not join the waitlist.");
+        return;
+      }
+      setWaitlistSlots((prev) => [...prev, slot.toISOString()]);
+      setSuccess(`Added to the waitlist for ${formatHour(slot)}.`);
+      setTimeout(() => setSuccess(null), 4000);
+    } catch {
+      setError("Something went wrong. Try again.");
+    } finally {
+      setPendingWaitlistSlot(null);
     }
   }
 
@@ -256,6 +288,13 @@ export function BookingGrid({
             const isFull = !isMine && slotBookings.length >= podCapacity;
             const inUnlockWindow =
               isMine && now >= slot.getTime() - WINDOW_BEFORE_MS && now <= slot.getTime() + WINDOW_AFTER_MS;
+            // A slot can have real physical space (not "full") but still be
+            // off-limits to everyone except whoever it's currently offered
+            // to on the waitlist — create_booking() enforces this server-side
+            // regardless, this is just showing it honestly instead of a
+            // clickable "Book" that would only actually work for one person.
+            const reservation = reservations.find((r) => new Date(r.slot_start).getTime() === slot.getTime());
+            const isReservedForOther = !isMine && !isFull && reservation && reservation.member_id !== memberId;
 
             return (
               <div
@@ -276,9 +315,24 @@ export function BookingGrid({
                     )}
                   </div>
                 ) : isFull ? (
-                  <span className="text-sm text-card-light-muted">
-                    {podCapacity > 1 ? `Full (${slotBookings.length}/${podCapacity})` : "Booked"}
-                  </span>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className="text-sm text-card-light-muted">
+                      {podCapacity > 1 ? `Full (${slotBookings.length}/${podCapacity})` : "Booked"}
+                    </span>
+                    {waitlistSlots.includes(slot.toISOString()) ? (
+                      <span className="text-xs text-card-light-muted">On waitlist</span>
+                    ) : (
+                      <button
+                        onClick={() => joinWaitlist(slot)}
+                        disabled={!!pendingWaitlistSlot}
+                        className="text-xs font-semibold text-card-light-foreground underline hover:no-underline disabled:opacity-50"
+                      >
+                        {pendingWaitlistSlot === slot.toISOString() ? "Joining..." : "Join waitlist"}
+                      </button>
+                    )}
+                  </div>
+                ) : isReservedForOther ? (
+                  <span className="text-sm text-card-light-muted">Reserved</span>
                 ) : (
                   <button
                     onClick={() => bookSlot(slot)}

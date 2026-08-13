@@ -15,8 +15,12 @@ const securityHeaders = [
   {
     // geolocation=(self), not (): the pod-unlock location gate (Stage 7)
     // needs it for our own origin. camera/microphone stay disabled, unused.
+    // push/notifications aren't currently enforced via Permissions-Policy
+    // by any shipping browser, but explicitly allowing them costs nothing
+    // and avoids relying on that staying true — the exact same silent,
+    // zero-console-warning failure mode geolocation=() once caused here.
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(self)",
+    value: "camera=(), microphone=(), geolocation=(self), push=(self), notifications=(self)",
   },
 ];
 

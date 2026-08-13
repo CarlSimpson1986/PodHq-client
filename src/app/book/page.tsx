@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, getCreditBalance, getBookingsForDate, getPodConfig } from "@/lib/data/member";
+import {
+  getMemberByAuthUserId,
+  getCreditBalance,
+  getBookingsForDate,
+  getPodConfig,
+  getMemberWaitlistSlots,
+  getActiveReservationsForDate,
+} from "@/lib/data/member";
 import { parseDateParam, formatDateParam } from "@/lib/booking-dates";
 import { BookingGrid } from "@/components/booking-grid";
 import { NoMemberProfile } from "@/components/no-member-profile";
@@ -27,10 +34,12 @@ export default async function BookPage({
     return <NoMemberProfile />;
   }
 
-  const [credits, dayBookings, podConfig] = await Promise.all([
+  const [credits, dayBookings, podConfig, waitlistSlots, reservations] = await Promise.all([
     getCreditBalance(member.id),
     getBookingsForDate(member.gym, selectedDate),
     getPodConfig(member.gym),
+    getMemberWaitlistSlots(member.id),
+    getActiveReservationsForDate(member.gym, selectedDate),
   ]);
 
   return (
@@ -48,6 +57,8 @@ export default async function BookPage({
         openHour={podConfig.openHour}
         closeHour={podConfig.closeHour}
         podCapacity={podConfig.podCapacity}
+        initialWaitlistSlots={waitlistSlots}
+        reservations={reservations}
       />
     </main>
   );

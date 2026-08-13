@@ -134,6 +134,54 @@ export async function getAllMemberBookings(memberId: number): Promise<Booking[]>
   return data ?? [];
 }
 
+// Slots this member is currently queued for (waiting or already offered) —
+// small, member-scoped, no pagination concern. Used by /book to show
+// "On waitlist" instead of "Join waitlist" on a slot they've already queued
+// for.
+export async function getMemberWaitlistSlots(memberId: number): Promise<string[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("waitlist_entries")
+    .select("slot_start")
+    .eq("member_id", memberId)
+    .in("status", ["waiting", "offered"]);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.slot_start as string);
+}
+
+export interface ActiveReservation {
+  slot_start: string;
+  member_id: number;
+}
+
+// Slots on this day currently held for a specific waitlisted member (an
+// active, non-expired offer) — used by /book so a slot with genuine
+// physical space still shows as unavailable to everyone except the person
+// it's actually reserved for, rather than a plain clickable "Book" that
+// would only 409 for anyone else who tries it. Mirrors the same
+// "computed, not stored" reservation check create_booking() itself uses
+// (offer_expires_at checked live, never a stale cached status).
+export async function getActiveReservationsForDate(gym: string, date: Date): Promise<ActiveReservation[]> {
+  const admin = createAdminClient();
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setDate(endOfDay.getDate() + 1);
+
+  const { data, error } = await admin
+    .from("waitlist_entries")
+    .select("slot_start, member_id")
+    .eq("gym", gym)
+    .eq("status", "offered")
+    .gt("offer_expires_at", new Date().toISOString())
+    .gte("slot_start", startOfDay.toISOString())
+    .lt("slot_start", endOfDay.toISOString());
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ActiveReservation[];
+}
+
 export async function getBookingsForDate(gym: string, date: Date): Promise<Booking[]> {
   const admin = createAdminClient();
   const startOfDay = new Date(date);

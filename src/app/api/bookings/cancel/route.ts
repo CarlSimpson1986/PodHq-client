@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { cancelBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { notifyFireAndForget } from "@/lib/notifications/core";
+import { bookingCancelledEmail } from "@/lib/notifications/templates";
+import { offerNextWaitlistEntry } from "@/lib/waitlist/offer-next";
 
 export async function POST(request: NextRequest) {
   const session = await createSessionClient();
@@ -54,6 +57,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "error", message: "That booking can't be cancelled." }, { status: 409 });
     }
     return NextResponse.json({ status: "error", message: "Could not cancel booking." }, { status: 500 });
+  }
+
+  if (user.email) {
+    // cancel_booking() only returns the refund boolean, not the booking's
+    // own slot_start — a cheap extra lookup rather than widening the RPC's
+    // return shape for every other caller of it.
+    const { data: booking } = await admin
+      .from("bookings")
+      .select("slot_start")
+      .eq("id", parsed.data.bookingId)
+      .maybeSingle();
+
+    const { subject, html } = bookingCancelledEmail({
+      memberName: member.name,
+      gym: member.gym,
+      slotStart: booking?.slot_start ?? "",
+      refunded: Boolean(refunded),
+    });
+    await notifyFireAndForget({
+      eventType: "booking_cancelled",
+      to: user.email,
+      subject,
+      html,
+      memberId: member.id,
+    });
+
+    if (booking?.slot_start) {
+      await offerNextWaitlistEntry(member.gym, booking.slot_start);
+    }
   }
 
   return NextResponse.json({ status: "ok", refunded });

@@ -1,0 +1,41 @@
+import "server-only";
+import { sendEmail } from "./resend";
+import { logNotification } from "./log";
+import type { NotificationEventType } from "./types";
+
+interface NotifyInput {
+  eventType: NotificationEventType;
+  to: string;
+  subject: string;
+  html: string;
+  memberId?: number;
+}
+
+/**
+ * The one place "send an email" and "log the outcome" happen together.
+ * Deliberately swallows every failure (network, Resend 4xx/5xx, missing
+ * config) rather than throwing — a booking/purchase/signup must succeed
+ * even if its email never sends. This is the direct structural fix for the
+ * historical Kisi-unlock bug (unlock/route.ts's original unwrapped call let
+ * a failed unlock skip its own audit-log row entirely): every path through
+ * here, success or failure, always reaches logNotification.
+ *
+ * Callers `await` this before returning their response rather than firing
+ * it unawaited — a bare unawaited promise after `return NextResponse.json`
+ * isn't guaranteed to finish once Vercel's serverless runtime sends the
+ * response. Awaiting only gates the response on completion, never on
+ * success: this function itself never throws, so it can never turn into an
+ * error response for the caller.
+ */
+export async function notifyFireAndForget(input: NotifyInput): Promise<void> {
+  const result = await sendEmail({ to: input.to, subject: input.subject, html: input.html });
+
+  await logNotification({
+    eventType: input.eventType,
+    recipientEmail: input.to,
+    memberId: input.memberId,
+    status: result.ok ? "sent" : "failed",
+    providerMessageId: result.providerMessageId,
+    errorDetail: result.errorDetail,
+  });
+}
