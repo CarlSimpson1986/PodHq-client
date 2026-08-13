@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
 import { formatDateParam } from "@/lib/booking-dates";
 import { LockIcon } from "@/components/icons";
+import { subscribeToPush } from "@/lib/push/subscribe";
 
 const STATUS_LABELS: Record<Booking["status"], string> = {
   booked: "Booked",
@@ -39,6 +40,23 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [cancelledIds, setCancelledIds] = useState<Set<number>>(new Set());
   const [cancelErrors, setCancelErrors] = useState<Record<number, string>>({});
+  // Lazy initializer, not an effect — this only needs to read the current
+  // permission once at mount (it's never externally re-checked afterward;
+  // enableNotifications sets it directly once the user acts), and
+  // `typeof Notification !== "undefined"` keeps it SSR-safe (evaluates to
+  // null on the server, same as before hydration on the client).
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(() =>
+    typeof Notification !== "undefined" ? Notification.permission : null
+  );
+  const [subscribing, setSubscribing] = useState(false);
+
+  async function enableNotifications() {
+    setSubscribing(true);
+    const ok = await subscribeToPush();
+    setNotifPermission(typeof Notification !== "undefined" ? Notification.permission : null);
+    setSubscribing(false);
+    if (!ok) return;
+  }
 
   async function confirmCancel(bookingId: number) {
     setCancellingId(bookingId);
@@ -127,6 +145,18 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
 
   return (
     <div className="space-y-4">
+      {notifPermission === "default" && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-card-light-border p-3">
+          <p className="text-xs text-card-light-muted">Get notified the moment a waitlisted spot opens up.</p>
+          <button
+            onClick={enableNotifications}
+            disabled={subscribing}
+            className="shrink-0 rounded-lg border border-card-light-border px-3 py-1.5 text-xs font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
+          >
+            {subscribing ? "..." : "Enable notifications"}
+          </button>
+        </div>
+      )}
       <div className="flex rounded-lg border border-card-light-border p-1">
         {(["upcoming", "past"] as const).map((option) => (
           <button

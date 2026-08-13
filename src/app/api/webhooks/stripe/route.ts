@@ -2,6 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripeClient } from "@/lib/stripe";
+import { notifyFireAndForget } from "@/lib/notifications/core";
+import { resolveMemberContact } from "@/lib/notifications/resolve-member-contact";
+import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
+import {
+  creditPackPurchasedEmail,
+  giftVoucherPurchasedEmail,
+  staffGiftVoucherPurchasedEmail,
+  membershipStartedEmail,
+  membershipRenewedEmail,
+  staffMembershipCancelledEmail,
+} from "@/lib/notifications/templates";
 
 // Called by Stripe's servers, not a member's browser — no session cookie
 // exists here, so this route (unlike every other route in this app) skips
@@ -65,6 +76,43 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "error", message: "Could not record voucher." }, { status: 500 });
       }
 
+      // Only email on a genuinely fresh insert, not a retried delivery —
+      // a redelivered event must not re-send a receipt for a payment the
+      // purchaser already got emailed about.
+      if (!error) {
+        const purchaser = await resolveMemberContact(purchaserMemberId);
+        if (purchaser) {
+          const purchaserEmail = giftVoucherPurchasedEmail({
+            memberName: purchaser.name,
+            code,
+            amountGBP,
+            credits: voucherCredits,
+          });
+          await notifyFireAndForget({
+            eventType: "gift_voucher_purchased",
+            to: purchaser.email,
+            subject: purchaserEmail.subject,
+            html: purchaserEmail.html,
+            memberId: purchaserMemberId,
+          });
+
+          const staffEmails = await getStaffRecipients(purchaser.gym);
+          const staffEmail = staffGiftVoucherPurchasedEmail({
+            purchaserName: purchaser.name,
+            gym: purchaser.gym,
+            amountGBP,
+          });
+          for (const to of staffEmails) {
+            await notifyFireAndForget({
+              eventType: "staff_gift_voucher_purchased",
+              to,
+              subject: staffEmail.subject,
+              html: staffEmail.html,
+            });
+          }
+        }
+      }
+
       return NextResponse.json({ status: "ok" });
     }
 
@@ -90,6 +138,22 @@ export async function POST(request: NextRequest) {
     if (error && error.code !== "23505") {
       console.error("[stripe-webhook] failed to record purchase", { error: error.message });
       return NextResponse.json({ status: "error", message: "Could not record purchase." }, { status: 500 });
+    }
+
+    // Only email on a fresh insert — a retried delivery already got its
+    // receipt the first time.
+    if (!error) {
+      const contact = await resolveMemberContact(memberId);
+      if (contact) {
+        const { subject, html } = creditPackPurchasedEmail({ memberName: contact.name, credits });
+        await notifyFireAndForget({
+          eventType: "credit_pack_purchased",
+          to: contact.email,
+          subject,
+          html,
+          memberId,
+        });
+      }
     }
   }
 
@@ -131,6 +195,16 @@ export async function POST(request: NextRequest) {
       console.error("[stripe-webhook] failed to record membership", { error: error.message });
       return NextResponse.json({ status: "error", message: "Could not record membership." }, { status: 500 });
     }
+
+    const contact = await resolveMemberContact(memberId);
+    if (contact) {
+      const { subject, html } = membershipStartedEmail({
+        memberName: contact.name,
+        tierName,
+        creditsPerPeriod,
+      });
+      await notifyFireAndForget({ eventType: "membership_started", to: contact.email, subject, html, memberId });
+    }
   }
 
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
@@ -145,6 +219,27 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("[stripe-webhook] failed to update membership status", { error: error.message });
       return NextResponse.json({ status: "error", message: "Could not update membership." }, { status: 500 });
+    }
+
+    // Only a genuine cancellation gets a staff alert — not every status
+    // change (e.g. a plain past_due transition on the same "updated" event).
+    if (event.type === "customer.subscription.deleted") {
+      const memberId = Number(subscription.metadata?.member_id);
+      const tierName = subscription.metadata?.tier_name;
+      if (memberId && tierName) {
+        const contact = await resolveMemberContact(memberId);
+        if (contact) {
+          const staffEmails = await getStaffRecipients(contact.gym);
+          const { subject, html } = staffMembershipCancelledEmail({
+            memberName: contact.name,
+            gym: contact.gym,
+            tierName,
+          });
+          for (const to of staffEmails) {
+            await notifyFireAndForget({ eventType: "staff_membership_cancelled", to, subject, html });
+          }
+        }
+      }
     }
   }
 
@@ -181,6 +276,26 @@ export async function POST(request: NextRequest) {
       if (error && error.code !== "23505") {
         console.error("[stripe-webhook] failed to grant membership credits", { error: error.message });
         return NextResponse.json({ status: "error", message: "Could not grant credits." }, { status: 500 });
+      }
+
+      // customer.subscription.created (above) already emails
+      // membership_started, and Stripe always invoices the first period
+      // too — without this gate a brand-new member would get both emails
+      // seconds apart. billing_reason distinguishes a real renewal
+      // ("subscription_cycle") from that first invoice
+      // ("subscription_create"). The credit grant itself stays
+      // unconditional either way — only the email is gated.
+      if (!error && invoice.billing_reason === "subscription_cycle") {
+        const contact = await resolveMemberContact(memberId);
+        if (contact) {
+          const tierName = subscription.metadata?.tier_name ?? "";
+          const { subject, html } = membershipRenewedEmail({
+            memberName: contact.name,
+            tierName,
+            creditsPerPeriod,
+          });
+          await notifyFireAndForget({ eventType: "membership_renewed", to: contact.email, subject, html, memberId });
+        }
       }
     }
   }

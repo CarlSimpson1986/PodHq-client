@@ -35,6 +35,13 @@ function buildCsp(nonce: string) {
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
+    // Explicit rather than relying on the script-src/default-src fallback —
+    // the same "silently blocked, zero console warning" failure mode this
+    // codebase already hit once with Permissions-Policy's geolocation=()
+    // is worth guarding against defensively here too, for the waitlist
+    // push-notification service worker.
+    "worker-src 'self'",
+    "manifest-src 'self'",
   ].join("; ");
 }
 
@@ -106,6 +113,10 @@ export const config = {
     // Exclude static-asset extensions so an unauthenticated request for
     // e.g. a PWA icon or manifest doesn't get 307'd to /login the way
     // podHq's logo did before this same fix there (see its proxy.ts).
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|webp|avif|svg|ico|webmanifest)$).*)",
+    // sw.js is named explicitly (not just by extension) so the service
+    // worker script itself is always served plainly, regardless of auth
+    // state — the browser's own registration fetch shouldn't ever hit a
+    // redirect in place of the actual script.
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:png|jpe?g|gif|webp|avif|svg|ico|webmanifest)$).*)",
   ],
 };

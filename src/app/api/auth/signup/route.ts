@@ -6,6 +6,10 @@ import { logAuthEvent } from "@/lib/audit";
 import { checkAuthActionRateLimit } from "@/lib/auth/lockout";
 import { getRequestIp } from "@/lib/request-ip";
 import { PILOT_GYM } from "@/lib/gym";
+import { notifyFireAndForget } from "@/lib/notifications/core";
+import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
+import { staffNewSignupEmail } from "@/lib/notifications/templates";
+import { recordSignupLead } from "@/lib/leads/record-signup-lead";
 
 // Never reveals whether the email was already registered — same
 // no-enumeration principle as podHq's magic-link GENERIC_MESSAGE.
@@ -95,9 +99,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok", message: GENERIC_MESSAGE });
   }
 
-  const { error: memberError } = await admin
+  const { data: memberRows, error: memberError } = await admin
     .from("members")
-    .insert({ auth_user_id: data.user.id, gym: PILOT_GYM, name });
+    .insert({ auth_user_id: data.user.id, gym: PILOT_GYM, name })
+    .select("id");
 
   // 23505 = auth_user_id already has a members row (repeat signup attempt
   // for an email that already has a confirmed member account). 23503 = the
@@ -115,6 +120,22 @@ export async function POST(request: NextRequest) {
   // hit the same auth_events.user_id foreign key for the same reason.
   if (!memberError || memberError.code === "23505") {
     await logAuthEvent({ email, userId: data.user.id, eventType: "signup", ipAddress: ip });
+  }
+
+  // Lead capture + staff alert only on a genuinely fresh member row
+  // (!memberError) — not a 23505 repeat attempt, which isn't a new signup
+  // to alert anyone about or track as a lead.
+  if (!memberError) {
+    const newMemberId = memberRows?.[0]?.id as number | undefined;
+    if (newMemberId) {
+      await recordSignupLead({ memberId: newMemberId, gym: PILOT_GYM, name, email });
+    }
+
+    const staffEmails = await getStaffRecipients(PILOT_GYM);
+    const { subject, html } = staffNewSignupEmail({ memberName: name, gym: PILOT_GYM });
+    for (const to of staffEmails) {
+      await notifyFireAndForget({ eventType: "staff_new_signup", to, subject, html });
+    }
   }
 
   return NextResponse.json({ status: "ok", message: GENERIC_MESSAGE });

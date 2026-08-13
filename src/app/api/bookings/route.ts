@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberByAuthUserId, getPodConfig } from "@/lib/data/member";
 import { createBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { notifyFireAndForget } from "@/lib/notifications/core";
+import { bookingConfirmedEmail } from "@/lib/notifications/templates";
 
 export async function POST(request: NextRequest) {
   const session = await createSessionClient();
@@ -70,10 +72,31 @@ export async function POST(request: NextRequest) {
     if (error.message.includes("slot_full")) {
       return NextResponse.json({ status: "error", message: "That slot is fully booked." }, { status: 409 });
     }
+    if (error.message.includes("slot_reserved")) {
+      return NextResponse.json(
+        { status: "error", message: "This slot is reserved for someone on the waitlist right now." },
+        { status: 409 }
+      );
+    }
     if (error.message.includes("duplicate key") || error.code === "23505") {
       return NextResponse.json({ status: "error", message: "That slot is already booked." }, { status: 409 });
     }
     return NextResponse.json({ status: "error", message: "Could not create booking." }, { status: 500 });
+  }
+
+  if (user.email) {
+    const { subject, html } = bookingConfirmedEmail({
+      memberName: member.name,
+      gym: member.gym,
+      slotStart: parsed.data.slotStart,
+    });
+    await notifyFireAndForget({
+      eventType: "booking_confirmed",
+      to: user.email,
+      subject,
+      html,
+      memberId: member.id,
+    });
   }
 
   return NextResponse.json({ status: "ok", bookingId });
