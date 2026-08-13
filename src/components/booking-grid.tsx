@@ -266,7 +266,9 @@ export function BookingGrid({
 
                 {isMine ? (
                   <div className="flex flex-col items-end gap-1.5">
-                    <span className="text-sm font-semibold text-card-light-foreground">Your booking</span>
+                    <Link href="/bookings" className="text-sm font-semibold text-card-light-foreground hover:underline">
+                      Your booking
+                    </Link>
                     {inUnlockWindow && (
                       <Link href="/bookings" className="text-xs text-card-light-muted underline hover:text-card-light-foreground">
                         Unlock from Bookings

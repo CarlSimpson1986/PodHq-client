@@ -948,3 +948,20 @@ network request sent), matching this session's earlier note about
 programmatic clicks needing a render tick — switched to ref-based
 element clicks (`read_page` → click by ref) instead of raw coordinates,
 which worked reliably every time after that.
+
+**Deployed to production and re-verified there 2026-08-13** (`vercel --prod`,
+aliased to `podhq-client.vercel.app`). Repeated the exact same three-part
+test against the live site instead of local dev: refund case, forfeit
+case, and a double-cancel replay of the same booking id — all three
+matched local dev exactly, each cross-checked directly against Supabase
+(`booking_refund`/`booking_used` rows and `get_credit_balance()`), not
+just the UI. Cancel-session is now live-verified in both environments.
+
+**Small UX gap found and fixed while testing**: on `/book`, a slot
+showing "Your booking" was plain static text — the only way to reach that
+booking's cancel/unlock controls was navigating to `/bookings` separately,
+even though the booking was right there on screen. Made "Your booking" a
+link to `/bookings` (`booking-grid.tsx`), matching the existing
+"Unlock from Bookings" link's styling/target directly below it. Live-
+verified locally: clicking it lands on `/bookings` with that exact
+session's card visible, `Unlock`/`Cancel session` both present.
