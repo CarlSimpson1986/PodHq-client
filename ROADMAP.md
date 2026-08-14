@@ -965,3 +965,61 @@ link to `/bookings` (`booking-grid.tsx`), matching the existing
 "Unlock from Bookings" link's styling/target directly below it. Live-
 verified locally: clicking it lands on `/bookings` with that exact
 session's card visible, `Unlock`/`Cancel session` both present.
+
+## Staff refunds (podHq side) — webhook + redemption changes, 2026-08-14
+
+Triggered by a question in podHq about whether that app needed its own
+Stripe integration — the real answer turned out to be refunds
+specifically, not general reporting (podHq already reads this app's real
+purchase data straight out of the shared Supabase project). The staff-side
+UI, `/api/pods/refund`, and its data layer all live in podHq — see its own
+ROADMAP.md Stage 17 for that half. This app's half is the webhook
+plumbing that half depends on.
+
+**Real gap found first**: nothing this app ever wrote captured the actual
+Stripe payment/charge reference — only `stripe_event_id` (the webhook
+event id), which isn't enough to call `stripe.refunds.create()`. Fixed by
+`podHq/supabase/migrations/0026_stripe_refunds.sql` (written, not yet
+applied) adding `stripe_payment_intent_id` to `credits` and
+`gift_vouchers`, `'refund'` to `credits.reason`, and `refunded_at` to
+`gift_vouchers`.
+
+**`src/app/api/webhooks/stripe/route.ts` changes**:
+- `checkout.session.completed`'s credit-pack and gift-voucher inserts now
+  capture `checkoutSession.payment_intent`.
+- `invoice.payment_succeeded`'s membership credit grant needed real
+  research, not a guess: confirmed against the installed Stripe SDK's type
+  definitions that `Invoice` has **no direct `payment_intent` field** in
+  this API version — it was replaced by the Invoice Payments API. Fixed by
+  calling `stripe.invoicePayments.list({ invoice: invoice.id })` and
+  taking the default payment's reference, same "confirm against the SDK's
+  actual types, don't assume" discipline Stage 8's `current_period_end`
+  gotcha already established for this file.
+- New `charge.refunded` handler — the sole writer of the ledger
+  correction for a staff-issued refund, same webhook-driven pattern every
+  other money event here already uses (podHq's refund route only ever
+  calls Stripe, never touches the ledger directly). Looks up the charge's
+  `payment_intent` against `stripe_payment_intent_id`: a matching
+  `purchase`/`membership` credits row gets a negative `reason: 'refund'`
+  row inserted (idempotent via `stripe_event_id`, same as every other
+  insert in this file); a matching gift voucher gets `refunded_at` set
+  (atomic `.is("refunded_at", null)` update, same claim pattern as
+  redemption). **Partial refunds aren't supported** — only a
+  fully-refunded charge (`charge.refunded === true`) is processed; a
+  partial refund is logged, not silently treated as a full reversal.
+  Staff only ever issues full refunds from podHq's side, so this wasn't
+  built out further.
+
+**`src/app/api/vouchers/redeem/route.ts`**: now also rejects an
+already-refunded code (`refunded_at` set), folded into the same atomic
+claim update that already guarded against double-redemption, so a code
+staff has just refunded can't still be redeemed by whoever's holding it.
+
+**`0026_stripe_refunds.sql` applied 2026-08-14.** Still not
+live-tested — blocked on the same remaining manual steps as podHq's
+side: a restricted `STRIPE_SECRET_KEY` for podHq's env, and adding
+`charge.refunded` to the production Stripe webhook endpoint's configured
+event list (this endpoint opts into specific event types rather than
+forwarding everything by default, same as when the membership event types were
+added in Stage 8). `npx tsc --noEmit` and `eslint` pass on all
+changed files.

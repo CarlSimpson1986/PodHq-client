@@ -57,17 +57,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "That code has already been redeemed." }, { status: 409 });
   }
 
-  // Mark redeemed first, conditioned on it still being unredeemed — the
-  // `.is("redeemed_by_member_id", null)` filter makes this an atomic
-  // claim: if two requests race for the same code, only the one whose
-  // UPDATE actually matches a row (still-null) wins; the loser's update
-  // affects zero rows rather than both silently succeeding and double-
-  // granting credits for one voucher.
+  if (voucher.refunded_at) {
+    return NextResponse.json({ status: "error", message: "That code is no longer valid." }, { status: 409 });
+  }
+
+  // Mark redeemed first, conditioned on it still being unredeemed and
+  // unrefunded — the `.is(...)` filters make this an atomic claim: if two
+  // requests race for the same code, only the one whose UPDATE actually
+  // matches a row (still-null on both) wins; the loser's update affects
+  // zero rows rather than both silently succeeding and double-granting
+  // credits for one voucher, or redeeming one staff has just refunded.
   const { data: claimed, error: claimError } = await admin
     .from("gift_vouchers")
     .update({ redeemed_by_member_id: member.id, redeemed_at: new Date().toISOString() })
     .eq("code", parsed.data.code)
     .is("redeemed_by_member_id", null)
+    .is("refunded_at", null)
     .select()
     .maybeSingle();
 
@@ -77,7 +82,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!claimed) {
-    return NextResponse.json({ status: "error", message: "That code has already been redeemed." }, { status: 409 });
+    return NextResponse.json({ status: "error", message: "That code is no longer valid." }, { status: 409 });
   }
 
   const { error: creditError } = await admin.from("credits").insert({

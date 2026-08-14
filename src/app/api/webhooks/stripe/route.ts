@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
         credits: voucherCredits,
         purchaser_member_id: purchaserMemberId,
         stripe_event_id: event.id,
+        stripe_payment_intent_id: resolvePaymentIntentId(checkoutSession.payment_intent),
       });
 
       // Same retry tolerance as every other webhook-driven insert here —
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
       amount: credits,
       reason: "purchase",
       stripe_event_id: event.id,
+      stripe_payment_intent_id: resolvePaymentIntentId(checkoutSession.payment_intent),
     });
 
     // Stripe retries delivery on anything but a 2xx, so this must tolerate
@@ -263,11 +265,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "error", message: "Missing metadata." }, { status: 400 });
       }
 
+      // Invoice has no direct payment_intent field in this Stripe API
+      // version (confirmed against the installed SDK's types — it was
+      // replaced by the Invoice Payments API) — the default payment's
+      // reference has to be looked up separately to store it for a future
+      // refund.
+      const invoicePayments = await stripe.invoicePayments.list({ invoice: invoice.id });
+      const defaultPayment = invoicePayments.data.find((p) => p.is_default) ?? invoicePayments.data[0];
+      const paymentIntentId =
+        defaultPayment?.payment.type === "payment_intent" ? resolvePaymentIntentId(defaultPayment.payment.payment_intent) : null;
+
       const { error } = await admin.from("credits").insert({
         member_id: memberId,
         amount: creditsPerPeriod,
         reason: "membership",
         stripe_event_id: event.id,
+        stripe_payment_intent_id: paymentIntentId,
       });
 
       // Fires for both the first payment and every renewal — stripe_event_id
@@ -300,7 +313,88 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Staff-initiated refunds (podHq admin) call stripe.refunds.create()
+  // directly against the original payment_intent — this event is Stripe
+  // confirming it happened, and is the sole writer of the ledger
+  // correction, same webhook-driven pattern every other money event here
+  // already uses (never trust the refund-issuing request itself to also
+  // touch the ledger).
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+
+    // Partial refunds aren't supported yet (podHq only ever issues a full
+    // refund) — a partially-refunded charge is logged, not silently
+    // reflected as a full reversal in the ledger.
+    if (!charge.refunded) {
+      console.error("[stripe-webhook] partial refund not supported, skipping", { chargeId: charge.id });
+      return NextResponse.json({ status: "ok" });
+    }
+
+    const paymentIntentId = resolvePaymentIntentId(charge.payment_intent);
+    if (!paymentIntentId) {
+      console.error("[stripe-webhook] refunded charge has no payment_intent", { chargeId: charge.id });
+      return NextResponse.json({ status: "ok" });
+    }
+
+    const { data: originalCredit, error: lookupError } = await admin
+      .from("credits")
+      .select("member_id, amount")
+      .eq("stripe_payment_intent_id", paymentIntentId)
+      .in("reason", ["purchase", "membership"])
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("[stripe-webhook] refund lookup failed", { error: lookupError.message });
+      return NextResponse.json({ status: "error", message: "Could not record refund." }, { status: 500 });
+    }
+
+    if (originalCredit) {
+      // stripe_event_id's unique constraint makes a redelivered event a
+      // no-op here too — the original purchase row is never touched, so
+      // reprocessing the same refund event would otherwise insert a
+      // second negative row and double-claw-back the member's balance.
+      const { error } = await admin.from("credits").insert({
+        member_id: originalCredit.member_id,
+        amount: -originalCredit.amount,
+        reason: "refund",
+        stripe_event_id: event.id,
+        stripe_payment_intent_id: paymentIntentId,
+      });
+
+      if (error && error.code !== "23505") {
+        console.error("[stripe-webhook] failed to record refund", { error: error.message });
+        return NextResponse.json({ status: "error", message: "Could not record refund." }, { status: 500 });
+      }
+
+      return NextResponse.json({ status: "ok" });
+    }
+
+    // Not a credit purchase — check whether it's a gift voucher instead.
+    // Conditioned on refunded_at still being null, same atomic-claim
+    // pattern as voucher redemption, so a redelivered event is a harmless
+    // no-op rather than needing its own idempotency key.
+    const { error: voucherError } = await admin
+      .from("gift_vouchers")
+      .update({ refunded_at: new Date().toISOString() })
+      .eq("stripe_payment_intent_id", paymentIntentId)
+      .is("refunded_at", null);
+
+    if (voucherError) {
+      console.error("[stripe-webhook] failed to record voucher refund", { error: voucherError.message });
+      return NextResponse.json({ status: "error", message: "Could not record refund." }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({ status: "ok" });
+}
+
+// payment_intent-bearing fields come back as a plain id string unless the
+// caller explicitly expanded them — normalizes both shapes to a plain id
+// (or null) so every insert site can store one consistent value for a
+// future refund lookup.
+function resolvePaymentIntentId(value: string | Stripe.PaymentIntent | null | undefined): string | null {
+  if (!value) return null;
+  return typeof value === "string" ? value : value.id;
 }
 
 // Stripe subscription statuses (incomplete, incomplete_expired, trialing,
