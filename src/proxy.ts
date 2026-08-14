@@ -6,7 +6,15 @@ const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback"]
 // there's no session cookie to check, so the auth gate below must not
 // redirect it to /login (the route authenticates via Stripe's own
 // signature instead, see src/app/api/webhooks/stripe/route.ts).
-const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/webhooks/"];
+//
+// /api/waitlist/expire and /api/notifications/* are the same story but for
+// Vercel Cron: no session cookie either, authenticated via CRON_SECRET
+// inside the route itself. Found live 2026-08-14 while testing the new
+// win-back route — it (and the pre-existing waitlist/expire cron) were
+// being silently redirected to /login by this same gate before ever
+// reaching their own auth check, meaning the daily waitlist-expiry sweep
+// had likely never actually run since it was built.
+const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/webhooks/", "/api/waitlist/expire", "/api/notifications/"];
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;

@@ -3,6 +3,11 @@ import { sendEmail } from "./resend";
 import { logNotification } from "./log";
 import type { NotificationEventType } from "./types";
 
+/** Shared by every notification that links back into the app — moved here from waitlist/offer-next.ts once a second and third call site needed it. */
+export function appUrl(): string {
+  return process.env.APP_URL ?? "http://localhost:3000";
+}
+
 interface NotifyInput {
   eventType: NotificationEventType;
   to: string;

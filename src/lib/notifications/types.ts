@@ -8,4 +8,6 @@ export type NotificationEventType =
   | "staff_new_signup"
   | "staff_membership_cancelled"
   | "staff_gift_voucher_purchased"
-  | "waitlist_offered";
+  | "waitlist_offered"
+  | "credits_low"
+  | "win_back";

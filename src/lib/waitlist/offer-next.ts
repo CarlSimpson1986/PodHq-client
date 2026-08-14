@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveMemberContact } from "@/lib/notifications/resolve-member-contact";
-import { notifyFireAndForget } from "@/lib/notifications/core";
+import { notifyFireAndForget, appUrl } from "@/lib/notifications/core";
 import { waitlistOfferedEmail } from "@/lib/notifications/templates";
 import { sendPush } from "@/lib/push/send";
 
@@ -11,10 +11,6 @@ const OFFER_WINDOW_MS = 15 * 60 * 1000;
 // and still make it — the slot just opens up normally instead of issuing
 // an offer nobody can act on in time.
 const MIN_NOTICE_MS = 20 * 60 * 1000;
-
-function appUrl(): string {
-  return process.env.APP_URL ?? "http://localhost:3000";
-}
 
 /**
  * Finds the next waiting person for a gym+slot and offers them the spot —
