@@ -1,11 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId, getPodConfig } from "@/lib/data/member";
+import { getMemberByAuthUserId, getPodConfig, isAccessComplete, getCreditBalance } from "@/lib/data/member";
 import { createBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { notifyFireAndForget } from "@/lib/notifications/core";
-import { bookingConfirmedEmail } from "@/lib/notifications/templates";
+import { notifyFireAndForget, appUrl } from "@/lib/notifications/core";
+import { bookingConfirmedEmail, creditsLowEmail } from "@/lib/notifications/templates";
+
+// "Running low" fires once, when a booking leaves the member with exactly
+// this many credits — a heads-up while they can still book one more
+// session, not a last-second warning after they're already out.
+const LOW_CREDITS_THRESHOLD = 1;
 
 export async function POST(request: NextRequest) {
   const session = await createSessionClient();
@@ -85,10 +90,20 @@ export async function POST(request: NextRequest) {
   }
 
   if (user.email) {
+    // Count excludes the booking we just created — 0 prior rows means this
+    // is genuinely their first, not just their first of the day.
+    const { count: priorBookings } = await admin
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("member_id", member.id)
+      .neq("id", bookingId as number);
+
     const { subject, html } = bookingConfirmedEmail({
       memberName: member.name,
       gym: member.gym,
       slotStart: parsed.data.slotStart,
+      isFirstBooking: (priorBookings ?? 0) === 0,
+      accessComplete: isAccessComplete(member),
     });
     await notifyFireAndForget({
       eventType: "booking_confirmed",
@@ -97,6 +112,22 @@ export async function POST(request: NextRequest) {
       html,
       memberId: member.id,
     });
+
+    const creditsRemaining = await getCreditBalance(member.id);
+    if (creditsRemaining === LOW_CREDITS_THRESHOLD) {
+      const lowCredits = creditsLowEmail({
+        memberName: member.name,
+        creditsRemaining,
+        buyCreditsUrl: `${appUrl()}/buy-credits`,
+      });
+      await notifyFireAndForget({
+        eventType: "credits_low",
+        to: user.email,
+        subject: lowCredits.subject,
+        html: lowCredits.html,
+        memberId: member.id,
+      });
+    }
   }
 
   return NextResponse.json({ status: "ok", bookingId });

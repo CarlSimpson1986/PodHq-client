@@ -1015,11 +1015,116 @@ already-refunded code (`refunded_at` set), folded into the same atomic
 claim update that already guarded against double-redemption, so a code
 staff has just refunded can't still be redeemed by whoever's holding it.
 
-**`0026_stripe_refunds.sql` applied 2026-08-14.** Still not
-live-tested — blocked on the same remaining manual steps as podHq's
-side: a restricted `STRIPE_SECRET_KEY` for podHq's env, and adding
-`charge.refunded` to the production Stripe webhook endpoint's configured
-event list (this endpoint opts into specific event types rather than
-forwarding everything by default, same as when the membership event types were
-added in Stage 8). `npx tsc --noEmit` and `eslint` pass on all
-changed files.
+**`0026_stripe_refunds.sql` applied 2026-08-14.** `npx tsc --noEmit` and
+`eslint` pass on all changed files.
+
+**Fully live-verified end-to-end, same day, once the two remaining manual
+steps closed** (restricted `STRIPE_SECRET_KEY` added to podHq's env,
+`charge.refunded` added to the production webhook's event list — see
+podHq's own ROADMAP Stage 17 for the full account, including two
+unrelated real bugs found and fixed along the way: a Stripe-key swap
+between the two apps' `.env.local` files, and podHq's own refund-feature
+commit having never been deployed). A real test purchase through this
+app's Stripe Checkout correctly captured `stripe_payment_intent_id`; the
+staff refund issued from podHq produced a genuine `charge.refunded`
+webhook here, which correctly wrote the `-1 reason: 'refund'` ledger row
+matched to the original purchase by payment intent — confirmed directly
+against the database, not just a 200 response.
+
+## Booking automations: first-session guide, low-credits nudge, win-back — 2026-08-14
+
+Requested at the user's prompting ("give this to 10 members to test") while
+scoping a beta rollout — the notification system already covered purchases
+and cancellations but not these three. Checking the actual code before
+building (not assumed) surfaced that far more already existed and was
+already live than the user believed: `booking_confirmed`,
+`booking_cancelled`, and all four purchase/membership confirmation emails
+were already wired up and firing, not just the waitlist one.
+
+**1. First-booking access guide** — `bookingConfirmedEmail` (`src/lib/notifications/templates.ts`)
+gained `isFirstBooking`/`accessComplete` params, adding a bullet-point
+guide only on a member's genuine first booking (checked via a count query
+in `src/app/api/bookings/route.ts`, excluding the just-created row):
+complete Access onboarding if not already done (with an explicit note that
+the door won't unlock until it is — `isAccessComplete()` already gates
+`/api/unlock`, confirmed by reading that route rather than assumed),
+turn on Location Services, then Bookings → Unlock. Real flow verified
+against the actual `bookings-view.tsx` unlock button before writing the
+copy, not guessed.
+
+**2. Running low on credits** — deliberately event-driven (checked right
+after a booking's credit deduction) rather than a scheduled sweep, since
+the state change that matters already happens at a single point.
+`LOW_CREDITS_THRESHOLD = 1` fires the nudge once, when a booking leaves
+exactly 1 credit remaining.
+
+**3. Win-back (`/api/notifications/win-back`, new Vercel Cron, daily 9am UTC)** —
+genuinely needed a scheduled job, so it follows the existing
+`waitlist/expire` cron's exact pattern (`CRON_SECRET` bearer auth,
+paginated queries — same 1000-row PostgREST cap lesson podHq's Revenue
+queries learned). Finds members whose most recent qualifying booking
+(`booked`/`completed`, not `cancelled`) is more than 21 days old and nudges
+them once, deduped against `notification_log` so nobody gets renudged
+inside 30 days. A member whose latest booking is 21+ days old can't also
+have a future one booked (a future slot_start would itself be more recent
+and become their "latest"), so no separate upcoming-booking check is
+needed.
+
+`appUrl()` (previously private to `waitlist/offer-next.ts`) moved to
+`notifications/core.ts` and is now shared by all three call sites rather
+than reimplemented.
+
+**Real, separate bug found while testing, not by the user**: the very
+first live test of the new win-back route returned the login page's HTML
+instead of a JSON response. Root cause: `proxy.ts`'s auth gate redirects
+any request with no session cookie to `/login` unless its path is in
+`PUBLIC_API_PREFIXES` — and neither `/api/notifications/` nor
+`/api/waitlist/` was ever in that list. A Vercel Cron invocation has no
+session cookie at all, so **this wasn't just a bug in the brand-new
+win-back route — the pre-existing `waitlist/expire` cron had the identical
+problem and had likely never actually executed since it was built**,
+despite `vercel.json` scheduling it daily since. Fixed by adding
+`/api/waitlist/expire` (that specific route only, not the whole
+`/api/waitlist/` prefix — `/api/waitlist` itself and its `[id]/accept`
+`[id]/decline` siblings are real member actions and must stay
+session-gated) and `/api/notifications/` to `PUBLIC_API_PREFIXES`.
+Re-verified live after the fix: win-back now returns real JSON
+(`{"status":"ok","checked":0,"sent":0}`, correctly finding no genuinely
+inactive members in current data) instead of HTML, a bad bearer token
+correctly gets `401`, and — the real proof this had been silently broken
+— re-running `waitlist/expire` for the first time post-fix immediately
+processed **5 genuinely stale offers** that had been sitting unactioned.
+
+**Also confirmed, not assumed, while discussing this with the user**: a
+waitlist offer's slot is genuinely protected from being booked out from
+under the offeree during their 15-minute window — `create_booking()`
+(`0024_waitlist.sql`) checks for an active, unexpired offer on that exact
+gym+slot before allowing anyone else to book it, raising `slot_reserved`
+if the caller isn't the offeree, all inside the same advisory-lock
+transaction the capacity check already uses. Nothing needed fixing here;
+this was a "verify the existing design holds" question, not a gap.
+
+**Verified live**: booking a session as a real test member (zero prior
+bookings, credits adjusted to land exactly on the low-credits threshold)
+correctly triggered both `booking_confirmed` (with the full bullet-point
+guide, including the Access-incomplete warning, since this test member
+genuinely had none of that completed) and `credits_low` in the same
+request; both delivered through Resend with real provider message IDs.
+Rendered HTML content checked directly in Resend's dashboard, not just
+assumed correct from the template code. One separate, real deliverability
+observation caught in passing: both bounced when sent to a plus-addressed
+Yahoo test address (`user+test@yahoo.co.uk`) despite the bare address
+delivering fine minutes earlier for an unrelated test — most likely the
+sending domain's youth/reputation rather than anything in this app, not
+chased further, worth revisiting if real members on Yahoo report missing
+emails. `npx tsc --noEmit` and `eslint` pass clean on every file touched.
+
+**Also found and fixed the same day, a step up from these three
+features**: `RESEND_API_KEY`/`RESEND_FROM_ADDRESS` were entirely absent
+from Vercel production (confirmed via `vercel env ls production`), meaning
+every notification this whole system has ever tried to send in
+production — waitlist offers included — had been silently failing (the
+fire-and-forget design swallows the error on purpose, so nothing surfaced
+until `notification_log` was checked directly). Both added to Vercel
+Production + Preview and to local `.env.local`; confirmed present in
+Vercel afterward.

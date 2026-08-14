@@ -32,12 +32,33 @@ interface EmailContent {
   html: string;
 }
 
-export function bookingConfirmedEmail(input: { memberName: string; gym: string; slotStart: string }): EmailContent {
+export function bookingConfirmedEmail(input: {
+  memberName: string;
+  gym: string;
+  slotStart: string;
+  isFirstBooking: boolean;
+  accessComplete: boolean;
+}): EmailContent {
+  const firstBookingGuide = input.isFirstBooking
+    ? `
+      <p style="margin-top: 16px;"><strong>This is your first session, so here's how it works:</strong></p>
+      <ul style="padding-left: 20px; margin: 8px 0;">
+        ${
+          input.accessComplete
+            ? ""
+            : `<li style="margin-bottom: 8px;">Before you arrive, complete your Access details (mobile number, address, waiver) &mdash; go to <strong>Profile &rarr; Access</strong> in the app. The door won't unlock until this is done.</li>`
+        }
+        <li style="margin-bottom: 8px;">Make sure Location Services are turned on for the app &mdash; the door only unlocks when you're actually at the gym.</li>
+        <li style="margin-bottom: 8px;">When you arrive, go to <strong>Bookings</strong> and tap <strong>Unlock</strong> to open the door.</li>
+      </ul>
+    `
+    : "";
   return {
     subject: "Booking confirmed",
     html: emailShell(`
       <p>Hi ${input.memberName},</p>
       <p>Your pod session at <strong>${input.gym}</strong> is confirmed for <strong>${formatSlot(input.slotStart)}</strong>.</p>
+      ${firstBookingGuide}
       <p>See you there!</p>
     `),
   };
@@ -164,6 +185,29 @@ export function waitlistOfferedEmail(input: {
       <p>A spot for <strong>${formatSlot(input.slotStart)}</strong> at <strong>${input.gym}</strong> just opened up, and you're next on the waitlist.</p>
       <p><strong>You have 15 minutes to claim it</strong> before it's offered to the next person.</p>
       <p><a href="${input.acceptUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Claim this spot</a></p>
+    `),
+  };
+}
+
+export function creditsLowEmail(input: { memberName: string; creditsRemaining: number; buyCreditsUrl: string }): EmailContent {
+  return {
+    subject: input.creditsRemaining === 1 ? "You're down to your last credit" : `Only ${input.creditsRemaining} credits left`,
+    html: emailShell(`
+      <p>Hi ${input.memberName},</p>
+      <p>You've got <strong>${input.creditsRemaining} credit${input.creditsRemaining === 1 ? "" : "s"}</strong> left on your account.</p>
+      <p>Top up now so you don't miss your next session.</p>
+      <p><a href="${input.buyCreditsUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Buy more credits</a></p>
+    `),
+  };
+}
+
+export function winBackEmail(input: { memberName: string; gym: string; daysSinceLastVisit: number; bookUrl: string }): EmailContent {
+  return {
+    subject: "We haven't seen you in a while",
+    html: emailShell(`
+      <p>Hi ${input.memberName},</p>
+      <p>It's been ${input.daysSinceLastVisit} days since your last session at <strong>${input.gym}</strong> &mdash; your pod's still waiting for you.</p>
+      <p><a href="${input.bookUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Book your next session</a></p>
     `),
   };
 }
