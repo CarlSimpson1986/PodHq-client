@@ -3,7 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
-import { CREDIT_PACKAGES } from "@/lib/credit-packages";
+import { getCreditPackageById } from "@/lib/data/catalog";
 import { checkoutSchema } from "@/lib/validation/checkout";
 
 export async function POST(request: NextRequest) {
@@ -33,14 +33,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
   }
 
-  const pkg = CREDIT_PACKAGES.find((p) => p.id === parsed.data.packageId);
-  if (!pkg) {
-    return NextResponse.json({ status: "error", message: "Unknown credit package." }, { status: 400 });
-  }
-
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
+  }
+
+  const pkg = await getCreditPackageById(member.gym, parsed.data.packageId);
+  if (!pkg) {
+    return NextResponse.json({ status: "error", message: "Unknown credit package." }, { status: 400 });
   }
 
   const origin = request.nextUrl.origin;
