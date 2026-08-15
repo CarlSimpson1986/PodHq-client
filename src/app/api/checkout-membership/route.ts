@@ -3,7 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
-import { MEMBERSHIP_TIERS } from "@/lib/membership-tiers";
+import { getMembershipTierById } from "@/lib/data/catalog";
 import { checkoutMembershipSchema } from "@/lib/validation/checkout-membership";
 
 export async function POST(request: NextRequest) {
@@ -33,14 +33,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
   }
 
-  const tier = MEMBERSHIP_TIERS.find((t) => t.id === parsed.data.tierId);
-  if (!tier) {
-    return NextResponse.json({ status: "error", message: "Unknown membership tier." }, { status: 400 });
-  }
-
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
+  }
+
+  const tier = await getMembershipTierById(member.gym, parsed.data.tierId);
+  if (!tier) {
+    return NextResponse.json({ status: "error", message: "Unknown membership tier." }, { status: 400 });
   }
 
   const stripe = getStripeClient();
