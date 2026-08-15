@@ -158,7 +158,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await saveStripeCustomerId(admin, memberId, checkoutSession.customer);
+    // The payment method used isn't set as the customer's default just by
+    // being attached (setup_future_usage attaches it, nothing more) — a
+    // separate call to the PaymentIntent is needed to find which one was
+    // actually used, since Checkout Sessions don't expose it directly.
+    const paymentIntentId = resolvePaymentIntentId(checkoutSession.payment_intent);
+    const usedPaymentMethodId = paymentIntentId
+      ? resolvePaymentMethodId((await stripe.paymentIntents.retrieve(paymentIntentId)).payment_method)
+      : null;
+    await saveStripeCustomerId(admin, memberId, checkoutSession.customer, usedPaymentMethodId);
   }
 
   // Staff-initiated "charge card on file" (podHq's /pods/members/[id] sell
@@ -260,7 +268,7 @@ export async function POST(request: NextRequest) {
       await notifyFireAndForget({ eventType: "membership_started", to: contact.email, subject, html, memberId });
     }
 
-    await saveStripeCustomerId(admin, memberId, subscription.customer);
+    await saveStripeCustomerId(admin, memberId, subscription.customer, resolvePaymentMethodId(subscription.default_payment_method));
   }
 
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
@@ -452,7 +460,8 @@ export async function POST(request: NextRequest) {
 async function saveStripeCustomerId(
   admin: ReturnType<typeof createAdminClient>,
   memberId: number,
-  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined,
+  defaultPaymentMethodId: string | null
 ) {
   if (!customer) return;
   const customerId = typeof customer === "string" ? customer : customer.id;
@@ -461,6 +470,30 @@ async function saveStripeCustomerId(
   if (error) {
     console.error("[stripe-webhook] failed to save stripe_customer_id", { memberId, error: error.message });
   }
+
+  // Attaching a payment method to a Customer (via setup_future_usage, or a
+  // subscription's own default) doesn't automatically make it the
+  // Customer's own invoice_settings.default_payment_method — that has to
+  // be set explicitly, and it's what podHq's getSavedPaymentMethod reads
+  // to display/charge "the" card on file, rather than listing every
+  // attached payment method and guessing which one is current.
+  if (defaultPaymentMethodId) {
+    const stripe = getStripeClient();
+    try {
+      await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: defaultPaymentMethodId } });
+    } catch (err) {
+      console.error("[stripe-webhook] failed to set default payment method", {
+        memberId,
+        customerId,
+        error: err instanceof Error ? err.message : err,
+      });
+    }
+  }
+}
+
+function resolvePaymentMethodId(value: string | Stripe.PaymentMethod | null | undefined): string | null {
+  if (!value) return null;
+  return typeof value === "string" ? value : value.id;
 }
 
 // payment_intent-bearing fields come back as a plain id string unless the
