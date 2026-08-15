@@ -118,6 +118,18 @@ export function PinIcon({ className }: IconProps) {
   );
 }
 
+export function WifiOffIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M3 3l18 18" strokeLinecap="round" />
+      <path d="M8.5 16.5a5 5 0 0 1 7 0" strokeLinecap="round" />
+      <path d="M5 12.5a10 10 0 0 1 3.5-2.3M19 12.5a10 10 0 0 0-4.8-2.7" strokeLinecap="round" />
+      <path d="M1.5 8.5a15 15 0 0 1 4-2.7M22.5 8.5a15 15 0 0 0-7-3.9" strokeLinecap="round" />
+      <circle cx="12" cy="19.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IdCardIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>

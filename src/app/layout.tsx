@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { RegisterServiceWorker } from "@/components/register-service-worker";
 import "./globals.css";
 
 const inter = Inter({
@@ -11,6 +12,14 @@ export const metadata: Metadata = {
   title: "My Fit Pod",
   description: "Book your pod session",
   applicationName: "My Fit Pod",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -34,6 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB" className={`${inter.variable} h-full antialiased dark`}>
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <RegisterServiceWorker />
         {children}
       </body>
     </html>

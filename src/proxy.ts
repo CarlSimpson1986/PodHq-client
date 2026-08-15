@@ -1,7 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback"];
+// /offline is the service worker's navigation fallback (see public/sw.js) —
+// it must be reachable and precache-able without a session, otherwise a
+// logged-out member on a dead connection would get bounced in a redirect
+// loop instead of seeing it, and the SW's install-time cache.addAll would
+// fail on the 307 it'd otherwise get back.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/offline"];
 // /api/webhooks/ is called by Stripe's servers, not a member's browser —
 // there's no session cookie to check, so the auth gate below must not
 // redirect it to /login (the route authenticates via Stripe's own

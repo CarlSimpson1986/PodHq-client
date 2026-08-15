@@ -1128,3 +1128,69 @@ fire-and-forget design swallows the error on purpose, so nothing surfaced
 until `notification_log` was checked directly). Both added to Vercel
 Production + Preview and to local `.env.local`; confirmed present in
 Vercel afterward.
+
+## PWA: installable + basic offline/flaky-signal support — 2026-08-15
+
+Closes the real gap behind podHq's Stage 11 PWA descope note: PWA behaviour
+belongs here (the member-facing app), not podHq's own admin dashboard.
+Found three concrete gaps on inspection rather than assuming "PWA" meant
+one thing: `manifest.webmanifest` had `"icons": []`, nothing in
+`layout.tsx` actually linked the manifest or an apple-touch-icon into the
+page `<head>`, and `sw.js` only ever handled push notifications — no
+offline/flaky-connection behaviour at all despite members using this at
+the gym on mobile data.
+
+**Icons + manifest linking.** Generated `icon-192.png`/`icon-512.png`/
+`apple-touch-icon.png` via `sharp` from podHq's existing
+`public/logo-mark.png` — its black background actually suits this app
+(manifest `background_color`/`theme_color` are already `#000000`/
+`#0a0a0b`), the inverse of the clash that same asset caused in podHq's own
+now-light-themed sidebar. `manifest.webmanifest`'s `icons` array and
+`layout.tsx`'s `Metadata.manifest`/`Metadata.icons` fields both filled in;
+verified live via the actual rendered `<head>` (not just that the files
+exist) — `<link rel="manifest">`, both `<link rel="icon">` sizes, and
+`<link rel="apple-touch-icon">` all present and 200-ing.
+
+**Offline/flaky-signal support**, scoped after checking with the user
+specifically because of poor gym-floor signal, not just full offline: a
+new `sw.js` fetch handler (GET, same-origin only, `/api/*` explicitly
+skipped so auth/session/payment/booking calls never get intercepted or
+served stale) does cache-first for the static shell
+(`/_next/static/*`, `/icons/*`, `/manifest.webmanifest`) and, for page
+navigations, races the real network fetch against a 4s timeout — on a
+dead or merely slow connection the cached version (or the new `/offline`
+page as a last resort) is served immediately rather than making the
+member stare at a spinner or a browser connection-error page, while the
+real fetch keeps running in the background to refresh the cache for next
+time. `/offline` (`src/app/offline/page.tsx`) is a small static,
+auth-agnostic page precached at install time. The service worker itself
+is now registered unconditionally on every page load
+(`src/components/register-service-worker.tsx`, mounted in `layout.tsx`)
+rather than only when a member opts into push — `subscribeToPush`'s own
+`register()` call is unaffected, since registering the same script URL
+twice is a no-op against the existing registration.
+
+**Real bug caught before it shipped**: `/offline` was returning a 307 to
+`/login` — `proxy.ts`'s auth gate treats every path as protected unless
+explicitly allowlisted, and `/offline` wasn't in `PUBLIC_PATHS`. Left
+unfixed, this would have broken precaching outright (the service worker's
+`cache.addAll` at install time would get a redirect response back instead
+of the real page) and, worse, put a logged-out member with dead signal
+into a redirect loop instead of ever seeing the fallback. Added `/offline`
+to `PUBLIC_PATHS`; confirmed live afterward (200, no `Location` header).
+
+**Verified live end-to-end**, not just via file inspection: registered
+service worker confirmed `activated` in a real browser session; the
+precache (`caches.keys()`/`cache.keys()`) held exactly the four expected
+URLs after first load. Then the actual dev server process was killed
+(genuinely unreachable, not a simulated flag) and a fresh navigation to
+`/profile` — a page never previously visited in that session, so nothing
+page-specific was cached for it — correctly rendered the real `/offline`
+fallback content instead of a browser error. Server restarted afterward
+and the same navigation immediately went back to serving live, real
+server-rendered content (confirming the network-first race doesn't leave
+anything stuck showing stale/cached data once connectivity returns).
+`npx tsc --noEmit`, `eslint`, and `next build` all pass clean on every
+file touched — the two `Date.now`-purity errors `eslint` reports
+(`booking-grid.tsx`, `bookings-view.tsx`) are pre-existing and untouched
+by this work.
