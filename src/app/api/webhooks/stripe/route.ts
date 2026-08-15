@@ -157,6 +157,58 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
+    await saveStripeCustomerId(admin, memberId, checkoutSession.customer);
+  }
+
+  // Staff-initiated "charge card on file" (podHq's /pods/members/[id] sell
+  // panel) — a raw off-session PaymentIntent, no Checkout Session involved,
+  // so checkout.session.completed never fires for it. Gated strictly on
+  // metadata.source rather than just member_id/credits presence: Checkout
+  // Session metadata doesn't propagate to its underlying PaymentIntent
+  // unless payment_intent_data.metadata is explicitly set (which the normal
+  // credit-pack checkout path here never does), so a plain Checkout payment
+  // would fail this gate anyway — the explicit check is defense-in-depth
+  // against ever double-crediting the same purchase from two event types.
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
+    if (paymentIntent.metadata?.source === "staff_saved_card") {
+      const memberId = Number(paymentIntent.metadata.member_id);
+      const credits = Number(paymentIntent.metadata.credits);
+
+      if (!memberId || !credits) {
+        console.error("[stripe-webhook] staff saved-card charge missing metadata", { paymentIntentId: paymentIntent.id });
+        return NextResponse.json({ status: "error", message: "Missing metadata." }, { status: 400 });
+      }
+
+      const { error } = await admin.from("credits").insert({
+        member_id: memberId,
+        amount: credits,
+        reason: "purchase",
+        stripe_event_id: event.id,
+        stripe_payment_intent_id: paymentIntent.id,
+      });
+
+      if (error && error.code !== "23505") {
+        console.error("[stripe-webhook] failed to record staff saved-card purchase", { error: error.message });
+        return NextResponse.json({ status: "error", message: "Could not record purchase." }, { status: 500 });
+      }
+
+      if (!error) {
+        const contact = await resolveMemberContact(memberId);
+        if (contact) {
+          const { subject, html } = creditPackPurchasedEmail({ memberName: contact.name, credits });
+          await notifyFireAndForget({
+            eventType: "credit_pack_purchased",
+            to: contact.email,
+            subject,
+            html,
+            memberId,
+          });
+        }
+      }
+    }
   }
 
   if (event.type === "customer.subscription.created") {
@@ -207,6 +259,8 @@ export async function POST(request: NextRequest) {
       });
       await notifyFireAndForget({ eventType: "membership_started", to: contact.email, subject, html, memberId });
     }
+
+    await saveStripeCustomerId(admin, memberId, subscription.customer);
   }
 
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
@@ -386,6 +440,27 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ status: "ok" });
+}
+
+// Captures the Stripe Customer created/reused for a purchase so podHq's
+// staff "sell a pack or membership" feature can later offer "charge card on
+// file" instead of re-collecting card details every time (see podHq's
+// 0028_member_stripe_customer.sql). Only ever set, never cleared — a
+// member's customer id doesn't change just because a later purchase omits
+// one (e.g. a guest checkout would have none), so this is a plain update
+// guarded on customerId being present, not an unconditional overwrite.
+async function saveStripeCustomerId(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: number,
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined
+) {
+  if (!customer) return;
+  const customerId = typeof customer === "string" ? customer : customer.id;
+
+  const { error } = await admin.from("members").update({ stripe_customer_id: customerId }).eq("id", memberId);
+  if (error) {
+    console.error("[stripe-webhook] failed to save stripe_customer_id", { memberId, error: error.message });
+  }
 }
 
 // payment_intent-bearing fields come back as a plain id string unless the
