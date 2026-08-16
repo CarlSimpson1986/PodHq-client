@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       daysSinceLastVisit,
       bookUrl: `${appUrl()}/book`,
     });
-    await notifyFireAndForget({ eventType: "win_back", to: contact.email, subject, html, memberId });
+    await notifyFireAndForget({ eventType: "win_back", to: contact.email, subject, html, memberId, gym: contact.gym });
     sent++;
   }
 

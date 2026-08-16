@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PasswordInput } from "@/components/password-input";
 import { PageHero } from "@/components/page-hero";
 import { UserPlusIcon } from "@/components/icons";
+import { GYM_NAMES, type GymName } from "@/lib/gym";
 
 const inputClass =
   "w-full rounded-lg border border-card-light-border bg-white px-4 py-3 text-base text-card-light-foreground placeholder:text-card-light-muted focus:border-card-light-foreground focus:outline-none";
@@ -15,12 +16,17 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [gym, setGym] = useState<GymName | "">("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!gym) {
+      setError("Please select your gym.");
+      return;
+    }
     setError(null);
     setMessage(null);
     setLoading(true);
@@ -28,7 +34,7 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, gym }),
       });
       const body = await res.json();
       if (body.status === "ok") {
@@ -45,7 +51,7 @@ export default function SignupPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col">
-      <PageHero title="Create an account" subtitle="My Fit Pod — Aylesbury Berryfields" icon={UserPlusIcon} />
+      <PageHero title="Create an account" subtitle="My Fit Pod" icon={UserPlusIcon} />
       <div className="card-light flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
           {message ? (
@@ -65,6 +71,27 @@ export default function SignupPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
+              </div>
+              <div>
+                <label htmlFor="gym" className="mb-1.5 block text-sm text-card-light-muted">
+                  Your gym
+                </label>
+                <select
+                  id="gym"
+                  required
+                  className={inputClass}
+                  value={gym}
+                  onChange={(e) => setGym(e.target.value as GymName)}
+                >
+                  <option value="" disabled>
+                    Select your gym
+                  </option>
+                  {GYM_NAMES.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label htmlFor="email" className="mb-1.5 block text-sm text-card-light-muted">

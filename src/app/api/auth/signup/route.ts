@@ -5,7 +5,6 @@ import { signupSchema } from "@/lib/validation/auth";
 import { logAuthEvent } from "@/lib/audit";
 import { checkAuthActionRateLimit } from "@/lib/auth/lockout";
 import { getRequestIp } from "@/lib/request-ip";
-import { PILOT_GYM } from "@/lib/gym";
 import { notifyFireAndForget } from "@/lib/notifications/core";
 import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
 import { staffNewSignupEmail } from "@/lib/notifications/templates";
@@ -32,7 +31,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { email, password, name } = parsed.data;
+  const { email, password, name, gym } = parsed.data;
 
   const rateLimit = await checkAuthActionRateLimit("signup", email, ip);
   if (!rateLimit.allowed) {
@@ -72,7 +71,7 @@ export async function POST(request: NextRequest) {
       email,
       options: {
         shouldCreateUser: false,
-        emailRedirectTo: `${origin}/auth/callback?mode=link_existing&name=${encodeURIComponent(name)}`,
+        emailRedirectTo: `${origin}/auth/callback?mode=link_existing&name=${encodeURIComponent(name)}&gym=${encodeURIComponent(gym)}`,
       },
     });
     if (otpError) {
@@ -101,7 +100,7 @@ export async function POST(request: NextRequest) {
 
   const { data: memberRows, error: memberError } = await admin
     .from("members")
-    .insert({ auth_user_id: data.user.id, gym: PILOT_GYM, name })
+    .insert({ auth_user_id: data.user.id, gym, name })
     .select("id");
 
   // 23505 = auth_user_id already has a members row (repeat signup attempt
@@ -128,13 +127,13 @@ export async function POST(request: NextRequest) {
   if (!memberError) {
     const newMemberId = memberRows?.[0]?.id as number | undefined;
     if (newMemberId) {
-      await recordSignupLead({ memberId: newMemberId, gym: PILOT_GYM, name, email });
+      await recordSignupLead({ memberId: newMemberId, gym, name, email });
     }
 
-    const staffEmails = await getStaffRecipients(PILOT_GYM);
-    const { subject, html } = staffNewSignupEmail({ memberName: name, gym: PILOT_GYM });
+    const staffEmails = await getStaffRecipients(gym);
+    const { subject, html } = staffNewSignupEmail({ memberName: name, gym });
     for (const to of staffEmails) {
-      await notifyFireAndForget({ eventType: "staff_new_signup", to, subject, html });
+      await notifyFireAndForget({ eventType: "staff_new_signup", to, subject, html, gym });
     }
   }
 

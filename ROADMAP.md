@@ -1321,3 +1321,146 @@ both apps). Staff selling/comping via podHq is deliberately exempt from
 the block, per the user's explicit requirement.
 
 `npx tsc --noEmit`, `eslint`, and `next build` all pass clean.
+
+## Signup gym dropdown, ending single-gym-pilot scope — 2026-08-16
+
+Added a "Your gym" dropdown to `/signup`, replacing the hardcoded
+`PILOT_GYM` ("Aylesbury Berryfields") every new member was silently
+assigned to regardless of which gym they actually attend. Confirmed with
+the user first whether to list all 9 gyms now or keep it Aylesbury-only
+until other locations are ready — user chose **all 9**, so this is a real
+scope change, not just a UI addition: it deliberately ends the
+"Aylesbury Berryfields only, not multi-gym yet" pilot-scope decision
+documented earlier in this file. A gym without pod/Kisi config yet
+(`gym_kisi_mapping`) isn't blocked from signing up members — they just
+fall back to that table's existing defaults (capacity 1, open all day)
+until staff configure it properly from podHq's `/pods`.
+
+`src/lib/gym.ts`'s single `PILOT_GYM` string became a `GYM_NAMES` array +
+`GymName` type, matching podHq's own gym list verbatim (same list that
+must stay in sync across both repos, per the "exact gym name strings"
+convention podHq's ROADMAP documents). `signupSchema` now validates `gym`
+against it. The account-linking flow (`/api/auth/link-existing-account`,
+triggered when someone signs up with an email that already exists
+elsewhere in the shared Supabase project, e.g. a podHq staff login) also
+used `PILOT_GYM` and needed the same fix — the selected gym now travels
+through the magic-link redirect URL (`emailRedirectTo`) alongside the
+already-established `name` param, read back out in `/auth/callback` and
+posted through to the linking route. A stale/missing `gym` on that path
+(a magic link sent before this change existed) is rejected outright
+(400, "this link has expired") rather than silently defaulting to
+Aylesbury — the member never actually chose that, so guessing would be
+wrong, not just imprecise.
+
+Also updated the login and reset-password page subtitles, which
+hardcoded "My Fit Pod — Aylesbury Berryfields" as static branding text —
+left as-is they'd now misleadingly suggest the app is still
+Aylesbury-only to a member from any other gym. Simplified to "My Fit
+Pod".
+
+**Not yet live-tested** — needs an actual signup run through the real UI
+for at least one non-Aylesbury gym to confirm the dropdown, validation,
+and the account-linking redirect path all work end-to-end; the
+account-linking branch specifically has no automated test coverage and
+was previously only exercised with the hardcoded constant. `npx tsc
+--noEmit`, `eslint`, and `next build` all pass clean.
+
+## Per-gym Resend accounts, same day — 2026-08-16
+
+The user wants each gym on its own Resend account with its own send
+quota, not the one shared `RESEND_API_KEY`/`RESEND_FROM_ADDRESS` this app
+has always used. Real reason: Resend's free tier is a hard 100-email/day
+cap with no graceful queueing (unlike Brevo, which auto-resumes a paused
+campaign the next day) — a booking-confirmation email sent after the cap
+is hit just fails outright, so one shared account across a growing
+franchise risks silently dropping real member-facing email as more gyms
+come online. Full design discussion (including why Resend didn't need a
+separate *account* per gym the way Brevo does, but the user specifically
+wanted separate *quotas* anyway, which does require it) is in podHq's
+ROADMAP — the config table (`gym_resend_config`,
+`0037_gym_resend_config.sql`) and its admin-only Setup UI both live
+there; this repo only ever reads it, never writes it.
+
+**This app's half**: new `src/lib/data/resend-config.ts` —
+`getGymResendConfig(gym)` reads `gym_resend_config` via the shared
+service-role client and decrypts the stored API key. The decrypt logic
+(AES-256-GCM) is a second, independent copy of podHq's
+`secret-encryption.ts` — the two apps are separate repos/deploys with no
+shared package, so it has to be duplicated exactly rather than imported,
+and must stay byte-for-byte compatible with whatever encrypted it on the
+podHq side.
+
+`sendEmail()` (`src/lib/notifications/resend.ts`) now takes a required
+`gym`, looks up that gym's config, and **falls back to the existing
+shared env vars** if the gym has none configured yet — deliberately not
+a silent skip, since these are member-facing transactional emails
+(booking confirmations, purchase receipts), not a low-stakes marketing
+sync. `notifyFireAndForget()` (`src/lib/notifications/core.ts`) now
+requires `gym` too, which propagated to all 13 call sites across 6
+files: `api/auth/signup`, `api/bookings`, `api/bookings/cancel`,
+`api/notifications/win-back`, `lib/waitlist/offer-next`, and 7 separate
+sites inside `api/webhooks/stripe` (voucher purchase + staff alert,
+two credit-pack-purchase paths, membership started, staff
+cancellation alert, membership renewed). Every call site already had a
+gym value in scope — `member.gym`, `contact.gym` (from
+`resolveMemberContact`), `purchaser.gym`, or an existing `gym` function
+parameter — so this was mechanical, not a redesign. Caught every missed
+site via `tsc` itself (making `gym` required turned a missed call site
+into a compile error) rather than manually re-grepping the codebase.
+
+Supabase Auth's own emails (signup confirmation, password reset) are
+explicitly **unaffected** — those are sent by Supabase itself via one
+project-wide custom SMTP setting with no per-gym concept at all, and
+stay on the existing shared configuration.
+
+**Not yet exercised with a real per-gym account** — every gym currently
+has no `gym_resend_config` row, so every send still goes through the
+shared fallback exactly as before this change; the per-gym path itself
+(config present, used instead of the fallback) hasn't been triggered
+live yet, since no gym has actually connected its own Resend account.
+`npx tsc --noEmit`, `eslint`, and `next build` all pass clean.
+
+## Health check endpoint + first regression tests, same day — 2026-08-16
+
+Prompted by an honest business-analysis of the whole system (both
+repos) — two of the risks it surfaced had a real code fix: no automated
+tests anywhere, and no uptime monitoring.
+
+`GET /api/health` (`src/app/api/health/route.ts`) — unauthenticated
+(added to `PUBLIC_API_EXACT_PATHS` in `proxy.ts`, same exact-path
+convention the 2026-08-16 OWASP audit established for the cron routes
+above, deliberately not a prefix), checks real Supabase connectivity via
+a cheap `head: true` query against `members`, returns 503 on failure so
+an external uptime monitor can alert on it. Verified live against the
+local dev server. Not yet wired to an actual monitoring service — that's
+a manual signup step, not code.
+
+**Vitest added** (`vitest.config.ts`, `npm test`) — first test framework
+this repo has had. `server-only` throws unconditionally outside Next's
+bundler, so the config aliases it to a no-op shim
+(`src/test/server-only-shim.ts`).
+
+**Two regression tests, both encoding a bug that actually happened**:
+
+- `src/lib/pods/bookable-hours.test.ts` — the BST timezone bug from
+  Stage 15 (a plain server-side `.getHours()` would read the wrong hour
+  during British Summer Time since Vercel's functions run in UTC
+  internally). The check itself was extracted out of `/api/bookings`
+  into a standalone `isWithinBookableHours()` (`src/lib/pods/
+  bookable-hours.ts`) so it's actually unit-testable — asserts a slot at
+  09:00 Europe/London during BST is correctly read as hour 9, not the
+  UTC hour 8.
+- `src/lib/validation/auth.test.ts` — the multi-gym signup dropdown
+  added earlier this session turned `gym` into real client-supplied
+  input for the first time (previously a hardcoded constant); asserts
+  `signupSchema` rejects a gym string that isn't one of the 9 real
+  franchise names, not just whatever a `<select>` happens to render.
+
+**Deliberately not attempted this pass**: booking capacity/advisory-lock
+concurrency and the cross-gym ownership checks scattered across the
+Stripe webhook and booking routes aren't unit-testable without either
+significant mocking or a real integration test against a live Supabase
+project — worth doing, but a separate pass, not folded into this one.
+
+`npx tsc --noEmit`, `eslint`, `next build`, and `npx vitest run` all
+pass clean.

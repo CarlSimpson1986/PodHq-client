@@ -64,7 +64,7 @@ function AuthCallbackInner() {
           const linkRes = await fetch("/api/auth/link-existing-account", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: searchParams.get("name") ?? "" }),
+            body: JSON.stringify({ name: searchParams.get("name") ?? "", gym: searchParams.get("gym") ?? "" }),
           });
           const linkBody = await linkRes.json();
           if (linkBody.status !== "ok") {

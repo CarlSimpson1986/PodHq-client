@@ -45,7 +45,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col">
-      <PageHero title="Sign in" subtitle="My Fit Pod — Aylesbury Berryfields" icon={LockIcon} />
+      <PageHero title="Sign in" subtitle="My Fit Pod" icon={LockIcon} />
       <div className="card-light flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
           <form className="space-y-5" onSubmit={handleSubmit}>
