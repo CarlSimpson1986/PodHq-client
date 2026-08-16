@@ -3,7 +3,11 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuthEvent } from "@/lib/audit";
 import { getRequestIp } from "@/lib/request-ip";
-import { PILOT_GYM } from "@/lib/gym";
+import { GYM_NAMES, type GymName } from "@/lib/gym";
+
+function isGymName(value: string): value is GymName {
+  return (GYM_NAMES as readonly string[]).includes(value);
+}
 
 /**
  * Completes the account-linking flow: called from /auth/callback right
@@ -23,7 +27,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Not signed in." }, { status: 401 });
   }
 
-  let body: { name?: string };
+  let body: { name?: string; gym?: string };
   try {
     body = await request.json();
   } catch {
@@ -45,7 +49,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok" });
   }
 
-  const { error } = await admin.from("members").insert({ auth_user_id: user.id, gym: PILOT_GYM, name });
+  // gym travels through the magic-link redirect URL (see signup's
+  // collision branch) rather than being re-entered here — a missing/
+  // invalid value only happens for a stale link sent before this field
+  // existed, or tampering, neither of which should silently default to a
+  // gym the member never actually picked.
+  const gym = body.gym ?? "";
+  if (!isGymName(gym)) {
+    return NextResponse.json(
+      { status: "error", message: "This link has expired. Please sign up again." },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await admin.from("members").insert({ auth_user_id: user.id, gym, name });
 
   if (error) {
     console.error("[link-existing-account] failed to create member row", { error: error.message });

@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
       subject,
       html,
       memberId: member.id,
+      gym: member.gym,
     });
 
     if (booking?.slot_start) {

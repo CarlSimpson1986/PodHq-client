@@ -13,6 +13,7 @@ interface NotifyInput {
   to: string;
   subject: string;
   html: string;
+  gym: string;
   memberId?: number;
 }
 
@@ -33,7 +34,7 @@ interface NotifyInput {
  * error response for the caller.
  */
 export async function notifyFireAndForget(input: NotifyInput): Promise<void> {
-  const result = await sendEmail({ to: input.to, subject: input.subject, html: input.html });
+  const result = await sendEmail({ to: input.to, subject: input.subject, html: input.html, gym: input.gym });
 
   await logNotification({
     eventType: input.eventType,

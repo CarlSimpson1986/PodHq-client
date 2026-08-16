@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberByAuthUserId, getPodConfig, isAccessComplete, getCreditBalance } from "@/lib/data/member";
+import { isWithinBookableHours } from "@/lib/pods/bookable-hours";
 import { createBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { notifyFireAndForget, appUrl } from "@/lib/notifications/core";
@@ -54,12 +55,7 @@ export async function POST(request: NextRequest) {
   // browser in UK wall-clock time, so the check needs to use the same
   // frame of reference to compare correctly against the configured hours).
   const { openHour, closeHour } = await getPodConfig(member.gym);
-  const slotHour = Number(
-    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", hourCycle: "h23" }).format(
-      new Date(parsed.data.slotStart)
-    )
-  );
-  if (slotHour < openHour || slotHour >= closeHour) {
+  if (!isWithinBookableHours(parsed.data.slotStart, openHour, closeHour)) {
     return NextResponse.json({ status: "error", message: "That time is outside booking hours." }, { status: 400 });
   }
 
@@ -111,6 +107,7 @@ export async function POST(request: NextRequest) {
       subject,
       html,
       memberId: member.id,
+      gym: member.gym,
     });
 
     const creditsRemaining = await getCreditBalance(member.id);
@@ -126,6 +123,7 @@ export async function POST(request: NextRequest) {
         subject: lowCredits.subject,
         html: lowCredits.html,
         memberId: member.id,
+        gym: member.gym,
       });
     }
   }

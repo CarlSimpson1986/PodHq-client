@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
             subject: purchaserEmail.subject,
             html: purchaserEmail.html,
             memberId: purchaserMemberId,
+            gym: purchaser.gym,
           });
 
           const staffEmails = await getStaffRecipients(purchaser.gym);
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
               to,
               subject: staffEmail.subject,
               html: staffEmail.html,
+              gym: purchaser.gym,
             });
           }
         }
@@ -155,6 +157,7 @@ export async function POST(request: NextRequest) {
           subject,
           html,
           memberId,
+          gym: contact.gym,
         });
       }
     }
@@ -215,6 +218,7 @@ export async function POST(request: NextRequest) {
             subject,
             html,
             memberId,
+            gym: contact.gym,
           });
         }
       }
@@ -267,7 +271,7 @@ export async function POST(request: NextRequest) {
         tierName,
         creditsPerPeriod,
       });
-      await notifyFireAndForget({ eventType: "membership_started", to: contact.email, subject, html, memberId });
+      await notifyFireAndForget({ eventType: "membership_started", to: contact.email, subject, html, memberId, gym: contact.gym });
     }
 
     await saveStripeCustomerId(admin, memberId, subscription.customer, resolvePaymentMethodId(subscription.default_payment_method));
@@ -302,7 +306,7 @@ export async function POST(request: NextRequest) {
             tierName,
           });
           for (const to of staffEmails) {
-            await notifyFireAndForget({ eventType: "staff_membership_cancelled", to, subject, html });
+            await notifyFireAndForget({ eventType: "staff_membership_cancelled", to, subject, html, gym: contact.gym });
           }
         }
       }
@@ -371,7 +375,7 @@ export async function POST(request: NextRequest) {
             tierName,
             creditsPerPeriod,
           });
-          await notifyFireAndForget({ eventType: "membership_renewed", to: contact.email, subject, html, memberId });
+          await notifyFireAndForget({ eventType: "membership_renewed", to: contact.email, subject, html, memberId, gym: contact.gym });
         }
       }
     }

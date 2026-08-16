@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GYM_NAMES } from "@/lib/gym";
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -22,6 +23,7 @@ export const signupSchema = z
     email: emailSchema,
     password: passwordSchema,
     name: z.string().trim().min(1).max(100),
+    gym: z.enum(GYM_NAMES),
   })
   .strict();
 

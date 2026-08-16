@@ -95,6 +95,7 @@ export async function offerNextWaitlistEntry(gym: string, slotStartIso: string):
       subject,
       html,
       memberId: nextEntry.member_id,
+      gym,
     });
 
     await sendPush({

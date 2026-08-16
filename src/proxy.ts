@@ -26,7 +26,9 @@ const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback",
 // route remembering its own auth check. An exact-path allowlist makes a new
 // cron route an explicit opt-in instead.
 const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/webhooks/"];
-const PUBLIC_API_EXACT_PATHS = ["/api/waitlist/expire", "/api/notifications/win-back"];
+// /api/health has no session to check either — an external uptime monitor
+// hits it directly, same reasoning as the cron routes above.
+const PUBLIC_API_EXACT_PATHS = ["/api/waitlist/expire", "/api/notifications/win-back", "/api/health"];
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
