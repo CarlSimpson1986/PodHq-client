@@ -18,8 +18,17 @@ import { offerNextWaitlistEntry } from "@/lib/waitlist/offer-next";
  * making this request.
  */
 export async function GET(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  // Fail closed if the secret itself is missing (misconfigured env) rather
+  // than comparing against the literal string "Bearer undefined" — found in
+  // the 2026-08-16 OWASP audit: a request that sends that exact header would
+  // otherwise pass.
+  if (!cronSecret) {
+    console.error("[waitlist] CRON_SECRET is not configured");
+    return NextResponse.json({ status: "error", message: "Not configured." }, { status: 500 });
+  }
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ status: "error", message: "Unauthorized." }, { status: 401 });
   }
 

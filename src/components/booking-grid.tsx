@@ -68,6 +68,16 @@ export function BookingGrid({
   const [success, setSuccess] = useState<string | null>(null);
   const [waitlistSlots, setWaitlistSlots] = useState<string[]>(initialWaitlistSlots);
   const [pendingWaitlistSlot, setPendingWaitlistSlot] = useState<string | null>(null);
+  // `now` as state rather than calling Date.now() directly during render —
+  // a newer eslint-plugin-react-hooks (pulled in by the 2026-08-16
+  // dependency upgrade) flags that as an impure-render error. Refreshed
+  // every minute so past-slot filtering doesn't go stale on a page left
+  // open across an hour boundary.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
   const selectedDayRef = useRef<HTMLAnchorElement>(null);
   const dayStripRef = useRef<HTMLDivElement>(null);
   // Touch/trackpad already scroll the strip natively via overflow-x-auto —
@@ -183,7 +193,6 @@ export function BookingGrid({
     }
   }
 
-  const now = Date.now();
   const windowDates = bookingWindowDates();
   const todayStr = formatDateParam(windowDates[0]);
   const isToday = selectedDate === todayStr;

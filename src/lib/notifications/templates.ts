@@ -1,3 +1,15 @@
+// Member-supplied names (signup `name`, no character restriction beyond
+// length — src/lib/validation/auth.ts) are interpolated into these HTML
+// email bodies. Found in the 2026-08-16 OWASP audit: unescaped, a name like
+// `<a href=...>` renders as real markup in the recipient's inbox — most
+// dangerously in staff-facing emails (staffNewSignupEmail etc.), a phishing/
+// spoofing vector against gym owners/admins. Escape any interpolated value
+// that ultimately comes from a member, not from this app's own fixed data
+// (gym names, catalog tier names, generated codes don't need this).
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(amount);
 }
@@ -56,7 +68,7 @@ export function bookingConfirmedEmail(input: {
   return {
     subject: "Booking confirmed",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>Your pod session at <strong>${input.gym}</strong> is confirmed for <strong>${formatSlot(input.slotStart)}</strong>.</p>
       ${firstBookingGuide}
       <p>See you there!</p>
@@ -76,7 +88,7 @@ export function bookingCancelledEmail(input: {
   return {
     subject: "Booking cancelled",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>Your session at <strong>${input.gym}</strong> on <strong>${formatSlot(input.slotStart)}</strong> has been cancelled.</p>
       <p>${refundLine}</p>
     `),
@@ -87,7 +99,7 @@ export function creditPackPurchasedEmail(input: { memberName: string; credits: n
   return {
     subject: "Credit pack purchased",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>Thanks for your purchase &mdash; <strong>${input.credits} credit${input.credits === 1 ? "" : "s"}</strong> have been added to your account.</p>
     `),
   };
@@ -102,7 +114,7 @@ export function giftVoucherPurchasedEmail(input: {
   return {
     subject: "Gift voucher purchased",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>Your ${formatGBP(input.amountGBP)} gift voucher is ready &mdash; worth <strong>${input.credits} credit${input.credits === 1 ? "" : "s"}</strong>.</p>
       <p>Code: <strong>${input.code}</strong></p>
     `),
@@ -117,7 +129,7 @@ export function membershipStartedEmail(input: {
   return {
     subject: "Membership started",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>Your <strong>${input.tierName}</strong> membership is active &mdash; ${input.creditsPerPeriod} credit${input.creditsPerPeriod === 1 ? "" : "s"} have been added.</p>
     `),
   };
@@ -131,7 +143,7 @@ export function membershipRenewedEmail(input: {
   return {
     subject: "Membership renewed",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>Your <strong>${input.tierName}</strong> membership has renewed &mdash; ${input.creditsPerPeriod} credit${input.creditsPerPeriod === 1 ? "" : "s"} have been added.</p>
     `),
   };
@@ -141,7 +153,7 @@ export function staffNewSignupEmail(input: { memberName: string; gym: string }):
   return {
     subject: `New signup: ${input.memberName}`,
     html: emailShell(`
-      <p><strong>${input.memberName}</strong> just signed up at <strong>${input.gym}</strong>.</p>
+      <p><strong>${escapeHtml(input.memberName)}</strong> just signed up at <strong>${input.gym}</strong>.</p>
     `),
   };
 }
@@ -154,7 +166,7 @@ export function staffMembershipCancelledEmail(input: {
   return {
     subject: `Membership cancelled: ${input.memberName}`,
     html: emailShell(`
-      <p><strong>${input.memberName}</strong> at <strong>${input.gym}</strong> cancelled their <strong>${input.tierName}</strong> membership.</p>
+      <p><strong>${escapeHtml(input.memberName)}</strong> at <strong>${input.gym}</strong> cancelled their <strong>${input.tierName}</strong> membership.</p>
     `),
   };
 }
@@ -167,7 +179,7 @@ export function staffGiftVoucherPurchasedEmail(input: {
   return {
     subject: `Gift voucher purchased: ${formatGBP(input.amountGBP)}`,
     html: emailShell(`
-      <p><strong>${input.purchaserName}</strong> at <strong>${input.gym}</strong> purchased a ${formatGBP(input.amountGBP)} gift voucher.</p>
+      <p><strong>${escapeHtml(input.purchaserName)}</strong> at <strong>${input.gym}</strong> purchased a ${formatGBP(input.amountGBP)} gift voucher.</p>
     `),
   };
 }
@@ -181,7 +193,7 @@ export function waitlistOfferedEmail(input: {
   return {
     subject: "A spot just opened up!",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>A spot for <strong>${formatSlot(input.slotStart)}</strong> at <strong>${input.gym}</strong> just opened up, and you're next on the waitlist.</p>
       <p><strong>You have 15 minutes to claim it</strong> before it's offered to the next person.</p>
       <p><a href="${input.acceptUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Claim this spot</a></p>
@@ -193,7 +205,7 @@ export function creditsLowEmail(input: { memberName: string; creditsRemaining: n
   return {
     subject: input.creditsRemaining === 1 ? "You're down to your last credit" : `Only ${input.creditsRemaining} credits left`,
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>You've got <strong>${input.creditsRemaining} credit${input.creditsRemaining === 1 ? "" : "s"}</strong> left on your account.</p>
       <p>Top up now so you don't miss your next session.</p>
       <p><a href="${input.buyCreditsUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Buy more credits</a></p>
@@ -205,7 +217,7 @@ export function winBackEmail(input: { memberName: string; gym: string; daysSince
   return {
     subject: "We haven't seen you in a while",
     html: emailShell(`
-      <p>Hi ${input.memberName},</p>
+      <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>It's been ${input.daysSinceLastVisit} days since your last session at <strong>${input.gym}</strong> &mdash; your pod's still waiting for you.</p>
       <p><a href="${input.bookUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Book your next session</a></p>
     `),

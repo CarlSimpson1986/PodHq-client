@@ -7,9 +7,18 @@
 // the network so auth/session state and payment/booking actions can't be
 // served stale.
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `podhq-client-${CACHE_VERSION}`;
 const PRECACHE_URLS = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+
+// Only these navigations are ever written to the cache — every other route
+// (profile, bookings, book, buy-credits, etc.) renders member-specific data
+// server-side and must never be served stale to a different person on a
+// shared device. Found in the 2026-08-16 OWASP audit: the old version cached
+// every successful navigation regardless of content, so logging out and back
+// in as someone else on the same device/browser could serve the previous
+// member's cached profile/bookings page if the network hit the timeout below.
+const CACHEABLE_NAVIGATION_PATHS = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/offline"]);
 
 // On a genuinely bad connection, fetch() doesn't reject quickly — it just
 // hangs until the browser's own long timeout. Racing it against a short
@@ -75,21 +84,27 @@ async function cacheFirst(request) {
 
 async function navigationHandler(request) {
   const cache = await caches.open(CACHE_NAME);
+  const path = new URL(request.url).pathname;
+  const cacheable = CACHEABLE_NAVIGATION_PATHS.has(path);
 
   const networkFetch = fetch(request).then((response) => {
-    if (response.ok) cache.put(request, response.clone());
+    if (response.ok && cacheable) cache.put(request, response.clone());
     return response;
   });
 
   try {
     return await withTimeout(networkFetch, NAVIGATION_TIMEOUT_MS);
   } catch {
-    // Network is slow/dead — serve whatever's cached for this exact page if
-    // we have it, otherwise the generic offline page. The network fetch
-    // above keeps running unhandled; if it eventually succeeds it still
-    // updates the cache for the next visit.
-    const cached = await cache.match(request);
-    if (cached) return cached;
+    // Network is slow/dead. Only ever serve a cached copy for the small
+    // allowlisted set of public pages above — every other route falls
+    // straight through to the generic offline page rather than risk
+    // serving another member's cached, personalized HTML. The network
+    // fetch above keeps running unhandled; if it eventually succeeds it
+    // still updates the cache for next time (allowlisted paths only).
+    if (cacheable) {
+      const cached = await cache.match(request);
+      if (cached) return cached;
+    }
     const offline = await cache.match("/offline");
     if (offline) return offline;
     return networkFetch;
