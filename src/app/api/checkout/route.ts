@@ -3,7 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
-import { getCreditPackageById } from "@/lib/data/catalog";
+import { getCreditPackageById, hasMemberClaimedItem } from "@/lib/data/catalog";
 import { checkoutSchema } from "@/lib/validation/checkout";
 
 export async function POST(request: NextRequest) {
@@ -43,6 +43,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Unknown credit package." }, { status: 400 });
   }
 
+  // Self-service only — staff can still sell/grant this again via podHq
+  // regardless (staff discretion, not enforced there).
+  if (pkg.oneTimePerMember && (await hasMemberClaimedItem(member.id, pkg.id))) {
+    return NextResponse.json(
+      { status: "error", message: "This is a one-time offer — you've already claimed it." },
+      { status: 409 }
+    );
+  }
+
   const origin = request.nextUrl.origin;
   const stripe = getStripeClient();
   const checkoutSession = await stripe.checkout.sessions.create({
@@ -64,6 +73,7 @@ export async function POST(request: NextRequest) {
     metadata: {
       member_id: String(member.id),
       credits: String(pkg.credits),
+      packageId: pkg.id,
     },
     success_url: `${origin}/book?purchase=success`,
     cancel_url: `${origin}/buy-credits?purchase=cancelled`,

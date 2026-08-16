@@ -4,4 +4,5 @@ export interface CreditPackage {
   label: string;
   credits: number;
   priceGBP: number;
+  oneTimePerMember: boolean;
 }
