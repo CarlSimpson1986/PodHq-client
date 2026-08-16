@@ -129,6 +129,7 @@ export async function POST(request: NextRequest) {
       member_id: memberId,
       amount: credits,
       reason: "purchase",
+      catalog_item_id: checkoutSession.metadata?.packageId ?? null,
       stripe_event_id: event.id,
       stripe_payment_intent_id: resolvePaymentIntentId(checkoutSession.payment_intent),
     });
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
         member_id: memberId,
         amount: credits,
         reason: "purchase",
+        catalog_item_id: paymentIntent.metadata?.packageId ?? null,
         stripe_event_id: event.id,
         stripe_payment_intent_id: paymentIntent.id,
       });

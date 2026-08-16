@@ -17,7 +17,7 @@ export async function getCreditPackages(gym: string): Promise<CreditPackage[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("catalog_items")
-    .select("item_id, name, label, credits, price_gbp")
+    .select("item_id, name, label, credits, price_gbp, one_time_per_member")
     .eq("gym", gym)
     .eq("type", "credit_pack")
     .eq("enabled", true)
@@ -30,7 +30,28 @@ export async function getCreditPackages(gym: string): Promise<CreditPackage[]> {
     label: row.label,
     credits: row.credits,
     priceGBP: row.price_gbp,
+    oneTimePerMember: row.one_time_per_member,
   }));
+}
+
+/** Which of this member's one-time-per-member items they've already claimed — catalog_item_id set on any credits row they've ever received. */
+export async function getClaimedOneTimeItemIds(memberId: number): Promise<Set<string>> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("credits").select("catalog_item_id").eq("member_id", memberId).not("catalog_item_id", "is", null);
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => row.catalog_item_id as string));
+}
+
+/** Server-side enforcement for a single item at checkout time — self-service purchase only, staff-initiated sales in podHq are deliberately exempt. */
+export async function hasMemberClaimedItem(memberId: number, itemId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { count, error } = await admin
+    .from("credits")
+    .select("id", { count: "exact", head: true })
+    .eq("member_id", memberId)
+    .eq("catalog_item_id", itemId);
+  if (error) throw error;
+  return (count ?? 0) > 0;
 }
 
 export async function getMembershipTiers(gym: string): Promise<MembershipTier[]> {

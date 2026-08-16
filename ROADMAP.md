@@ -1274,3 +1274,50 @@ still local-only as of this entry. `npx tsc --noEmit`, `eslint`, and
 production, then a real install-and-use PWA test on a phone against the
 live URL (the local-dev PWA verification in the Stage above only covered
 `localhost`, not a real installed-app experience).
+
+**Same-day follow-ups, after the first deploy above**:
+
+**Real phone install/offline test against production** surfaced two
+unrelated real issues, both fixed live rather than in code: (1) Supabase
+Auth's **Site URL** was still `http://localhost:3000` — a signup
+confirmation link sent to a real production visitor pointed at
+`localhost` and would 404 for anyone but a local dev. Fixed by updating
+Site URL to `https://podhq-client.vercel.app` in the Supabase dashboard
+(Redirect URLs already correctly had the production `/auth/callback`
+entry — only Site URL was stale). (2) Testing "forgot password" hit a
+real, unrelated `user_banned` error — traced to reusing an email address
+already tied to an old, deliberately-deactivated podHq **owner** test
+account (Supabase Auth is one shared user pool across both apps) — not a
+bug, just an identity collision from reusing a test email; resolved by
+using a fresh address.
+
+**Install-prompt banner** (`src/components/install-app-card.tsx`, shown
+on `/profile`) — added after live-testing surfaced that nothing in the
+app told a member this was installable at all, especially on iOS where
+there's no browser-level hint either (Apple has no `beforeinstallprompt`
+equivalent). Android/Chrome gets a real "Install" button wired to the
+native `beforeinstallprompt` flow; iOS gets static "Tap Share → Add to
+Home Screen" instructions. Dismissible (localStorage), hidden entirely
+if already running standalone. `dismissed`/`ios` use lazy `useState`
+initializers rather than an effect + synchronous setState, same fix
+pattern as podHq's `turnstile-widget.tsx` — same stricter
+eslint-plugin-react-hooks from the dependency upgrade above.
+
+**One-time-per-member catalog items** (podHq's Stage 22 has the full
+design rationale — this is the client-side half): `getCreditPackages`/
+`getCreditPackageById` now surface `oneTimePerMember`; a new
+`hasMemberClaimedItem`/`getClaimedOneTimeItemIds` pair
+(`src/lib/data/catalog.ts`) answers "has this member already received
+this item" from `credits.catalog_item_id` (new column, previously
+nothing tracked this). `/api/checkout` blocks a repeat self-service
+purchase server-side (409) — the real enforcement point, not just a UI
+nicety — and `/buy-credits` shows a "One-time offer" badge plus an
+already-claimed disabled state instead of letting a member hit a
+surprise rejection at checkout. The Stripe webhook now tags
+`catalog_item_id` on every credit-pack purchase (both the self-service
+`checkout.session.completed` path and podHq's staff-initiated
+`payment_intent.succeeded` path — one webhook, one shared fix, covers
+both apps). Staff selling/comping via podHq is deliberately exempt from
+the block, per the user's explicit requirement.
+
+`npx tsc --noEmit`, `eslint`, and `next build` all pass clean.
