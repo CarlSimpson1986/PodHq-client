@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HomeIcon, DumbbellIcon, ShopIcon, UserIcon } from "@/components/icons";
+import { HomeIcon, DumbbellIcon, ShopIcon, UserIcon, DownloadIcon } from "@/components/icons";
+import { useInstallPrompt } from "@/lib/use-install-prompt";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: HomeIcon },
@@ -19,9 +21,24 @@ const NAV_ITEMS = [
 // bar's exact highlighted state for a screen that isn't one of the 4 tabs.
 export function BottomNav() {
   const pathname = usePathname();
+  const { installable, ios, promptInstall } = useInstallPrompt();
+  const [showIosHint, setShowIosHint] = useState(false);
+
+  function handleInstallClick() {
+    if (ios) {
+      setShowIosHint((v) => !v);
+      return;
+    }
+    promptInstall();
+  }
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-card-border bg-card">
+      {showIosHint && (
+        <div className="mx-auto max-w-md px-4 pb-2 pt-3 text-center text-xs text-muted-foreground">
+          Tap the Share icon, then &quot;Add to Home Screen&quot; for quick access, even with poor signal at the gym.
+        </div>
+      )}
       <div className="mx-auto flex w-full max-w-md items-center justify-around">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href;
@@ -38,6 +55,16 @@ export function BottomNav() {
             </Link>
           );
         })}
+        {installable && (
+          <button
+            type="button"
+            onClick={handleInstallClick}
+            className="flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium text-muted-foreground"
+          >
+            <DownloadIcon className="h-6 w-6" />
+            Install
+          </button>
+        )}
       </div>
     </nav>
   );

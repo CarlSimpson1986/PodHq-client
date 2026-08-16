@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Membership } from "@/lib/data/member";
 import { BottomNav } from "@/components/bottom-nav";
-import { InstallAppCard } from "@/components/install-app-card";
 import { CoinIcon, IdCardIcon, GiftIcon, DumbbellIcon, ChevronRightIcon, LogoutIcon, PinIcon, LockIcon } from "@/components/icons";
 
 function formatDate(iso: string) {
@@ -118,8 +117,6 @@ export function ProfileView({
 
       <div className="card-light flex-1 space-y-6 px-6 pb-24 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
-          <InstallAppCard />
-
           <div className="flex items-center gap-4 rounded-xl border border-card-light-border p-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-light-border text-lg font-semibold">
               {initials(memberName)}
