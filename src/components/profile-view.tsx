@@ -93,6 +93,14 @@ export function ProfileView({
     setLoggingOut(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      // Belt-and-suspenders alongside the service worker's own allowlist
+      // (see public/sw.js) — clears any page HTML the SW cached under an
+      // older version, so a shared device doesn't risk serving the next
+      // person who logs in a cached copy of this member's profile/bookings.
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((key) => key.startsWith("podhq-client-")).map((key) => caches.delete(key)));
+      }
       router.push("/login");
     } catch {
       setLoggingOut(false);

@@ -24,8 +24,15 @@ const PAGE_SIZE = 1000;
  * nudging someone who's already got their next session booked.
  */
 export async function GET(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  // Fail closed if the secret itself is missing — see waitlist/expire's
+  // matching fix for the full reasoning (2026-08-16 OWASP audit).
+  if (!cronSecret) {
+    console.error("[notifications] CRON_SECRET is not configured");
+    return NextResponse.json({ status: "error", message: "Not configured." }, { status: 500 });
+  }
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ status: "error", message: "Unauthorized." }, { status: 401 });
   }
 

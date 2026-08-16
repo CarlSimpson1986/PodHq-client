@@ -12,17 +12,25 @@ const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback",
 // redirect it to /login (the route authenticates via Stripe's own
 // signature instead, see src/app/api/webhooks/stripe/route.ts).
 //
-// /api/waitlist/expire and /api/notifications/* are the same story but for
-// Vercel Cron: no session cookie either, authenticated via CRON_SECRET
-// inside the route itself. Found live 2026-08-14 while testing the new
-// win-back route — it (and the pre-existing waitlist/expire cron) were
-// being silently redirected to /login by this same gate before ever
+// /api/waitlist/expire and /api/notifications/win-back are the same story
+// but for Vercel Cron: no session cookie either, authenticated via
+// CRON_SECRET inside the route itself. Found live 2026-08-14 while testing
+// the new win-back route — it (and the pre-existing waitlist/expire cron)
+// were being silently redirected to /login by this same gate before ever
 // reaching their own auth check, meaning the daily waitlist-expiry sweep
 // had likely never actually run since it was built.
-const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/webhooks/", "/api/waitlist/expire", "/api/notifications/"];
+//
+// Listed as exact paths, not a "/api/notifications/" prefix — found in the
+// 2026-08-16 OWASP audit: a prefix here means any future route added under
+// that path skips this gate entirely by default, relying solely on that
+// route remembering its own auth check. An exact-path allowlist makes a new
+// cron route an explicit opt-in instead.
+const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/webhooks/"];
+const PUBLIC_API_EXACT_PATHS = ["/api/waitlist/expire", "/api/notifications/win-back"];
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
+  if (PUBLIC_API_EXACT_PATHS.includes(pathname)) return true;
   return PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 

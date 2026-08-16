@@ -1194,3 +1194,83 @@ anything stuck showing stale/cached data once connectivity returns).
 file touched — the two `Date.now`-purity errors `eslint` reports
 (`booking-grid.tsx`, `bookings-view.tsx`) are pre-existing and untouched
 by this work.
+
+## OWASP Top 10 audit fixes — 2026-08-16
+
+Same session as podHq's own audit-remediation pass (see its ROADMAP for
+the full cross-repo picture) — a general audit across both repos ahead of
+switching Stripe to live keys, not scoped to any single feature.
+
+**High: service worker cached authenticated page HTML, never purged on
+logout — cross-user leak on shared devices.** The Stage above's
+`navigationHandler` cached *every* successful navigation response
+regardless of content, including `/profile` and `/bookings`, both of
+which server-render a member's own name/gym/membership/booking history.
+`api/auth/logout` only called `supabase.auth.signOut()` — never touched
+the cache. On a shared/kiosk device, if the network happened to hit the
+4s timeout right after a new member logged in, they could be served the
+*previous* member's cached profile/bookings page. Fixed two ways:
+`sw.js`'s `navigationHandler` now only ever writes to the cache for a
+small allowlist of genuinely public routes (`/`, `/login`, `/signup`,
+`/forgot-password`, `/reset-password`, `/offline`) — every personalized
+route is fetched live, never cached, never served stale on a timeout;
+`CACHE_VERSION` bumped to `v2` so existing installs purge their old,
+now-suspect cache on next activation; and `profile-view.tsx`'s `logout()`
+additionally calls `caches.delete()` on every `podhq-client-*` cache
+directly, for immediate effect rather than waiting on the next SW
+activation cycle.
+
+**High: unsanitized member name injected into staff-facing HTML
+emails.** `src/lib/validation/auth.ts`'s signup `name` field has no
+character restriction, and flowed unescaped into `templates.ts`'s HTML
+bodies — most dangerously `staffNewSignupEmail`/
+`staffMembershipCancelledEmail`/`staffGiftVoucherPurchasedEmail`, sent to
+gym owners/admins, where a name containing markup could render as a real
+link/image, a phishing vector against staff inboxes. Added an
+`escapeHtml` helper, applied to every interpolated member-supplied name
+in every email body (not subject lines — those are plain JSON fields to
+Resend's API, not raw HTML, so escaping there would just show literal
+`&amp;`-style entities).
+
+**Medium: both cron routes' secret check failed open if `CRON_SECRET`
+itself was unset.** `waitlist/expire` and `notifications/win-back` both
+did `authHeader !== \`Bearer ${process.env.CRON_SECRET}\`` — if the env
+var were ever missing, that becomes a literal string comparison against
+`"Bearer undefined"`, which a request could just send. Both routes now
+check `cronSecret` is actually configured first and fail closed (500) if
+not, same pattern `/api/unlock` already used for `KISI_API_KEY`.
+
+**Medium: `/api/notifications/` was allowlisted as an entire public
+prefix, not one route.** `proxy.ts`'s `PUBLIC_API_PREFIXES` included the
+whole `/api/notifications/` path, so any future route added under it
+would skip the session-auth gate by default. Only `win-back` exists
+today; narrowed to an exact-path allowlist (`PUBLIC_API_EXACT_PATHS`)
+covering it and `waitlist/expire` specifically, so a new route has to
+opt in rather than inherit public access silently.
+
+**Medium: rate limiter had a read-then-write race.** `checkRateLimit`
+did a separate `select` then `update` — two concurrent requests in the
+same window could both read a count under the limit and both increment,
+letting a burst modestly exceed `LIMIT_PER_MINUTE`. Replaced with a call
+to a new `increment_rate_limit` Postgres function (defined in podHq's
+`supabase/migrations/0034_increment_rate_limit.sql` per the shared-schema
+convention — this table is shared between both apps) that does the
+check-and-increment as a single atomic `INSERT ... ON CONFLICT ... DO
+UPDATE`, applied identically here and in podHq.
+
+**Dependency vulnerabilities patched**: `npm audit fix --force` (`next`
+16.2.11 → 16.3.1, plus transitive `postcss`/`sharp`/`nanoid`) — 0
+vulnerabilities remaining. This pulled in a stricter
+`eslint-plugin-react-hooks` that promoted the two pre-existing
+`Date.now`-purity warnings noted at the end of the Stage above
+(`booking-grid.tsx`, `bookings-view.tsx`) to hard errors. Fixed properly
+rather than suppressed: `now` is `useState(() => Date.now())`, refreshed
+every 60s via a `useInterval`-style effect, instead of called directly
+during render.
+
+**Not yet deployed** — these changes (plus podHq's parallel fixes) are
+still local-only as of this entry. `npx tsc --noEmit`, `eslint`, and
+`next build` all pass clean. Next step: commit, push, deploy to
+production, then a real install-and-use PWA test on a phone against the
+live URL (the local-dev PWA verification in the Stage above only covered
+`localhost`, not a real installed-app experience).

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
@@ -38,6 +38,16 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
   const [unlockMessages, setUnlockMessages] = useState<Record<number, string>>({});
   const [confirmingCancelId, setConfirmingCancelId] = useState<number | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  // `now` as state rather than calling Date.now() directly during render —
+  // a newer eslint-plugin-react-hooks (pulled in by the 2026-08-16
+  // dependency upgrade) flags that as an impure-render error. Refreshed
+  // every minute so the upcoming/past split doesn't go stale on a page left
+  // open past a booking's window.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
   const [cancelledIds, setCancelledIds] = useState<Set<number>>(new Set());
   const [cancelErrors, setCancelErrors] = useState<Record<number, string>>({});
   // Lazy initializer, not an effect — this only needs to read the current
@@ -126,7 +136,6 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
     }
   }
 
-  const now = Date.now();
   // A booking stays "upcoming" through the end of its own unlock window
   // (65 min after the slot starts), not just until the slot's start time —
   // otherwise it flipped to "past" right as a member arrived to unlock it.
