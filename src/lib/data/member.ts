@@ -34,8 +34,26 @@ export interface Booking {
   id: number;
   member_id: number;
   gym: string;
+  resource_id: number;
   slot_start: string;
   status: "booked" | "cancelled" | "completed" | "no_show";
+}
+
+// One row per bookable resource — a gym can have more than one (see
+// podHq's pod_resources, 0038_pod_resources.sql). creditType/
+// accessProvider are plain strings here, not a closed TS union yet —
+// Milestone 1 (Berkhamsted) never produces anything but 'pod'/'kisi'.
+export interface PodResource {
+  id: number;
+  gym: string;
+  resourceKey: string;
+  label: string;
+  creditType: string;
+  slotDurationMinutes: number;
+  accessProvider: string;
+  podCapacity: number;
+  openHour: number;
+  closeHour: number;
 }
 
 export interface Membership {
@@ -74,9 +92,12 @@ export async function getMemberByAuthUserId(authUserId: string): Promise<Member 
 // not just an incomplete list — this RPC returns one number regardless
 // of how large the ledger gets, same pattern create_booking() already
 // uses internally for its own balance check.
-export async function getCreditBalance(memberId: number): Promise<number> {
+// creditType defaults to 'pod' — Milestone 1 never needs anything else;
+// Brighton's Recovery-credit balance display passes it explicitly once
+// that resource type exists.
+export async function getCreditBalance(memberId: number, creditType = "pod"): Promise<number> {
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("get_credit_balance", { p_member_id: memberId });
+  const { data, error } = await admin.rpc("get_credit_balance", { p_member_id: memberId, p_credit_type: creditType });
 
   if (error) throw new Error(error.message);
   return data ?? 0;
@@ -134,25 +155,32 @@ export async function getAllMemberBookings(memberId: number): Promise<Booking[]>
   return data ?? [];
 }
 
+export interface MemberWaitlistSlot {
+  slotStart: string;
+  resourceId: number;
+}
+
 // Slots this member is currently queued for (waiting or already offered) —
 // small, member-scoped, no pagination concern. Used by /book to show
 // "On waitlist" instead of "Join waitlist" on a slot they've already queued
-// for.
-export async function getMemberWaitlistSlots(memberId: number): Promise<string[]> {
+// for. Includes resourceId — two resources can share a slot_start, and
+// being queued on one must not show as "on waitlist" for the other.
+export async function getMemberWaitlistSlots(memberId: number): Promise<MemberWaitlistSlot[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("waitlist_entries")
-    .select("slot_start")
+    .select("slot_start, resource_id")
     .eq("member_id", memberId)
     .in("status", ["waiting", "offered"]);
 
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => r.slot_start as string);
+  return (data ?? []).map((r) => ({ slotStart: r.slot_start as string, resourceId: r.resource_id as number }));
 }
 
 export interface ActiveReservation {
   slot_start: string;
   member_id: number;
+  resource_id: number;
 }
 
 // Slots on this day currently held for a specific waitlisted member (an
@@ -161,7 +189,9 @@ export interface ActiveReservation {
 // it's actually reserved for, rather than a plain clickable "Book" that
 // would only 409 for anyone else who tries it. Mirrors the same
 // "computed, not stored" reservation check create_booking() itself uses
-// (offer_expires_at checked live, never a stale cached status).
+// (offer_expires_at checked live, never a stale cached status). Includes
+// resource_id — a gym with more than one resource can have the same
+// slot_start reserved on one resource but free on another.
 export async function getActiveReservationsForDate(gym: string, date: Date): Promise<ActiveReservation[]> {
   const admin = createAdminClient();
   const startOfDay = new Date(date);
@@ -171,7 +201,7 @@ export async function getActiveReservationsForDate(gym: string, date: Date): Pro
 
   const { data, error } = await admin
     .from("waitlist_entries")
-    .select("slot_start, member_id")
+    .select("slot_start, member_id, resource_id")
     .eq("gym", gym)
     .eq("status", "offered")
     .gt("offer_expires_at", new Date().toISOString())
@@ -202,18 +232,30 @@ export async function getBookingsForDate(gym: string, date: Date): Promise<Booki
   return data ?? [];
 }
 
-// Pod capacity + self-service booking hours (podHq's admin "Pods" page
-// configures these per gym) — defaults to today's original behaviour
-// (capacity 1, open all day) if the gym has no gym_kisi_mapping row at
-// all, matching the DB column defaults.
-export async function getPodConfig(gym: string): Promise<{ openHour: number; closeHour: number; podCapacity: number }> {
+// Every bookable resource at this gym (podHq's admin "Pods" Calendar page
+// configures these) — a gym with exactly one behaves exactly as before
+// this feature existed; more than one means the booking grid shows a
+// resource selector.
+export async function getPodResourcesForGym(gym: string): Promise<PodResource[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from("gym_kisi_mapping")
-    .select("open_hour, close_hour, pod_capacity")
+    .from("pod_resources")
+    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, pod_capacity, open_hour, close_hour")
     .eq("gym", gym)
-    .maybeSingle();
+    .order("resource_key");
 
   if (error) throw new Error(error.message);
-  return { openHour: data?.open_hour ?? 0, closeHour: data?.close_hour ?? 24, podCapacity: data?.pod_capacity ?? 1 };
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    gym: row.gym,
+    resourceKey: row.resource_key,
+    label: row.label,
+    creditType: row.credit_type,
+    slotDurationMinutes: row.slot_duration_minutes,
+    accessProvider: row.access_provider,
+    podCapacity: row.pod_capacity,
+    openHour: row.open_hour,
+    closeHour: row.close_hour,
+  }));
 }

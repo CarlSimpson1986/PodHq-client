@@ -4,6 +4,7 @@ export interface WaitlistEntry {
   id: number;
   member_id: number;
   gym: string;
+  resource_id: number;
   slot_start: string;
   status: WaitlistStatus;
   offered_at: string | null;

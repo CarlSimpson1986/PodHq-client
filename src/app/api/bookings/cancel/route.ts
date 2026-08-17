@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // return shape for every other caller of it.
     const { data: booking } = await admin
       .from("bookings")
-      .select("slot_start")
+      .select("slot_start, resource_id")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
 
@@ -84,8 +84,8 @@ export async function POST(request: NextRequest) {
       gym: member.gym,
     });
 
-    if (booking?.slot_start) {
-      await offerNextWaitlistEntry(member.gym, booking.slot_start);
+    if (booking?.slot_start && booking.resource_id) {
+      await offerNextWaitlistEntry(booking.resource_id, booking.slot_start);
     }
   }
 

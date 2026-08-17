@@ -186,6 +186,7 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          bookingId,
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         }),

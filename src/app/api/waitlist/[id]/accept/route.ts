@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // this is just a better error message than a generic booking failure.
   const { data: entry } = await admin
     .from("waitlist_entries")
-    .select("id, member_id, gym, slot_start, status, offer_expires_at")
+    .select("id, member_id, resource_id, slot_start, status, offer_expires_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { data: bookingId, error } = await admin.rpc("create_booking", {
     p_member_id: member.id,
-    p_gym: entry.gym,
+    p_resource_id: entry.resource_id,
     p_slot_start: entry.slot_start,
   });
 

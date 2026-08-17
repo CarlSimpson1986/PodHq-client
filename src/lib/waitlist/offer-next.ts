@@ -13,19 +13,27 @@ const OFFER_WINDOW_MS = 15 * 60 * 1000;
 const MIN_NOTICE_MS = 20 * 60 * 1000;
 
 /**
- * Finds the next waiting person for a gym+slot and offers them the spot —
- * called after a cancellation frees capacity, after a decline, or after an
- * offer is found to have expired. Correctness of *who currently holds the
- * slot* doesn't depend on this function running promptly (create_booking's
- * own timestamp check handles that, see 0024_waitlist.sql) — this only
+ * Finds the next waiting person for a resource+slot and offers them the
+ * spot — called after a cancellation frees capacity, after a decline, or
+ * after an offer is found to have expired. Correctness of *who currently
+ * holds the slot* doesn't depend on this function running promptly
+ * (create_booking's own timestamp check handles that, see
+ * 0024_waitlist.sql / 0039_pod_resources_functions.sql) — this only
  * controls how quickly the *next* person gets notified, which matters for
  * UX but never for correctness.
+ *
+ * Takes resourceId, not gym — a gym can have more than one bookable
+ * resource (see pod_resources, 0038_pod_resources.sql), and resourceId
+ * alone already fully identifies the slot; gym is derived internally
+ * (for the notification copy) rather than trusted as a separate,
+ * possibly-mismatched parameter, same "derive rather than trust" pattern
+ * create_booking() itself now uses.
  *
  * Never throws — a cancellation/decline/expiry-check must succeed even if
  * offering the next person fails for some reason (DB hiccup, missing
  * contact info); the failure is logged, not propagated.
  */
-export async function offerNextWaitlistEntry(gym: string, slotStartIso: string): Promise<void> {
+export async function offerNextWaitlistEntry(resourceId: number, slotStartIso: string): Promise<void> {
   const slotStart = new Date(slotStartIso);
   if (slotStart.getTime() - Date.now() < MIN_NOTICE_MS) return;
 
@@ -37,7 +45,7 @@ export async function offerNextWaitlistEntry(gym: string, slotStartIso: string):
     await admin
       .from("waitlist_entries")
       .update({ status: "expired" })
-      .eq("gym", gym)
+      .eq("resource_id", resourceId)
       .eq("slot_start", slotStartIso)
       .eq("status", "offered")
       .lt("offer_expires_at", nowIso);
@@ -46,7 +54,7 @@ export async function offerNextWaitlistEntry(gym: string, slotStartIso: string):
     const { data: activeOffer } = await admin
       .from("waitlist_entries")
       .select("id")
-      .eq("gym", gym)
+      .eq("resource_id", resourceId)
       .eq("slot_start", slotStartIso)
       .eq("status", "offered")
       .gt("offer_expires_at", nowIso)
@@ -55,8 +63,8 @@ export async function offerNextWaitlistEntry(gym: string, slotStartIso: string):
 
     const { data: nextEntry } = await admin
       .from("waitlist_entries")
-      .select("id, member_id")
-      .eq("gym", gym)
+      .select("id, member_id, gym")
+      .eq("resource_id", resourceId)
       .eq("slot_start", slotStartIso)
       .eq("status", "waiting")
       .order("created_at", { ascending: true })
@@ -82,6 +90,7 @@ export async function offerNextWaitlistEntry(gym: string, slotStartIso: string):
     const contact = await resolveMemberContact(nextEntry.member_id);
     if (!contact) return;
 
+    const gym = nextEntry.gym as string;
     const acceptUrl = `${appUrl()}/waitlist/${nextEntry.id}`;
     const { subject, html } = waitlistOfferedEmail({
       memberName: contact.name,
@@ -105,6 +114,6 @@ export async function offerNextWaitlistEntry(gym: string, slotStartIso: string):
       url: `/waitlist/${nextEntry.id}`,
     });
   } catch (err) {
-    console.error("[waitlist] offerNextWaitlistEntry failed", { gym, slotStartIso, error: err instanceof Error ? err.message : err });
+    console.error("[waitlist] offerNextWaitlistEntry failed", { resourceId, slotStartIso, error: err instanceof Error ? err.message : err });
   }
 }

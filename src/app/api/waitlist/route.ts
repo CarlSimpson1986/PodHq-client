@@ -39,23 +39,27 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
+  // resourceId must belong to the member's own gym — never trusted as-is,
+  // same IDOR-proofing pattern as /api/bookings.
+  const { data: resource } = await admin
+    .from("pod_resources")
+    .select("id, gym, pod_capacity")
+    .eq("id", parsed.data.resourceId)
+    .maybeSingle();
+  if (!resource || resource.gym !== member.gym) {
+    return NextResponse.json({ status: "error", message: "Resource not found." }, { status: 404 });
+  }
+
   // Only a genuinely full slot can be waitlisted — a member with an open
   // slot should just book it directly, not queue for something available.
-  const { data: config } = await admin
-    .from("gym_kisi_mapping")
-    .select("pod_capacity")
-    .eq("gym", member.gym)
-    .maybeSingle();
-  const capacity = config?.pod_capacity ?? 1;
-
   const { count: bookedCount } = await admin
     .from("bookings")
     .select("*", { count: "exact", head: true })
-    .eq("gym", member.gym)
+    .eq("resource_id", resource.id)
     .eq("slot_start", parsed.data.slotStart)
     .eq("status", "booked");
 
-  if ((bookedCount ?? 0) < capacity) {
+  if ((bookedCount ?? 0) < resource.pod_capacity) {
     return NextResponse.json(
       { status: "error", message: "That slot has space — book it directly instead." },
       { status: 409 }
@@ -65,6 +69,7 @@ export async function POST(request: NextRequest) {
   const { error } = await admin.from("waitlist_entries").insert({
     member_id: member.id,
     gym: member.gym,
+    resource_id: resource.id,
     slot_start: parsed.data.slotStart,
   });
 
