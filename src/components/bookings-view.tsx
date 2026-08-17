@@ -220,8 +220,6 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
 
   return (
     <div className="space-y-4">
-      {/* Temporary diagnostic — remove once the live push-subscribe issue is resolved. */}
-      <p className="text-[10px] text-card-light-muted">push debug: permission={String(notifPermission)}</p>
       {notifPermission === "default" && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-card-light-border p-3">
           <p className="text-xs text-card-light-muted">Get notified the moment a waitlisted spot opens up.</p>

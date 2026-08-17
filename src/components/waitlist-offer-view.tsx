@@ -4,11 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { WaitlistEntry } from "@/lib/waitlist/types";
 
+// timeZone pinned explicitly — without it this renders in whichever local
+// timezone the executing environment happens to be in, and server (Vercel,
+// UTC) vs a member's own browser (Europe/London) render genuinely
+// different text for the same instant, a real hydration mismatch (React
+// error #418) — same bug found and fixed in bookings-view.tsx 2026-08-17.
 function formatSlot(iso: string) {
   const d = new Date(iso);
   return {
-    day: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric" }),
-    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+    day: d.toLocaleDateString("en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "Europe/London",
+    }),
+    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }),
   };
 }
 

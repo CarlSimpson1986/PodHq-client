@@ -20,16 +20,27 @@ function hourSlots(day: Date): Date[] {
   });
 }
 
+// timeZone pinned on all three — see bookings-view.tsx's formatSlot for why
+// (same hydration-mismatch bug, React error #418, found live 2026-08-17;
+// this file's own hourSlots()/startOfDay below has a deeper, related issue
+// — setHours() builds the actual Date objects in local system time, not
+// just their display string — flagged, not fixed this session, see
+// ROADMAP).
 function formatHour(d: Date) {
-  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
 }
 
 function formatDayHeading(d: Date) {
-  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+  return d.toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    timeZone: "Europe/London",
+  });
 }
 
 function formatMonthYear(d: Date) {
-  return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  return d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "Europe/London" });
 }
 
 export function BookingGrid({
@@ -270,7 +281,9 @@ export function BookingGrid({
                   isSelected ? "bg-foreground text-background" : "text-muted-foreground hover:bg-card-border"
                 }`}
               >
-                <span className="text-xs uppercase">{day.toLocaleDateString("en-GB", { weekday: "short" })}</span>
+                <span className="text-xs uppercase">
+                  {day.toLocaleDateString("en-GB", { weekday: "short", timeZone: "Europe/London" })}
+                </span>
                 <span className="text-base font-semibold tabular-nums">{day.getDate()}</span>
               </Link>
             );
