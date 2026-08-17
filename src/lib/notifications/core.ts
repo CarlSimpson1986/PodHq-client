@@ -5,7 +5,11 @@ import type { NotificationEventType } from "./types";
 
 /** Shared by every notification that links back into the app — moved here from waitlist/offer-next.ts once a second and third call site needed it. */
 export function appUrl(): string {
-  return process.env.APP_URL ?? "http://localhost:3000";
+  if (process.env.APP_URL) return process.env.APP_URL;
+  if (process.env.NODE_ENV !== "development") {
+    throw new Error("APP_URL is not set — required outside local development so notification emails don't link to localhost.");
+  }
+  return "http://localhost:3000";
 }
 
 interface NotifyInput {
