@@ -1,32 +1,39 @@
 "use client";
 
+export type SubscribeResult = { ok: true } | { ok: false; reason: string };
+
 /**
  * Requests notification permission and subscribes this device to push,
  * POSTing the subscription to /api/push/subscribe for storage. Called from
  * the /bookings page — a natural moment (already engaged enough to be
- * checking bookings), not forced at signup. Returns false (never throws)
- * on any failure — permission denied, no service worker support, VAPID
- * key missing, etc. — so the caller can just skip showing "subscribed"
- * state rather than needing its own try/catch.
+ * checking bookings), not forced at signup. Never throws — returns a typed
+ * failure reason instead (permission denied, no service worker support,
+ * VAPID key missing, etc.) so the caller can surface something specific
+ * rather than a generic "didn't work" with no way to debug it on a device
+ * that isn't attached to a devtools console.
  */
-export async function subscribeToPush(): Promise<boolean> {
-  if (typeof window === "undefined") return false;
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+export async function subscribeToPush(): Promise<SubscribeResult> {
+  if (typeof window === "undefined") return { ok: false, reason: "No window (SSR)." };
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { ok: false, reason: "This browser doesn't support push notifications." };
+  }
 
   try {
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return false;
+    if (permission !== "granted") return { ok: false, reason: `Permission ${permission}.` };
 
     const registration = await navigator.serviceWorker.register("/sw.js");
     await navigator.serviceWorker.ready;
 
     const vapidPublicKeyRes = await fetch("/api/push/vapid-public-key");
-    const { publicKey } = await vapidPublicKeyRes.json();
-    if (!publicKey) return false;
+    const vapidBody = await vapidPublicKeyRes.json();
+    if (!vapidBody.publicKey) {
+      return { ok: false, reason: `No VAPID public key (${vapidPublicKeyRes.status}: ${vapidBody.message ?? "unknown"}).` };
+    }
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey: urlBase64ToUint8Array(vapidBody.publicKey),
     });
 
     const json = subscription.toJSON();
@@ -40,10 +47,14 @@ export async function subscribeToPush(): Promise<boolean> {
       }),
     });
     const body = await res.json();
-    return body.status === "ok";
+    if (body.status !== "ok") {
+      return { ok: false, reason: `Save failed (${res.status}: ${body.message ?? "unknown"}).` };
+    }
+    return { ok: true };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error.";
     console.error("[push] subscribe failed", err);
-    return false;
+    return { ok: false, reason };
   }
 }
 
