@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       member_id: String(member.id),
       credits: String(pkg.credits),
       packageId: pkg.id,
+      creditType: pkg.creditType,
     },
     success_url: `${origin}/book?purchase=success`,
     cancel_url: `${origin}/buy-credits?purchase=cancelled`,

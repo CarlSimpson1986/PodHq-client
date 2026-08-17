@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
         tier_id: tier.id,
         tier_name: tier.name,
         credits_per_period: String(tier.creditsPerPeriod),
+        credit_type: tier.creditType,
       },
     },
     success_url: `${origin}/book?membership=success`,

@@ -17,7 +17,7 @@ export async function getCreditPackages(gym: string): Promise<CreditPackage[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("catalog_items")
-    .select("item_id, name, label, credits, price_gbp, one_time_per_member")
+    .select("item_id, name, label, credits, credit_type, price_gbp, one_time_per_member")
     .eq("gym", gym)
     .eq("type", "credit_pack")
     .eq("enabled", true)
@@ -29,6 +29,7 @@ export async function getCreditPackages(gym: string): Promise<CreditPackage[]> {
     name: row.name,
     label: row.label,
     credits: row.credits,
+    creditType: row.credit_type,
     priceGBP: row.price_gbp,
     oneTimePerMember: row.one_time_per_member,
   }));
@@ -58,7 +59,7 @@ export async function getMembershipTiers(gym: string): Promise<MembershipTier[]>
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("catalog_items")
-    .select("item_id, name, label, credits, price_gbp")
+    .select("item_id, name, label, credits, credit_type, price_gbp")
     .eq("gym", gym)
     .eq("type", "membership")
     .eq("enabled", true)
@@ -70,6 +71,7 @@ export async function getMembershipTiers(gym: string): Promise<MembershipTier[]>
     name: row.name,
     label: row.label,
     creditsPerPeriod: row.credits,
+    creditType: row.credit_type,
     priceGBP: row.price_gbp,
   }));
 }

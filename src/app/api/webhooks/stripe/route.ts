@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
       amount: credits,
       reason: "purchase",
       catalog_item_id: checkoutSession.metadata?.packageId ?? null,
+      credit_type: checkoutSession.metadata?.creditType ?? "pod",
       stripe_event_id: event.id,
       stripe_payment_intent_id: resolvePaymentIntentId(checkoutSession.payment_intent),
     });
@@ -199,6 +200,7 @@ export async function POST(request: NextRequest) {
         amount: credits,
         reason: "purchase",
         catalog_item_id: paymentIntent.metadata?.packageId ?? null,
+        credit_type: paymentIntent.metadata?.creditType ?? "pod",
         stripe_event_id: event.id,
         stripe_payment_intent_id: paymentIntent.id,
       });
@@ -347,6 +349,7 @@ export async function POST(request: NextRequest) {
         member_id: memberId,
         amount: creditsPerPeriod,
         reason: "membership",
+        credit_type: subscription.metadata?.credit_type ?? "pod",
         stripe_event_id: event.id,
         stripe_payment_intent_id: paymentIntentId,
       });
@@ -406,7 +409,7 @@ export async function POST(request: NextRequest) {
 
     const { data: originalCredit, error: lookupError } = await admin
       .from("credits")
-      .select("member_id, amount")
+      .select("member_id, amount, credit_type")
       .eq("stripe_payment_intent_id", paymentIntentId)
       .in("reason", ["purchase", "membership"])
       .maybeSingle();
@@ -425,6 +428,7 @@ export async function POST(request: NextRequest) {
         member_id: originalCredit.member_id,
         amount: -originalCredit.amount,
         reason: "refund",
+        credit_type: originalCredit.credit_type,
         stripe_event_id: event.id,
         stripe_payment_intent_id: paymentIntentId,
       });
