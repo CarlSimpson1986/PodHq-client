@@ -1524,7 +1524,123 @@ calls `subscribeToPush()` again if nothing is actually saved —
 decided, so this self-heals with no visible UI change. `npx tsc --noEmit`
 and `eslint` both pass clean on the changed files.
 
-**Not yet re-verified live** — the fix was pushed but the user hadn't
-reloaded against the new deploy before this session's end; next session
-should confirm a `push_subscriptions` row actually appears for a real
-account after a reload, not just that the code is deployed.
+**Same-day follow-up: fully live-verified, after chasing three more real,
+separate bugs before push actually worked end-to-end.** What looked like
+one stuck problem was five independent things stacked on top of each
+other — each fix was real and necessary, none alone was sufficient:
+
+1. **`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` were never in
+   Vercel's env at all** — same class of gap as `APP_URL` above, present
+   locally, never added to production. Zero rows had ever existed in
+   `push_subscriptions`, for any member, confirming this wasn't
+   account-specific. Regenerated fresh via `npx web-push
+   generate-vapid-keys` (offered, but the user reused their existing local
+   pair instead, added to Vercel — first attempt landed in **podHq's** env
+   by mistake, same wrong-repo slip as the Stripe keys and
+   `SECRET_ENCRYPTION_KEY` before it, moved to podhq-client once caught).
+
+2. **`connect-src 'self'` in the CSP (`src/proxy.ts`) silently blocked
+   `pushManager.subscribe()`** — Chrome's Push API routes the actual
+   subscribe call through `fcm.googleapis.com` over a real network
+   connection from the page's own process, which page CSP does govern.
+   Same class of gap as this project's Turnstile and Stripe-embedded-
+   Checkout CSP misses — a third-party integration needing an explicit
+   connect-src allowance that a plain `'self'` silently blocks with zero
+   error pointing at the real cause. Added `https://fcm.googleapis.com`.
+
+3. **A genuine hydration crash in `BookingsView`** (React error #418,
+   confirmed live via `mcp__claude-in-chrome`, reproduced identically on a
+   fresh unauthenticated tab): `notifPermission` read
+   `Notification.permission` in a `useState` lazy initializer, which still
+   runs during React's render phase on both server and client — the
+   server has no `Notification` global (always `null`), but the client's
+   first render (which must match the server's or hydration fails)
+   computed a real permission value. This silently broke every push-
+   related feature on the page regardless of any server config being
+   correct. Fixed with `useSyncExternalStore` instead — its server
+   snapshot is always `null`, guaranteeing the first client render
+   matches, with the real value taking over immediately after hydration
+   commits. `enableNotifications`'s manual `setNotifPermission` call
+   became unnecessary too — any re-render (already triggered by
+   `setSubscribing`) re-reads the live value on its own.
+
+4. **A second, unrelated hydration crash, same page, same React error**:
+   `formatSlot`'s `toLocaleDateString`/`toLocaleTimeString` had no
+   `timeZone` option, so it rendered in whichever local timezone the
+   executing environment happened to be in — Vercel's functions run in
+   UTC internally regardless of region pin (already documented for the
+   self-service bookable-hours check, Stage 15 — never applied to this
+   display code), so server (UTC) and the user's own browser
+   (Europe/London, BST) genuinely differed by an hour for the same
+   booking. Confirmed via direct browser testing that this exact error
+   also reproduces on `/book`, unrelated to anything push-specific — same
+   bug, different page. Fixed with an explicit `timeZone: "Europe/London"`
+   everywhere the pattern was found: `bookings-view.tsx`,
+   `waitlist-offer-view.tsx`, `profile-view.tsx`, `booking-grid.tsx`
+   (4 call sites), and `app/page.tsx` (a Server Component — not a
+   hydration risk there, since it never re-runs client-side, but still
+   wrong without the fix: it would show UTC wall-clock time instead of
+   the gym's actual London time). **`booking-grid.tsx`'s `hourSlots()`/
+   `startOfDay` (and `bookingWindowDates()`/`startOfToday()` in
+   `src/lib/booking-dates.ts`) have a deeper, related issue not fixed
+   this session** — `setHours(0, 0, 0, 0)` builds the actual `Date`
+   objects in local system time, not just their display string, so
+   server and client can construct genuinely different day-boundary
+   instants, not just different-looking text for the same instant. A
+   proper fix needs the whole "what day is 'today'" pipeline anchored
+   explicitly to Europe/London (e.g. via `Intl.DateTimeFormat` component
+   extraction) rather than any local `Date` methods — flagged for a
+   dedicated session, not attempted reactively here given the scope and
+   risk of touching the core booking-window calculation live.
+
+5. **podHq's own magic-link login redirected to podhq-client's sign-in
+   instead** — surfaced by the user separately while working through an
+   unrelated real lockout on their own account (see below), but same
+   session, same root-cause family: podHq's `emailRedirectTo` was always
+   correct in code (`${origin}/auth/callback`), but Supabase only honors
+   that if the exact URL is in the project's Redirect URLs allowlist,
+   otherwise it silently substitutes the global Site URL — which had been
+   set to `https://podhq-client.vercel.app` (this project's own Stage
+   1280ish fix, from getting *that* app's confirmation emails working).
+   Only podhq-client's callback URL had ever been added to the shared
+   project's allowlist; podHq's own `https://podhq.vercel.app/auth/callback`
+   never was. Fixed by adding it (Supabase dashboard, both URLs coexist
+   fine in the same allowlist — Site URL is only a fallback for whichever
+   redirect isn't recognized, not a router).
+
+   **Real, live account lockout hit and resolved along the way, worth
+   recording since it's a structural gap, not a one-off**: the user's
+   shared admin/member account (MFA-enrolled, via podHq) got stuck
+   because **podhq-client has no MFA support at all** (deliberate pilot-
+   scope simplification) and Supabase requires an AAL2 (MFA-verified)
+   session to change a password on any MFA-enrolled account — so
+   podhq-client's own `/reset-password` screen can never complete a
+   password change for this specific account, no matter what's entered;
+   it was showing a generic "Could not set password" with no way to
+   diagnose it. Fixed the error visibility
+   (`/api/auth/set-password/route.ts` now returns Supabase's real
+   `error.message` instead of a hardcoded string — this is what actually
+   surfaced `AAL2 session is required to update email or password when
+   MFA is enabled`) and resolved the immediate lockout by changing the
+   password through podHq instead (which does have full MFA support,
+   reaching AAL2 normally). Separately, the user got rate-limited
+   (`checkAuthActionRateLimit`, 3 magic-link requests per 15 min) while
+   testing the redirect fix — worked around live via
+   `admin.auth.admin.generateLink()`, a privileged call bypassing the
+   app's own rate-limited endpoint, same escape hatch already documented
+   in this file's Stage-6/collision-testing section above. No code
+   changed for either of these — both are expected behavior given the
+   deliberate MFA/no-MFA split between the two apps, not bugs, but worth
+   remembering next time this exact account gets stuck the same way.
+
+**Verified live, end to end, for real** (not simulated): after all five
+fixes above, a fresh browser-tab permission grant (the user tapping
+"Allow" on Android Chrome, not the previously-installed home-screen PWA
+which turned out to hold a stale, separately-cached instance — uninstalling
+it and testing in a plain tab was what finally isolated the real signal)
+produced an actual `push_subscriptions` row within seconds
+(`endpoint` on `fcm.googleapis.com`, confirming the CSP fix specifically).
+A real test push sent via a throwaway script (`web-push`, the same library
+`src/lib/push/send.ts` uses) arrived on the user's phone as an actual
+notification. `npx tsc --noEmit`, `eslint`, and `next build` all pass
+clean across every file touched.
