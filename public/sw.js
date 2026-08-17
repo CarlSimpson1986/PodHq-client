@@ -142,6 +142,12 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "My Fit Pod";
   const options = {
     body: payload.body || "",
+    // Without an icon/badge, Android renders a bare generic notification —
+    // found live 2026-08-17, a real test push was flagged as "possible
+    // spam" on the recipient's device, most likely because it carried no
+    // branding at all to distinguish it from a low-effort/unwanted one.
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
     data: { url: payload.url || "/" },
   };
 
