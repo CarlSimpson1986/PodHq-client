@@ -53,7 +53,14 @@ function buildCsp(nonce: string) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    // fcm.googleapis.com — Chrome's Push API routes pushManager.subscribe()
+    // through its push service over a real network connection from the
+    // page's own process, which page CSP does govern (same class of gap as
+    // podHq's Turnstile CSP miss and this app's own Stripe-embedded-Checkout
+    // CSP miss — a third-party integration needing an explicit allowance
+    // that a plain 'self' connect-src silently blocks with no obvious error
+    // pointing at the real cause).
+    "connect-src 'self' https://fcm.googleapis.com",
     "frame-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
