@@ -1644,3 +1644,23 @@ A real test push sent via a throwaway script (`web-push`, the same library
 `src/lib/push/send.ts` uses) arrived on the user's phone as an actual
 notification. `npx tsc --noEmit`, `eslint`, and `next build` all pass
 clean across every file touched.
+
+**Same-day follow-up: notification icon added, and a real "possible
+spam" flag explained (not a bug).** `sw.js`'s push handler had no
+`icon`/`badge` at all — added both (`/icons/icon-192.png`), since a bare
+notification with zero branding is a real, if minor, quality gap
+independent of the spam finding below. Separately: after several
+generic, near-identical test pushes in quick succession ("Testing...",
+"Still working ✓", etc.) from this brand-new domain with no prior
+notification history, Android/Chrome's own Safe Browsing notification-
+content heuristic flagged them as **"Possible spam"** in the tray — a
+real Chrome anti-abuse feature reacting to *volume and genericness of
+test traffic*, not a defect in delivery or the app (the subscription and
+delivery mechanism were unaffected throughout; confirmed via
+`push_subscriptions` and successful `sendNotification()` calls). Real
+production notifications (a specific waitlist offer, tied to an actual
+action, spaced naturally) are exactly the pattern this classifier is
+designed *not* to flag. **Lesson for future sessions: don't send
+several generic throwaway test pushes back to back** — it pollutes the
+domain's own notification reputation on the tester's device for no
+diagnostic gain beyond the first one.
