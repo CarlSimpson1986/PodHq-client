@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .eq("id", id)
     .eq("member_id", member.id)
     .eq("status", "offered")
-    .select("gym, slot_start");
+    .select("resource_id, slot_start");
 
   if (error) {
     console.error("[waitlist] decline failed", { entryId: id, error: error.message });
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Cascade immediately rather than waiting for the next trigger (another
   // cancellation, or the daily cron safety-net) — a fast decline should
   // give the next waitlisted person their shot right away.
-  await offerNextWaitlistEntry(updated[0].gym as string, updated[0].slot_start as string);
+  await offerNextWaitlistEntry(updated[0].resource_id as number, updated[0].slot_start as string);
 
   return NextResponse.json({ status: "ok" });
 }

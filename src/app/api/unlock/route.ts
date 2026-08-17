@@ -31,18 +31,13 @@ export async function POST(request: NextRequest) {
   }
   const parsed = unlockSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ status: "error", message: "Invalid location data." }, { status: 400 });
+    return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
   }
-  const { latitude, longitude } = parsed.data;
+  const { bookingId, latitude, longitude } = parsed.data;
 
   const rateLimit = await checkRateLimit(user.id, "/api/unlock");
   if (!rateLimit.allowed) {
     return NextResponse.json({ status: "error", message: "Too many requests. Slow down." }, { status: 429 });
-  }
-
-  const kisiKey = process.env.KISI_API_KEY;
-  if (!kisiKey) {
-    throw new Error("KISI_API_KEY is not configured");
   }
 
   const member = await getMemberByAuthUserId(user.id);
@@ -51,23 +46,31 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data: bookings, error: bookingError } = await admin
+
+  // Looks up the specific booking the client identified, not "the" active
+  // booking inferred from a time-window scan across all of the member's
+  // bookings — that inference was non-deterministic once a member could
+  // have two genuinely overlapping bookings across two different
+  // resources (see 0038_pod_resources.sql). member_id + status='booked' in
+  // the query itself doubles as the ownership check.
+  const { data: active, error: bookingError } = await admin
     .from("bookings")
     .select("*")
+    .eq("id", bookingId)
     .eq("member_id", member.id)
-    .eq("status", "booked");
+    .eq("status", "booked")
+    .maybeSingle();
 
   if (bookingError) {
-    return NextResponse.json({ status: "error", message: "Could not look up bookings." }, { status: 500 });
+    return NextResponse.json({ status: "error", message: "Could not look up booking." }, { status: 500 });
+  }
+  if (!active) {
+    return NextResponse.json({ status: "error", message: "Booking not found." }, { status: 404 });
   }
 
   const now = Date.now();
-  const active = (bookings ?? []).find((b) => {
-    const start = new Date(b.slot_start).getTime();
-    return now >= start - WINDOW_BEFORE_MS && now <= start + WINDOW_AFTER_MS;
-  });
-
-  if (!active) {
+  const start = new Date(active.slot_start).getTime();
+  if (now < start - WINDOW_BEFORE_MS || now > start + WINDOW_AFTER_MS) {
     return NextResponse.json({ status: "error", message: "No active booking right now." }, { status: 403 });
   }
 
@@ -87,24 +90,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: mapping, error: mapError } = await admin
-    .from("gym_kisi_mapping")
+  const { data: resource, error: resourceError } = await admin
+    .from("pod_resources")
     .select("*")
-    .eq("gym", active.gym)
-    .single();
+    .eq("id", active.resource_id)
+    .maybeSingle();
 
-  if (mapError || !mapping) {
-    return NextResponse.json({ status: "error", message: "This gym has no door configured yet." }, { status: 500 });
+  if (resourceError || !resource) {
+    return NextResponse.json({ status: "error", message: "This door has no lock configured yet." }, { status: 500 });
   }
 
   // Hard gate on location — see the note above the route. Only checked
-  // when the gym has coordinates configured (single-gym pilot: always
-  // true for Aylesbury Berryfields, but a newly added gym without them
-  // yet shouldn't be unable to unlock at all). distanceToGym is carried
-  // through to the pod_access_events insert below so successful unlocks
-  // get the same audit trail as blocked ones.
+  // when the resource has coordinates configured (single-gym pilot:
+  // always true for Aylesbury Berryfields, but a newly added resource
+  // without them yet shouldn't be unable to unlock at all). distanceToGym
+  // is carried through to the pod_access_events insert below so
+  // successful unlocks get the same audit trail as blocked ones.
   let distanceToGym: number | undefined;
-  if (mapping.latitude !== null && mapping.longitude !== null) {
+  if (resource.latitude !== null && resource.longitude !== null) {
     if (latitude === undefined || longitude === undefined) {
       await admin.from("pod_access_events").insert({
         booking_id: active.id,
@@ -120,15 +123,15 @@ export async function POST(request: NextRequest) {
 
     distanceToGym = distanceMeters(
       { latitude, longitude },
-      { latitude: mapping.latitude, longitude: mapping.longitude }
+      { latitude: resource.latitude, longitude: resource.longitude }
     );
 
-    if (distanceToGym > mapping.unlock_radius_meters) {
+    if (distanceToGym > resource.unlock_radius_meters) {
       await admin.from("pod_access_events").insert({
         booking_id: active.id,
         member_id: member.id,
         success: false,
-        kisi_response: `blocked: too far (${Math.round(distanceToGym)}m > ${mapping.unlock_radius_meters}m)`,
+        kisi_response: `blocked: too far (${Math.round(distanceToGym)}m > ${resource.unlock_radius_meters}m)`,
         reported_latitude: latitude,
         reported_longitude: longitude,
         distance_meters: distanceToGym,
@@ -140,6 +143,42 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // PDK (ProdataKey) resources — Brighton, confirmed live 2026-08-17 — are
+  // deliberately not integrated yet: PDK's real API shape is unconfirmed
+  // anywhere in this repo, and guessing at it against a physical door lock
+  // isn't acceptable. Fails closed with a clear message rather than a
+  // fabricated API call. See podHq's ROADMAP "PDK integration" note.
+  if (resource.access_provider === "pdk") {
+    await admin.from("pod_access_events").insert({
+      booking_id: active.id,
+      member_id: member.id,
+      success: false,
+      kisi_response: "blocked: PDK integration not yet built",
+      reported_latitude: latitude ?? null,
+      reported_longitude: longitude ?? null,
+      distance_meters: distanceToGym ?? null,
+    });
+    return NextResponse.json({ status: "error", message: "This door isn't set up yet — contact staff." }, { status: 500 });
+  }
+
+  if (!resource.kisi_lock_id) {
+    await admin.from("pod_access_events").insert({
+      booking_id: active.id,
+      member_id: member.id,
+      success: false,
+      kisi_response: "blocked: no Kisi lock configured for this resource",
+      reported_latitude: latitude ?? null,
+      reported_longitude: longitude ?? null,
+      distance_meters: distanceToGym ?? null,
+    });
+    return NextResponse.json({ status: "error", message: "This door isn't set up yet — contact staff." }, { status: 500 });
+  }
+
+  const kisiKey = process.env.KISI_API_KEY;
+  if (!kisiKey) {
+    throw new Error("KISI_API_KEY is not configured");
+  }
+
   // Wrapped: a thrown error here (network failure, DNS, timeout) used to
   // skip the pod_access_events insert below entirely, leaving a failed
   // unlock attempt with zero audit trail — found live when an attempt
@@ -147,7 +186,7 @@ export async function POST(request: NextRequest) {
   let success = false;
   let kisiResponse: string;
   try {
-    const res = await fetch(`https://api.kisi.io/locks/${mapping.kisi_lock_id}/unlock`, {
+    const res = await fetch(`https://api.kisi.io/locks/${resource.kisi_lock_id}/unlock`, {
       method: "POST",
       headers: {
         Authorization: `KISI-LOGIN ${kisiKey}`,

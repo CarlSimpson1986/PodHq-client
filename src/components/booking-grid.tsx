@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import type { Booking, ActiveReservation } from "@/lib/data/member";
+import type { Booking, ActiveReservation, MemberWaitlistSlot, PodResource } from "@/lib/data/member";
 import { UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { BottomNav } from "@/components/bottom-nav";
@@ -47,38 +47,40 @@ export function BookingGrid({
   gym,
   memberName,
   memberId,
-  initialCredits,
+  creditsByType,
   initialBookings,
   selectedDate,
   purchaseSuccess,
   membershipSuccess,
-  openHour,
-  closeHour,
-  podCapacity,
+  resources,
   initialWaitlistSlots,
   reservations,
 }: {
   gym: string;
   memberName: string;
   memberId: number;
-  initialCredits: number;
+  creditsByType: Record<string, number>;
   initialBookings: Booking[];
   selectedDate: string;
   purchaseSuccess: boolean;
   membershipSuccess: boolean;
-  openHour: number;
-  closeHour: number;
-  podCapacity: number;
-  initialWaitlistSlots: string[];
+  resources: PodResource[];
+  initialWaitlistSlots: MemberWaitlistSlot[];
   reservations: ActiveReservation[];
 }) {
   const [bookings, setBookings] = useState(initialBookings);
-  const [credits, setCredits] = useState(initialCredits);
+  const [creditBalances, setCreditBalances] = useState(creditsByType);
   const [pendingSlot, setPendingSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [waitlistSlots, setWaitlistSlots] = useState<string[]>(initialWaitlistSlots);
+  const [waitlistSlots, setWaitlistSlots] = useState<MemberWaitlistSlot[]>(initialWaitlistSlots);
   const [pendingWaitlistSlot, setPendingWaitlistSlot] = useState<string | null>(null);
+  // Resource selector — a gym with exactly one resource never shows tabs
+  // at all (see the render below), so this only ever matters once a gym
+  // has more than one.
+  const [resourceId, setResourceId] = useState<number | null>(resources[0]?.id ?? null);
+  const resource = resources.find((r) => r.id === resourceId) ?? null;
+  const credits = resource ? (creditBalances[resource.creditType] ?? 0) : 0;
   // `now` as state rather than calling Date.now() directly during render —
   // a newer eslint-plugin-react-hooks (pulled in by the 2026-08-16
   // dependency upgrade) flags that as an impure-render error. Refreshed
@@ -149,7 +151,7 @@ export function BookingGrid({
     // a rapid double/triple click can fire multiple click events before
     // React re-renders the disabled state on the button that was actually
     // clicked, so per-slot pendingSlot alone isn't a tight enough guard.
-    if (pendingSlot) return;
+    if (pendingSlot || !resource) return;
     setError(null);
     setSuccess(null);
     setPendingSlot(slot.toISOString());
@@ -157,7 +159,7 @@ export function BookingGrid({
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotStart: slot.toISOString() }),
+        body: JSON.stringify({ resourceId: resource.id, slotStart: slot.toISOString() }),
       });
       const body = await res.json();
       if (body.status !== "ok") {
@@ -166,9 +168,9 @@ export function BookingGrid({
       }
       setBookings((prev) => [
         ...prev,
-        { id: body.bookingId, member_id: memberId, gym, slot_start: slot.toISOString(), status: "booked" },
+        { id: body.bookingId, member_id: memberId, gym, resource_id: resource.id, slot_start: slot.toISOString(), status: "booked" },
       ]);
-      setCredits((prev) => prev - 1);
+      setCreditBalances((prev) => ({ ...prev, [resource.creditType]: (prev[resource.creditType] ?? 0) - 1 }));
       setSuccess(`Booked ${formatHour(slot)} — 1 credit used.`);
       setTimeout(() => setSuccess(null), 4000);
     } catch {
@@ -179,7 +181,7 @@ export function BookingGrid({
   }
 
   async function joinWaitlist(slot: Date) {
-    if (pendingWaitlistSlot) return;
+    if (pendingWaitlistSlot || !resource) return;
     setError(null);
     setSuccess(null);
     setPendingWaitlistSlot(slot.toISOString());
@@ -187,14 +189,14 @@ export function BookingGrid({
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotStart: slot.toISOString() }),
+        body: JSON.stringify({ resourceId: resource.id, slotStart: slot.toISOString() }),
       });
       const body = await res.json();
       if (body.status !== "ok") {
         setError(body.message ?? "Could not join the waitlist.");
         return;
       }
-      setWaitlistSlots((prev) => [...prev, slot.toISOString()]);
+      setWaitlistSlots((prev) => [...prev, { slotStart: slot.toISOString(), resourceId: resource.id }]);
       setSuccess(`Added to the waitlist for ${formatHour(slot)}.`);
       setTimeout(() => setSuccess(null), 4000);
     } catch {
@@ -216,13 +218,17 @@ export function BookingGrid({
   // (still relevant briefly after a booking, e.g. mid-unlock-window). Only
   // applies when viewing today — every slot on a future day is, by
   // definition, still ahead of "now".
-  const slots = hourSlots(selectedDayDate).filter((slot) => {
-    if (slot.getHours() < openHour || slot.getHours() >= closeHour) return false;
-    if (!isToday) return true;
-    const isPast = slot.getTime() + 60 * 60 * 1000 < now;
-    if (!isPast) return true;
-    return bookings.some((b) => new Date(b.slot_start).getTime() === slot.getTime() && b.member_id === memberId);
-  });
+  const slots = resource
+    ? hourSlots(selectedDayDate).filter((slot) => {
+        if (slot.getHours() < resource.openHour || slot.getHours() >= resource.closeHour) return false;
+        if (!isToday) return true;
+        const isPast = slot.getTime() + 60 * 60 * 1000 < now;
+        if (!isPast) return true;
+        return bookings.some(
+          (b) => b.resource_id === resource.id && new Date(b.slot_start).getTime() === slot.getTime() && b.member_id === memberId
+        );
+      })
+    : [];
 
   return (
     <>
@@ -289,6 +295,23 @@ export function BookingGrid({
             );
           })}
         </div>
+        {/* A gym with exactly one resource shows nothing here — zero UI
+            change for the only currently-live single-resource gym. */}
+        {resources.length > 1 && (
+          <div className="mx-auto mt-3 flex w-full max-w-md gap-2">
+            {resources.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => setResourceId(r.id)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                  r.id === resourceId ? "bg-foreground text-background" : "border border-card-border text-muted-foreground"
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card-light flex-1 space-y-3 px-6 pb-24 pt-8">
@@ -301,12 +324,15 @@ export function BookingGrid({
           {error && <p className="text-sm text-danger">{error}</p>}
           {success && <p className="text-sm text-success">{success}</p>}
           {slots.map((slot) => {
-            const slotBookings = bookings.filter((b) => new Date(b.slot_start).getTime() === slot.getTime());
+            const slotBookings = bookings.filter(
+              (b) => b.resource_id === resource?.id && new Date(b.slot_start).getTime() === slot.getTime()
+            );
             const isMine = slotBookings.some((b) => b.member_id === memberId);
             // Capacity is normally 1 (unchanged pilot default) — a gym
             // configured for more than one concurrent booking (podHq's
             // admin Pods page) just means "taken" now means "at capacity",
             // not "anyone at all has this slot".
+            const podCapacity = resource?.podCapacity ?? 1;
             const isFull = !isMine && slotBookings.length >= podCapacity;
             const inUnlockWindow =
               isMine && now >= slot.getTime() - WINDOW_BEFORE_MS && now <= slot.getTime() + WINDOW_AFTER_MS;
@@ -315,7 +341,9 @@ export function BookingGrid({
             // to on the waitlist — create_booking() enforces this server-side
             // regardless, this is just showing it honestly instead of a
             // clickable "Book" that would only actually work for one person.
-            const reservation = reservations.find((r) => new Date(r.slot_start).getTime() === slot.getTime());
+            const reservation = reservations.find(
+              (r) => r.resource_id === resource?.id && new Date(r.slot_start).getTime() === slot.getTime()
+            );
             const isReservedForOther = !isMine && !isFull && reservation && reservation.member_id !== memberId;
 
             return (
@@ -341,7 +369,7 @@ export function BookingGrid({
                     <span className="text-sm text-card-light-muted">
                       {podCapacity > 1 ? `Full (${slotBookings.length}/${podCapacity})` : "Booked"}
                     </span>
-                    {waitlistSlots.includes(slot.toISOString()) ? (
+                    {waitlistSlots.some((w) => w.resourceId === resource?.id && w.slotStart === slot.toISOString()) ? (
                       <span className="text-xs text-card-light-muted">On waitlist</span>
                     ) : (
                       <button

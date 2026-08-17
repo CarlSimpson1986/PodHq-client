@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId, getPodConfig, isAccessComplete, getCreditBalance } from "@/lib/data/member";
+import { getMemberByAuthUserId, getPodResourcesForGym, isAccessComplete, getCreditBalance } from "@/lib/data/member";
 import { isWithinBookableHours } from "@/lib/pods/bookable-hours";
 import { createBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -45,6 +45,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
   }
 
+  // resourceId must belong to the member's own gym — never trusted as-is,
+  // same IDOR-proofing pattern as every other gym-scoped write in this
+  // app. Also gives us the resource's own open/close hours and credit
+  // type, both needed below.
+  const resources = await getPodResourcesForGym(member.gym);
+  const resource = resources.find((r) => r.id === parsed.data.resourceId);
+  if (!resource) {
+    return NextResponse.json({ status: "error", message: "Resource not found." }, { status: 404 });
+  }
+
   // Self-service-only restriction — staff can knowingly book outside these
   // hours from podHq's admin Pods page, but the member-facing booking flow
   // respects whatever the gym has configured (defaults to all-day). Reads
@@ -54,15 +64,14 @@ export async function POST(request: NextRequest) {
   // during BST (this gym's slots are always constructed from the member's
   // browser in UK wall-clock time, so the check needs to use the same
   // frame of reference to compare correctly against the configured hours).
-  const { openHour, closeHour } = await getPodConfig(member.gym);
-  if (!isWithinBookableHours(parsed.data.slotStart, openHour, closeHour)) {
+  if (!isWithinBookableHours(parsed.data.slotStart, resource.openHour, resource.closeHour)) {
     return NextResponse.json({ status: "error", message: "That time is outside booking hours." }, { status: 400 });
   }
 
   const admin = createAdminClient();
   const { data: bookingId, error } = await admin.rpc("create_booking", {
     p_member_id: member.id,
-    p_gym: member.gym,
+    p_resource_id: resource.id,
     p_slot_start: parsed.data.slotStart,
   });
 
@@ -110,7 +119,7 @@ export async function POST(request: NextRequest) {
       gym: member.gym,
     });
 
-    const creditsRemaining = await getCreditBalance(member.id);
+    const creditsRemaining = await getCreditBalance(member.id, resource.creditType);
     if (creditsRemaining === LOW_CREDITS_THRESHOLD) {
       const lowCredits = creditsLowEmail({
         memberName: member.name,

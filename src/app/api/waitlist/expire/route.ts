@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   const { data: staleOffers, error } = await admin
     .from("waitlist_entries")
-    .select("gym, slot_start")
+    .select("resource_id, slot_start")
     .eq("status", "offered")
     .lt("offer_expires_at", nowIso);
 
@@ -46,15 +46,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Sweep failed." }, { status: 500 });
   }
 
-  const uniqueSlots = new Map<string, { gym: string; slotStart: string }>();
+  const uniqueSlots = new Map<string, { resourceId: number; slotStart: string }>();
   for (const row of staleOffers ?? []) {
-    uniqueSlots.set(`${row.gym}|${row.slot_start}`, { gym: row.gym as string, slotStart: row.slot_start as string });
+    uniqueSlots.set(`${row.resource_id}|${row.slot_start}`, { resourceId: row.resource_id as number, slotStart: row.slot_start as string });
   }
 
-  for (const { gym, slotStart } of uniqueSlots.values()) {
+  for (const { resourceId, slotStart } of uniqueSlots.values()) {
     // offerNextWaitlistEntry itself expires the stale row before offering
     // the next person — one call handles both steps for each slot.
-    await offerNextWaitlistEntry(gym, slotStart);
+    await offerNextWaitlistEntry(resourceId, slotStart);
   }
 
   return NextResponse.json({ status: "ok", processed: uniqueSlots.size });
