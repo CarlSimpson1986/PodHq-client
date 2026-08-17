@@ -30,7 +30,8 @@ export async function POST(request: Request) {
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) {
-    return NextResponse.json({ status: "error", message: "Could not set password." }, { status: 400 });
+    console.error("[auth] set-password failed", { userId: user.id, error: error.message, status: error.status });
+    return NextResponse.json({ status: "error", message: error.message || "Could not set password." }, { status: 400 });
   }
 
   // Doubles as the hard-lockout reset marker — see checkLoginLockout, which
