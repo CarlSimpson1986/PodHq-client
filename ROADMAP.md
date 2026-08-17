@@ -1664,3 +1664,116 @@ designed *not* to flag. **Lesson for future sessions: don't send
 several generic throwaway test pushes back to back** — it pollutes the
 domain's own notification reputation on the tester's device for no
 diagnostic gain beyond the first one.
+
+## Multiple bookable resources per gym (Hove) shipped; production deploy
+gap found and fixed; the timezone hydration bug from earlier this file
+finally fixed for real — 2026-08-17, same day, later session
+
+Picks up directly from podHq's own ROADMAP Stage "Multiple bookable
+resources per gym" — full architecture/schema/RPC detail lives there
+(`pod_resources`, `resource_id` threaded through bookings/waitlist,
+`credit_type` threaded through credits/catalog/gift_vouchers), built and
+merged to `main` in both repos as an emergency deploy after discovering
+the already-applied DB migration had left production code (still on the
+pre-migration table name) actively broken for real Aylesbury usage. This
+entry covers what happened *after* that merge, specific to this repo.
+
+**podhq-client's production deploy silently never happened.** `git push
+origin main` succeeded (confirmed both locally and against
+`origin/main`), and podHq's Vercel project picked up the new commits and
+redeployed within a minute — but podhq-client's didn't, and kept serving
+a build from ~5 hours earlier despite `vercel ls` showing a `-git-main-`
+alias (proving GitHub integration exists in general). Root cause
+(confirmed with the user checking Vercel's dashboard directly): **this
+project has never used GitHub-push-triggered deploys at all** — every
+previous production deploy, including the "49m ago" one that made podHq
+look fine, was a manual `vercel --prod` CLI run, not a webhook. There was
+no broken integration to fix; the fix was just running `vercel --prod`
+for real, which the user explicitly asked for after the dashboard showed
+no queued/failed deployment and no GitHub App installation to check
+either. **Lesson: don't assume `git push` deploys a Vercel project on
+this stack — verify the actual deploy mechanism (`vercel ls` timestamps,
+dashboard, or just ask) before treating a push as equivalent to shipping,
+especially for an "emergency" fix.**
+
+**Once genuinely running the new code, a real production-only crash
+surfaced**: `/book` threw an unhandled server exception (Next's generic
+"This page couldn't load" fallback, React error #441) on every load.
+Root-caused properly rather than guessed at — reproduced first in local
+`next dev`, then in a local `next build && next start` (both clean, no
+crash), which by itself proved the DB/schema side was healthy and pointed
+straight back at the just-fixed deploy gap: production was still on old
+code trying to query `gym_kisi_mapping` by its pre-migration name.
+Confirmed via a throwaway service-role script against the real prod DB
+(`pod_resources`, `bookings.resource_id`, `waitlist_entries.resource_id`,
+`get_credit_balance()` all present and correct) before touching any code
+— the data was never the problem.
+
+**Redeploying then exposed the actual bug flagged but not fixed earlier
+in this file (see finding 4 above, `bookingWindowDates`/`hourSlots`)** —
+`booking-grid.tsx` built and read slot times via local `Date` methods
+(`setHours`/`getHours`/`getDate`), which resolve in whatever timezone the
+executing machine is in. Vercel's server runs in UTC; a UK member's
+browser runs in Europe/London (BST for half the year) — a "use client"
+component still renders once server-side for the initial HTML and once
+again client-side for hydration, and if those two environments disagree
+on what "today" or "17:00" actually is, the rendered output disagrees
+too. This is exactly why it never reproduced locally, in either dev or
+production-build testing: the same machine was always both "server" and
+"client" in every local test, so there was no timezone gap to expose it.
+Only a real Vercel-hosted server paired with a real browser surfaces it.
+
+Fixed properly, not reactively patched: new `src/lib/london-time.ts`
+(`londonWallTimeToUtc`, `londonMidnight`, `addLondonDays`, `londonHour`,
+`londonHourOf` — all Intl.DateTimeFormat-based, same established pattern
+as `src/lib/pods/bookable-hours.ts`'s existing fix for the self-service
+hours check, generalized here rather than duplicated again) with
+`src/lib/london-time.test.ts` covering the actual risk: correct UTC
+offset in both GMT and BST, and — the case a naive fix would get wrong —
+a day added across the real 2026 BST→GMT clock-change date doesn't drift.
+`booking-dates.ts` (`formatDateParam`/`bookingWindowDates`/
+`parseDateParam`) and `booking-grid.tsx` (`hourSlots`, the
+`openHour`/`closeHour` slot filter, the day-strip's displayed date
+number) now route every date construction/read through these helpers
+instead of local accessors.
+
+**A second instance of the same bug class found and fixed in the same
+pass**: `src/lib/use-install-prompt.ts` still used the old, already-
+disproven pattern this file's own finding 3 (above) already fixed
+elsewhere — `useState(isStandalone)`/`useState(isIOS)` lazy initializers
+reading `window.matchMedia`/`navigator.userAgent` directly. A lazy
+initializer still runs during React's render phase on both server and
+client, so this had the exact same hydration-mismatch shape as
+`notifPermission` did. `BottomNav` (rendered on `/book`, via
+`booking-grid.tsx`) is what surfaced it: after the timezone fix above
+resolved the fatal #441, a second, non-fatal but still real #418 kept
+appearing from this exact call site. Fixed with `useSyncExternalStore`,
+same proven pattern, server snapshot always `false`.
+
+**Verified live, for real, after each fix, not assumed**: production
+`/book` reproduced the #441 crash consistently (3 separate loads) before
+the deploy fix; a fresh local `next build && next start` login as a real
+throwaway-password test member (`waitlist-test-member@example.com`,
+password reset via `admin.auth.admin.updateUserById` for this one test)
+rendered clean, confirming the deploy gap as the cause rather than a code
+bug; after `vercel --prod`, production still crashed but now with #418 in
+a different, already-familiar shape, confirming progress not regression;
+after the `london-time.ts` fix + redeploy, `/book` rendered real Aylesbury
+data (actual credit balance, actual bookings, actual open slots) with a
+lingering non-fatal #418 still logged; after the `use-install-prompt.ts`
+fix + third redeploy, a completely fresh navigation produced zero console
+errors. `npx tsc --noEmit`, `eslint`, and `npx vitest run` (21 tests,
+including the 6 new timezone ones) all pass clean. Local
+throwaway-password test member's password is a one-off random value, not
+reset back — same account already existed as an established test
+fixture from earlier sessions, no cleanup needed beyond that.
+
+**Not yet done**: the two production hotfixes in this section
+(`london-time.ts`/`booking-dates.ts`/`booking-grid.tsx` and
+`use-install-prompt.ts`) were deployed straight via `vercel --prod`
+before being committed — this entry's own commit is what finally brings
+git history back in sync with what's actually running in production.
+Tomorrow's session: confirm the Hove/Brighton resource-selector UI (the
+two-button Gym/Wellness Room switch already built in `booking-grid.tsx`,
+see podHq's ROADMAP Stage 15) actually matches what's wanted before
+assuming it needs new work — it may already be done.

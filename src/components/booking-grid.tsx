@@ -5,27 +5,22 @@ import Link from "next/link";
 import type { Booking, ActiveReservation, MemberWaitlistSlot, PodResource } from "@/lib/data/member";
 import { UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
+import { londonDateParts, londonHour, londonHourOf } from "@/lib/london-time";
 import { BottomNav } from "@/components/bottom-nav";
 
 const WINDOW_BEFORE_MS = 5 * 60 * 1000;
 const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
 
 function hourSlots(day: Date): Date[] {
-  const startOfDay = new Date(day);
-  startOfDay.setHours(0, 0, 0, 0);
-  return Array.from({ length: 24 }, (_, hour) => {
-    const d = new Date(startOfDay);
-    d.setHours(hour);
-    return d;
-  });
+  return Array.from({ length: 24 }, (_, hour) => londonHour(day, hour));
 }
 
 // timeZone pinned on all three — see bookings-view.tsx's formatSlot for why
-// (same hydration-mismatch bug, React error #418, found live 2026-08-17;
-// this file's own hourSlots()/startOfDay below has a deeper, related issue
-// — setHours() builds the actual Date objects in local system time, not
-// just their display string — flagged, not fixed this session, see
-// ROADMAP).
+// (same hydration-mismatch bug, React error #418, found live 2026-08-17,
+// and see london-time.ts for the deeper related issue this file also had:
+// setHours()/getHours()/getDate() build and read Date objects in local
+// system time, not just display strings — fixed by routing every such
+// access in this file through london-time.ts's helpers instead).
 function formatHour(d: Date) {
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
 }
@@ -220,7 +215,8 @@ export function BookingGrid({
   // definition, still ahead of "now".
   const slots = resource
     ? hourSlots(selectedDayDate).filter((slot) => {
-        if (slot.getHours() < resource.openHour || slot.getHours() >= resource.closeHour) return false;
+        const slotHour = londonHourOf(slot);
+        if (slotHour < resource.openHour || slotHour >= resource.closeHour) return false;
         if (!isToday) return true;
         const isPast = slot.getTime() + 60 * 60 * 1000 < now;
         if (!isPast) return true;
@@ -290,7 +286,7 @@ export function BookingGrid({
                 <span className="text-xs uppercase">
                   {day.toLocaleDateString("en-GB", { weekday: "short", timeZone: "Europe/London" })}
                 </span>
-                <span className="text-base font-semibold tabular-nums">{day.getDate()}</span>
+                <span className="text-base font-semibold tabular-nums">{londonDateParts(day).day}</span>
               </Link>
             );
           })}
