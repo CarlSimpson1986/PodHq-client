@@ -7,8 +7,15 @@ import type { Membership } from "@/lib/data/member";
 import { BottomNav } from "@/components/bottom-nav";
 import { CoinIcon, IdCardIcon, GiftIcon, DumbbellIcon, ChevronRightIcon, LogoutIcon, PinIcon, LockIcon } from "@/components/icons";
 
+// timeZone pinned — see bookings-view.tsx's formatSlot for why (same
+// hydration-mismatch bug, found live 2026-08-17).
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/London",
+  });
 }
 
 // First letter of the first and last words — "Pilot Test Member" -> "PM",
