@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+
+const NOOP_SUBSCRIBE = () => () => {};
 
 // Chrome/Android fires this and lets us trigger the native install flow
 // programmatically. iOS Safari has no equivalent API at all — Add to Home
@@ -27,12 +29,22 @@ function isIOS(): boolean {
 
 /** Shared by the bottom-nav install icon — one detection path, one place to fix if platform behavior changes. */
 export function useInstallPrompt() {
-  // Lazy initializers rather than setting these from inside an effect — a
-  // newer eslint-plugin-react-hooks (2026-08-16 dependency upgrade)
-  // promotes synchronous setState-in-effect from warning to error, same
-  // fix pattern as turnstile-widget.tsx/install-app-card.tsx.
-  const [installed, setInstalled] = useState(isStandalone);
-  const [ios] = useState(isIOS);
+  // useSyncExternalStore, not a useState lazy initializer — a lazy
+  // initializer still runs during React's render phase on both server and
+  // client, and since isStandalone()/isIOS() read browser-only globals
+  // (window.matchMedia, navigator.userAgent), the client's first render
+  // computed a real value against the server's stubbed `false` — a genuine
+  // hydration mismatch (React error #418), not a false alarm. Same fix
+  // already proven for bookings-view.tsx's notifPermission (found live
+  // 2026-08-17); this call site was still on the old broken pattern and
+  // resurfaced the identical error on /book once its own timezone-related
+  // #418 was fixed, same day. The server snapshot is always `false`,
+  // guaranteeing the first client render matches; the real value takes
+  // over immediately after hydration commits.
+  const standalone = useSyncExternalStore(NOOP_SUBSCRIBE, isStandalone, () => false);
+  const ios = useSyncExternalStore(NOOP_SUBSCRIBE, isIOS, () => false);
+  const [installedAfterPrompt, setInstalled] = useState(false);
+  const installed = standalone || installedAfterPrompt;
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
