@@ -60,6 +60,33 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
   );
   const [subscribing, setSubscribing] = useState(false);
 
+  // Browser permission and "we actually have a saved subscription" can
+  // drift apart — e.g. VAPID keys missing server-side once meant every
+  // subscribe attempt silently failed after the permission prompt already
+  // succeeded, permanently hiding the banner below (permission stays
+  // "granted" forever once decided) for anyone who'd hit that. If
+  // permission is already granted, confirm a subscription actually exists
+  // server-side and silently (re)subscribe if not — no prompt needed,
+  // requestPermission() resolves immediately once already decided.
+  useEffect(() => {
+    if (notifPermission !== "granted") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/push/subscription-status");
+        const body = await res.json();
+        if (!cancelled && body.status === "ok" && !body.subscribed) {
+          await subscribeToPush();
+        }
+      } catch {
+        // Best-effort — next page load just retries.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [notifPermission]);
+
   async function enableNotifications() {
     setSubscribing(true);
     const ok = await subscribeToPush();

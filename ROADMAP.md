@@ -1464,3 +1464,67 @@ project — worth doing, but a separate pass, not folded into this one.
 
 `npx tsc --noEmit`, `eslint`, `next build`, and `npx vitest run` all
 pass clean.
+
+## `APP_URL` production gap + push-subscription self-heal — 2026-08-17
+
+User noticed a waitlist-offer email linked to `localhost:3000` instead of
+production. Root cause: `appUrl()` (`src/lib/notifications/core.ts`) fell
+back to `http://localhost:3000` whenever `process.env.APP_URL` was unset,
+and `APP_URL` had never been added to Vercel — silently broken since
+whichever session first wrote that fallback. Affects every notification
+that links back into the app: waitlist accept (`waitlist/offer-next.ts`),
+buy-credits (`api/bookings/route.ts`), win-back
+(`api/notifications/win-back/route.ts`). Fixed two ways: `APP_URL` added to
+Vercel (`https://podhq-client.vercel.app`, Production only — Preview
+deliberately left unset, since a fixed URL can't match Preview's
+per-deployment hostnames anyway), and `appUrl()` now throws outside local
+dev if `APP_URL` is unset, so this fails loudly next time instead of
+silently defaulting to localhost.
+
+**Verified live** via a real production round-trip: two throwaway members
+(Aylesbury Berryfields) — one booked a real slot, the other joined its
+waitlist — then logged into production as the first member through the
+actual UI and clicked **Cancel session** for real, triggering
+`offerNextWaitlistEntry()`. Confirmed via `notification_log`: the
+`waitlist_offered` email sent successfully with a real Resend message ID.
+First attempt addressed the waiting member with a Yahoo `+alias`
+(`carlsimpson83+podhqwaitlisttest@yahoo.co.uk`) and the user never
+received it — consistent with Yahoo's known-unreliable plus-addressing
+(see podHq's ROADMAP Stage 9/22 notes on the same thing). Re-ran addressed
+to the user's real member account (id 12) directly instead — confirmed
+sent — establishing **don't use a Yahoo `+alias` for live-test email
+delivery, use the plain address**. All throwaway members/bookings/
+waitlist rows/auth users deleted after each run; the real member's data
+was only ever given a temporary `waitlist_entries` row, also deleted
+immediately after.
+
+**Second, unrelated bug found from the same live test**: the "Enable
+notifications" banner on `/bookings` (`src/components/bookings-view.tsx`)
+only shows when `Notification.permission === "default"`. The user had
+already clicked it once, that morning, before `VAPID_PUBLIC_KEY`/
+`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` existed in Vercel's env (same gap as
+`APP_URL` — present locally, never added to production) — so the browser
+recorded permission as granted, but `subscribeToPush()`'s POST to
+`/api/push/subscribe` never actually saved a row, and the banner then
+had no way to reappear since permission was no longer `"default"`.
+Confirmed via direct query: zero rows in `push_subscriptions`, for any
+member, ever, at the time this was found. VAPID keys added to Vercel
+(existing values reused, not rotated, since zero subscriptions existed to
+invalidate) — mistakenly added to **podHq's** env at first, moved to
+**podhq-client** once caught, matching the same wrong-repo slip already
+on record for the Stripe keys and `SECRET_ENCRYPTION_KEY`.
+
+Fixed properly rather than just telling the user to reset their browser's
+site permission once: new `GET /api/push/subscription-status`
+(session-gated, returns whether the current member has any
+`push_subscriptions` row) plus an effect in `BookingsView` that, whenever
+`Notification.permission === "granted"`, checks that endpoint and silently
+calls `subscribeToPush()` again if nothing is actually saved —
+`requestPermission()` resolves immediately with no prompt once already
+decided, so this self-heals with no visible UI change. `npx tsc --noEmit`
+and `eslint` both pass clean on the changed files.
+
+**Not yet re-verified live** — the fix was pushed but the user hadn't
+reloaded against the new deploy before this session's end; next session
+should confirm a `push_subscriptions` row actually appears for a real
+account after a reload, not just that the code is deployed.
