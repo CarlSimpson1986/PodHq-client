@@ -41,7 +41,8 @@ export async function subscribeToPush(): Promise<boolean> {
     });
     const body = await res.json();
     return body.status === "ok";
-  } catch {
+  } catch (err) {
+    console.error("[push] subscribe failed", err);
     return false;
   }
 }

@@ -78,8 +78,9 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
         if (!cancelled && body.status === "ok" && !body.subscribed) {
           await subscribeToPush();
         }
-      } catch {
+      } catch (err) {
         // Best-effort — next page load just retries.
+        console.error("[push] subscription-status check failed", err);
       }
     })();
     return () => {
