@@ -59,6 +59,7 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
     typeof Notification !== "undefined" ? Notification.permission : null
   );
   const [subscribing, setSubscribing] = useState(false);
+  const [notifError, setNotifError] = useState<string | null>(null);
 
   // Browser permission and "we actually have a saved subscription" can
   // drift apart — e.g. VAPID keys missing server-side once meant every
@@ -75,9 +76,9 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
       try {
         const res = await fetch("/api/push/subscription-status");
         const body = await res.json();
-        if (!cancelled && body.status === "ok" && !body.subscribed) {
-          await subscribeToPush();
-        }
+        if (cancelled || body.status !== "ok" || body.subscribed) return;
+        const result = await subscribeToPush();
+        if (!cancelled && !result.ok) setNotifError(result.reason);
       } catch (err) {
         // Best-effort — next page load just retries.
         console.error("[push] subscription-status check failed", err);
@@ -90,10 +91,11 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
 
   async function enableNotifications() {
     setSubscribing(true);
-    const ok = await subscribeToPush();
+    setNotifError(null);
+    const result = await subscribeToPush();
     setNotifPermission(typeof Notification !== "undefined" ? Notification.permission : null);
     setSubscribing(false);
-    if (!ok) return;
+    if (!result.ok) setNotifError(result.reason);
   }
 
   async function confirmCancel(bookingId: number) {
@@ -193,6 +195,9 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
             {subscribing ? "..." : "Enable notifications"}
           </button>
         </div>
+      )}
+      {notifError && (
+        <p className="text-xs text-danger">Push notifications couldn&apos;t be set up: {notifError}</p>
       )}
       <div className="flex rounded-lg border border-card-light-border p-1">
         {(["upcoming", "past"] as const).map((option) => (
