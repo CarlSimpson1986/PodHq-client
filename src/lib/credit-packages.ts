@@ -3,6 +3,10 @@ export interface CreditPackage {
   name: string;
   label: string;
   credits: number;
+  // Which credit balance this pack grants — most gyms only ever use
+  // "pod". Not a closed union (see podHq's CatalogItem, the source of
+  // truth this is mapped from).
+  creditType: string;
   priceGBP: number;
   oneTimePerMember: boolean;
 }
