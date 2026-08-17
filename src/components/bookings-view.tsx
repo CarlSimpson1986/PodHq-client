@@ -30,11 +30,27 @@ const CANCELLATION_CUTOFF_MS = 2 * 60 * 60 * 1000;
 // feature.
 const NOOP_SUBSCRIBE = () => () => {};
 
+// timeZone pinned explicitly on both formatters — without it, this renders
+// in whichever local timezone the executing environment happens to be in,
+// and Vercel's serverless functions run in UTC internally regardless of
+// region pin (the same root cause already documented and fixed for the
+// self-service bookable-hours check — see podHq's ROADMAP Stage 15 — just
+// never applied to this display formatting). Server (UTC) and a member's
+// own browser (Europe/London, BST for half the year) would otherwise
+// render genuinely different time strings for the same booking — a real
+// hydration mismatch (React error #418) on every page listing bookings,
+// found live 2026-08-17.
 function formatSlot(iso: string) {
   const d = new Date(iso);
   return {
-    day: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric" }),
-    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+    day: d.toLocaleDateString("en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "Europe/London",
+    }),
+    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }),
   };
 }
 
