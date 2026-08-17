@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
@@ -22,6 +22,13 @@ const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
 // server-side cutoff in cancel_booking() — this is just a hint shown
 // before confirming, the DB function is the real enforcement.
 const CANCELLATION_CUTOFF_MS = 2 * 60 * 60 * 1000;
+
+// Notification.permission has no native "changed" event to subscribe to —
+// this only ever needs the current value, re-read on whatever render
+// happens to occur next (e.g. after enableNotifications's own setSubscribing
+// triggers one), so the subscribe half is a genuine no-op, not a missing
+// feature.
+const NOOP_SUBSCRIBE = () => () => {};
 
 function formatSlot(iso: string) {
   const d = new Date(iso);
@@ -50,13 +57,24 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
   }, []);
   const [cancelledIds, setCancelledIds] = useState<Set<number>>(new Set());
   const [cancelErrors, setCancelErrors] = useState<Record<number, string>>({});
-  // Lazy initializer, not an effect — this only needs to read the current
-  // permission once at mount (it's never externally re-checked afterward;
-  // enableNotifications sets it directly once the user acts), and
-  // `typeof Notification !== "undefined"` keeps it SSR-safe (evaluates to
-  // null on the server, same as before hydration on the client).
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(() =>
-    typeof Notification !== "undefined" ? Notification.permission : null
+  // useSyncExternalStore, not a useState lazy initializer reading
+  // Notification.permission directly — that looked SSR-safe but wasn't:
+  // the initializer function still runs during React's render phase on
+  // both server and client, and the server has no Notification global at
+  // all, so the client's very first render (which must match the server's
+  // or hydration fails) computed a real permission value against the
+  // server's null. That's a genuine hydration mismatch (React error #418),
+  // not a false alarm — found live 2026-08-17, silently crashing this
+  // component's hydration and breaking every push-related feature on this
+  // page regardless of any server-side config. useSyncExternalStore is
+  // React's actual sanctioned tool for "a browser-only value that can
+  // differ from the server snapshot" — its server snapshot is always null,
+  // guaranteeing the first client render matches, then the real value
+  // takes over immediately after hydration commits.
+  const notifPermission = useSyncExternalStore(
+    NOOP_SUBSCRIBE,
+    () => (typeof Notification !== "undefined" ? Notification.permission : null),
+    () => null
   );
   const [subscribing, setSubscribing] = useState(false);
   const [notifError, setNotifError] = useState<string | null>(null);
@@ -93,7 +111,9 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
     setSubscribing(true);
     setNotifError(null);
     const result = await subscribeToPush();
-    setNotifPermission(typeof Notification !== "undefined" ? Notification.permission : null);
+    // No manual permission re-read needed — setSubscribing below triggers a
+    // re-render, and useSyncExternalStore picks up the now-current
+    // Notification.permission value on its own.
     setSubscribing(false);
     if (!result.ok) setNotifError(result.reason);
   }
