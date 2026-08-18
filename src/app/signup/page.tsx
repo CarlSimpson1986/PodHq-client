@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PasswordInput } from "@/components/password-input";
 import { PageHero } from "@/components/page-hero";
@@ -12,11 +13,25 @@ const inputClass =
 const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
 
-export default function SignupPage() {
+function isGymName(value: string): value is GymName {
+  return (GYM_NAMES as readonly string[]).includes(value);
+}
+
+// useSearchParams needs a Suspense boundary (Next's own requirement), so
+// the actual form lives here and the default export below just wraps it.
+function SignupForm() {
+  const searchParams = useSearchParams();
+  const gymParam = searchParams.get("gym");
+  // A gym-specific signup link (e.g. from a QR code or that gym's own ad
+  // campaign) pre-selects the field so the member doesn't have to know
+  // their gym's exact name among all 10 — still fully editable, just a
+  // sensible default rather than a lock.
+  const initialGym = gymParam && isGymName(gymParam) ? gymParam : "";
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [gym, setGym] = useState<GymName | "">("");
+  const [gym, setGym] = useState<GymName | "">(initialGym);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -130,5 +145,13 @@ export default function SignupPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }

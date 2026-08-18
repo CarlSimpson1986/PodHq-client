@@ -1905,3 +1905,44 @@ kisi_response: "200 OK", distance_meters: 0` — a genuine successful Kisi
 call, not a client-side illusion. Throwaway booking and its access-event
 row deleted afterward. `npx tsc --noEmit` and `eslint` pass clean on all
 three changed/new files.
+
+## Signup gym pre-fill via `?gym=` link — same day, 2026-08-18
+
+Raised while the user was separately setting up Hove's Stripe/Brevo/
+Resend accounts, thinking through how someone actually gets from "saw
+Hove's marketing" to "signed up correctly tagged to Hove." The
+2026-08-16 signup dropdown (see that entry) added the ability to pick
+any of the 10 gyms, but nothing pre-selects or hints which one — a new
+member has to already know their own gym's exact name among a flat
+10-item list, with zero help from the app. Real risk: mis-selecting the
+wrong gym at signup with a shared multi-gym app (unlike GymFlow, which
+is deployed as a separate branded app per gym and doesn't have this
+ambiguity at all — different architecture, not a feature gap on
+GymFlow's part).
+
+Fixed with a `?gym=` query param: `/signup?gym=Hove` pre-selects the
+dropdown to Hove, still fully editable (not locked) so a wrong link
+doesn't trap anyone. Deliberately not tied to any one distribution
+channel — works equally as a QR code on physical signage for someone
+who's already walked past the gym, or as a plain hyperlink in the
+Google Form waitlist's confirmation message, an ad campaign's landing
+page, or a newsletter — anywhere a gym-specific signup link can be
+dropped in, for people who've never been near the physical location at
+all.
+
+`src/app/signup/page.tsx` split into an inner `SignupForm` (the actual
+form, now reading `useSearchParams()`) and the default-exported
+`SignupPage` wrapping it in `<Suspense>` — Next's own requirement for
+any component calling `useSearchParams`, not optional. `initialGym` is
+computed once from the param (validated against `GYM_NAMES` via a new
+`isGymName` guard, same pattern the API routes already use) and only
+ever sets the field's *initial* state — no locking, no re-syncing on
+param change.
+
+**Live-verified** (local dev, via claude-in-chrome, after logging out
+of a leftover pilot-member session that was silently redirecting
+`/signup` away per `proxy.ts`'s already-known behavior — same gotcha
+hit earlier this session, not new): `/signup?gym=Hove` correctly showed
+"Hove" pre-selected in the dropdown on load, zero hydration errors in
+the console (the Suspense boundary did its job). `npx tsc --noEmit` and
+`eslint` pass clean.
