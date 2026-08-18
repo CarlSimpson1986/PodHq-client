@@ -1,22 +1,16 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, getCreditBalance, getActiveMembership, getNextUpcomingBooking } from "@/lib/data/member";
+import {
+  getMemberByAuthUserId,
+  getCreditBalance,
+  getActiveMembership,
+  getNextUpcomingBooking,
+  isAccessComplete,
+} from "@/lib/data/member";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { BottomNav } from "@/components/bottom-nav";
-
-// Server Component, so this never re-runs client-side — no hydration risk
-// — but still worth pinning: unpinned, this would show UTC wall-clock time
-// (Vercel's serverless functions run in UTC internally) rather than the
-// gym's actual London time.
-function formatSlot(iso: string) {
-  const d = new Date(iso);
-  return (
-    d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", timeZone: "Europe/London" }) +
-    " at " +
-    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })
-  );
-}
+import { UpcomingSessionCard } from "@/components/upcoming-session-card";
 
 export default async function HomePage() {
   const session = await createSessionClient();
@@ -63,31 +57,20 @@ export default async function HomePage() {
             </div>
           )}
 
-          <div className="rounded-xl border border-card-light-border p-5 text-center">
-            {upcomingBooking ? (
-              <>
-                <p className="text-base font-semibold">Upcoming session</p>
-                <p className="mt-1 text-sm text-card-light-muted">{formatSlot(upcomingBooking.slot_start)}</p>
-                <Link
-                  href="/bookings"
-                  className="mt-3 inline-block rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
-                >
-                  Access
-                </Link>
-              </>
-            ) : (
-              <>
-                <p className="text-base font-semibold">No upcoming sessions</p>
-                <p className="mt-1 text-sm text-card-light-muted">Book a session to set your goals in motion.</p>
-                <Link
-                  href="/book"
-                  className="mt-3 inline-block rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
-                >
-                  Book Session
-                </Link>
-              </>
-            )}
-          </div>
+          {upcomingBooking ? (
+            <UpcomingSessionCard booking={upcomingBooking} accessComplete={isAccessComplete(member)} />
+          ) : (
+            <div className="rounded-xl border border-card-light-border p-5 text-center">
+              <p className="text-base font-semibold">No upcoming sessions</p>
+              <p className="mt-1 text-sm text-card-light-muted">Book a session to set your goals in motion.</p>
+              <Link
+                href="/book"
+                className="mt-3 inline-block rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
+              >
+                Book Session
+              </Link>
+            </div>
+          )}
 
           <p className="text-center text-sm text-card-light-muted">{credits} credits available</p>
         </div>
