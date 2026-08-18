@@ -1777,3 +1777,50 @@ Tomorrow's session: confirm the Hove/Brighton resource-selector UI (the
 two-button Gym/Wellness Room switch already built in `booking-grid.tsx`,
 see podHq's ROADMAP Stage 15) actually matches what's wanted before
 assuming it needs new work — it may already be done.
+
+## Hove onboarding session + shared-fallback "From" display name fix — 2026-08-18
+
+Started from the "tomorrow's session" note above (confirm the Hove/
+Brighton resource-selector UI before assuming it needs work) — reviewed
+the current `booking-grid.tsx` implementation (two-button toggle, hidden
+entirely for a single-resource gym) and described it, but the session
+redirected into email/DNS onboarding work before it was ever pulled up
+live or explicitly confirmed against what's actually wanted. **Still an
+open item, not closed** — needs a real live walkthrough next session,
+same as originally flagged.
+
+Most of this session's real work landed on **podHq's** side — see its own
+ROADMAP for the full account: `/setup`'s three independent gym pickers
+(Catalog/Brevo/Resend) merged into one shared selector, and a genuine
+production bug found and fixed while using it for real — `SECRET_ENCRYPTION_KEY`
+had never been added to **either** app's Vercel Production environment,
+silently breaking every per-gym Brevo/Resend config save since the
+feature shipped. Fixed by rotating a fresh key and adding it to both
+apps' Production env + both local `.env.local` files (the key ended up
+rotated three times total before landing cleanly — the VS Code Claude
+Code extension surfaces whatever text is selected/cursor-adjacent in an
+open editor tab as conversation context automatically, and `.env.local`
+being open leaked the value into chat by accident twice, unrelated to
+the underlying bug itself). Hove's own Brevo (list ID 2) and Resend
+(`hello@hove.myfitpod.co.uk`) accounts are now genuinely saved and
+encrypted in production, confirmed via real `POST` requests returning 200
+in `vercel logs`, not just the UI's own success state. Hove's DNS
+(SPF/DKIM for `hove.myfitpod.co.uk`) is still outstanding — checked live
+via a direct public-resolver lookup (Google's 8.8.8.8, bypassing the
+local router) and confirmed neither record exists yet, so real sends
+through Hove's own Resend account won't work until that's added at the
+DNS host (Squarespace, backed by NS1 nameservers).
+
+**Real bug found in this repo while discussing the above**: the user
+noticed the shared fallback account's sender (what Aylesbury and every
+other gym without its own Resend config currently uses) shows up in
+recipients' inboxes as a bare address rather than a friendly name.
+Root cause in `src/lib/notifications/resend.ts`'s `sendEmail()`: a gym
+*with* its own `gym_resend_config` row gets its "from" header correctly
+formatted as `"{fromName} <{fromAddress}>"`, but the shared-fallback path
+used the raw `RESEND_FROM_ADDRESS` env var directly with no display name
+at all — a real, pre-existing gap this session just happened to surface,
+not something caused by today's changes. Fixed by wrapping the fallback
+the same way with a hardcoded `"My Fit Pod <...>"`, matching the per-gym
+format rather than adding a new env var for something that's app-wide
+branding anyway. `npx tsc --noEmit` and `eslint` pass clean.
