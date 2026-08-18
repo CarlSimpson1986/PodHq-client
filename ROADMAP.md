@@ -1950,3 +1950,15 @@ the console (the Suspense boundary did its job). `npx tsc --noEmit` and
 `GYM_SIGNUP_LINKS.md` (project root) lists the actual `?gym=` link for
 all 10 gyms, ready to hand out — keep it in sync with `GYM_NAMES` if a
 gym is ever renamed.
+
+## Resource-selector buttons made more prominent — same day, 2026-08-18
+
+The Gym/Wellness Room toggle in `booking-grid.tsx` (which resource is
+about to be booked) was styled as a small text-link-style button —
+easy to miss, and this is a choice that changes which pod/room a
+credit gets spent on, not a minor filter. Changed to large, equal-width
+(`flex-1`) pill buttons (`rounded-full`, bigger padding, 2px border)
+spanning the full row under the day-strip, same position as before,
+just impossible to miss now. Only affects gyms with more than one
+resource (currently Hove) — a single-resource gym still shows nothing
+here, unchanged. `npx tsc --noEmit` and `eslint` pass clean.

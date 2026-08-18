@@ -292,15 +292,20 @@ export function BookingGrid({
           })}
         </div>
         {/* A gym with exactly one resource shows nothing here — zero UI
-            change for the only currently-live single-resource gym. */}
+            change for the only currently-live single-resource gym. Large,
+            equal-width pill buttons rather than small text-links — this is
+            which resource you're about to book, not a minor filter, so it
+            needs to be impossible to miss at a glance. */}
         {resources.length > 1 && (
-          <div className="mx-auto mt-3 flex w-full max-w-md gap-2">
+          <div className="mx-auto mt-4 flex w-full max-w-md gap-3">
             {resources.map((r) => (
               <button
                 key={r.id}
                 onClick={() => setResourceId(r.id)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
-                  r.id === resourceId ? "bg-foreground text-background" : "border border-card-border text-muted-foreground"
+                className={`flex-1 rounded-full px-4 py-3 text-sm font-semibold transition-colors ${
+                  r.id === resourceId
+                    ? "bg-foreground text-background"
+                    : "border-2 border-card-border text-muted-foreground hover:border-foreground hover:text-foreground"
                 }`}
               >
                 {r.label}
