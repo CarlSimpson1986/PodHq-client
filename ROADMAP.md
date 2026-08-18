@@ -1946,3 +1946,7 @@ hit earlier this session, not new): `/signup?gym=Hove` correctly showed
 "Hove" pre-selected in the dropdown on load, zero hydration errors in
 the console (the Suspense boundary did its job). `npx tsc --noEmit` and
 `eslint` pass clean.
+
+`GYM_SIGNUP_LINKS.md` (project root) lists the actual `?gym=` link for
+all 10 gyms, ready to hand out — keep it in sync with `GYM_NAMES` if a
+gym is ever renamed.
