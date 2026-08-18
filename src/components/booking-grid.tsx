@@ -6,13 +6,22 @@ import type { Booking, ActiveReservation, MemberWaitlistSlot, PodResource } from
 import { UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { londonDateParts, londonHour, londonHourOf } from "@/lib/london-time";
+import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 import { BottomNav } from "@/components/bottom-nav";
 
-const WINDOW_BEFORE_MS = 5 * 60 * 1000;
-const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
-
-function hourSlots(day: Date): Date[] {
-  return Array.from({ length: 24 }, (_, hour) => londonHour(day, hour));
+// Slots for a day at the resource's own duration — a 60-minute resource
+// gets 24 hourly slots (00:00, 01:00, ...), a 30-minute one gets 48
+// half-hourly slots (00:00, 00:30, 01:00, ...). Previously always hourly
+// regardless of resource, which silently offered only half of Hove's
+// Recovery Room's real capacity (a 30-min resource has twice as many
+// bookable starts as a 60-min one) and misrepresented what "18:00" would
+// actually book.
+function slotsForDay(day: Date, durationMinutes: number): Date[] {
+  const count = (24 * 60) / durationMinutes;
+  return Array.from({ length: count }, (_, i) => {
+    const totalMinutes = i * durationMinutes;
+    return londonHour(day, Math.floor(totalMinutes / 60), totalMinutes % 60);
+  });
 }
 
 // timeZone pinned on all three — see bookings-view.tsx's formatSlot for why
@@ -214,11 +223,11 @@ export function BookingGrid({
   // applies when viewing today — every slot on a future day is, by
   // definition, still ahead of "now".
   const slots = resource
-    ? hourSlots(selectedDayDate).filter((slot) => {
+    ? slotsForDay(selectedDayDate, resource.slotDurationMinutes).filter((slot) => {
         const slotHour = londonHourOf(slot);
         if (slotHour < resource.openHour || slotHour >= resource.closeHour) return false;
         if (!isToday) return true;
-        const isPast = slot.getTime() + 60 * 60 * 1000 < now;
+        const isPast = slot.getTime() + resource.slotDurationMinutes * 60 * 1000 < now;
         if (!isPast) return true;
         return bookings.some(
           (b) => b.resource_id === resource.id && new Date(b.slot_start).getTime() === slot.getTime() && b.member_id === memberId
@@ -336,7 +345,10 @@ export function BookingGrid({
             const podCapacity = resource?.podCapacity ?? 1;
             const isFull = !isMine && slotBookings.length >= podCapacity;
             const inUnlockWindow =
-              isMine && now >= slot.getTime() - WINDOW_BEFORE_MS && now <= slot.getTime() + WINDOW_AFTER_MS;
+              isMine &&
+              !!resource &&
+              now >= slot.getTime() - UNLOCK_WINDOW_BEFORE_MS &&
+              now <= slot.getTime() + unlockWindowAfterMs(resource.slotDurationMinutes);
             // A slot can have real physical space (not "full") but still be
             // off-limits to everyone except whoever it's currently offered
             // to on the waitlist — create_booking() enforces this server-side

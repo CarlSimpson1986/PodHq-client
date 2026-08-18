@@ -6,6 +6,7 @@ import {
   getCreditBalance,
   getActiveMembership,
   getNextUpcomingBooking,
+  getPodResourcesForGym,
   isAccessComplete,
 } from "@/lib/data/member";
 import { NoMemberProfile } from "@/components/no-member-profile";
@@ -27,10 +28,11 @@ export default async function HomePage() {
     return <NoMemberProfile />;
   }
 
-  const [credits, membership, upcomingBooking] = await Promise.all([
+  const [credits, membership, upcomingBooking, resources] = await Promise.all([
     getCreditBalance(member.id),
     getActiveMembership(member.id),
     getNextUpcomingBooking(member.id),
+    getPodResourcesForGym(member.gym),
   ]);
 
   return (
@@ -58,7 +60,11 @@ export default async function HomePage() {
           )}
 
           {upcomingBooking ? (
-            <UpcomingSessionCard booking={upcomingBooking} accessComplete={isAccessComplete(member)} />
+            <UpcomingSessionCard
+              booking={upcomingBooking}
+              accessComplete={isAccessComplete(member)}
+              slotDurationMinutes={resources.find((r) => r.id === upcomingBooking.resource_id)?.slotDurationMinutes ?? 60}
+            />
           ) : (
             <div className="rounded-xl border border-card-light-border p-5 text-center">
               <p className="text-base font-semibold">No upcoming sessions</p>
