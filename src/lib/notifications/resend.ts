@@ -40,7 +40,8 @@ export async function sendEmail({ to, subject, html, gym }: SendEmailInput): Pro
   const gymConfig = await getGymResendConfig(gym);
 
   const apiKey = gymConfig?.apiKey ?? process.env.RESEND_API_KEY;
-  const from = gymConfig ? `${gymConfig.fromName} <${gymConfig.fromAddress}>` : process.env.RESEND_FROM_ADDRESS;
+  const fallbackFrom = process.env.RESEND_FROM_ADDRESS ? `My Fit Pod <${process.env.RESEND_FROM_ADDRESS}>` : undefined;
+  const from = gymConfig ? `${gymConfig.fromName} <${gymConfig.fromAddress}>` : fallbackFrom;
 
   if (!apiKey || !from) {
     return { ok: false, errorDetail: "No Resend config for this gym and no shared RESEND_API_KEY/RESEND_FROM_ADDRESS fallback" };
