@@ -5,9 +5,7 @@ import { getMemberByAuthUserId, isAccessComplete } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { unlockSchema } from "@/lib/validation/unlock";
 import { distanceMeters } from "@/lib/geo";
-
-const WINDOW_BEFORE_MS = 5 * 60 * 1000;
-const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
+import { isWithinUnlockWindow } from "@/lib/unlock-window";
 
 // Matches GymFlow's own existing requirement for general door access —
 // GPS-based, hard gate (confirmed 2026-08-10, ROADMAP.md Stage 7). Not
@@ -68,9 +66,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Booking not found." }, { status: 404 });
   }
 
+  // Fetched before the window check below — the unlock window's length
+  // depends on this resource's own slot duration (30 min for Hove's
+  // Recovery Room, 60 min elsewhere), not a flat assumption.
+  const { data: resource, error: resourceError } = await admin
+    .from("pod_resources")
+    .select("*")
+    .eq("id", active.resource_id)
+    .maybeSingle();
+
+  if (resourceError || !resource) {
+    return NextResponse.json({ status: "error", message: "This door has no lock configured yet." }, { status: 500 });
+  }
+
   const now = Date.now();
   const start = new Date(active.slot_start).getTime();
-  if (now < start - WINDOW_BEFORE_MS || now > start + WINDOW_AFTER_MS) {
+  if (!isWithinUnlockWindow(now, start, resource.slot_duration_minutes)) {
     return NextResponse.json({ status: "error", message: "No active booking right now." }, { status: 403 });
   }
 
@@ -88,16 +99,6 @@ export async function POST(request: NextRequest) {
       { status: "error", message: "Finish your Access details in Profile to unlock the door." },
       { status: 403 }
     );
-  }
-
-  const { data: resource, error: resourceError } = await admin
-    .from("pod_resources")
-    .select("*")
-    .eq("id", active.resource_id)
-    .maybeSingle();
-
-  if (resourceError || !resource) {
-    return NextResponse.json({ status: "error", message: "This door has no lock configured yet." }, { status: 500 });
   }
 
   // Hard gate on location — see the note above the route. Only checked

@@ -28,6 +28,7 @@ interface LondonParts {
   month: number; // 1-12
   day: number;
   hour: number; // 0-23
+  minute: number; // 0-59
 }
 
 function londonParts(instant: Date): LondonParts {
@@ -41,21 +42,27 @@ function londonParts(instant: Date): LondonParts {
     hourCycle: "h23",
   }).formatToParts(instant);
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
-  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour") };
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
 }
 
 /**
- * The UTC instant for a given Europe/London wall-clock date+hour — correct
- * across the BST transition, unlike `new Date(y, m, d, h)` (machine-local
- * timezone) or naive UTC arithmetic (wrong by an hour for half the year).
- * Two-pass fixed point: a plain UTC guess is always within an hour of
+ * The UTC instant for a given Europe/London wall-clock date+hour(+minute) —
+ * correct across the BST transition, unlike `new Date(y, m, d, h)` (machine-
+ * local timezone) or naive UTC arithmetic (wrong by an hour for half the
+ * year). Two-pass fixed point: a plain UTC guess is always within an hour of
  * correct (UK's offset from UTC is only ever 0 or 1 hour), so reading the
  * guess's actual London offset and correcting once is always enough.
  */
-export function londonWallTimeToUtc(year: number, month: number, day: number, hour = 0): Date {
-  const guess = new Date(Date.UTC(year, month - 1, day, hour));
+export function londonWallTimeToUtc(year: number, month: number, day: number, hour = 0, minute = 0): Date {
+  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute));
   const seenAsLondon = londonParts(guess);
-  const guessLondonHourAsUtc = Date.UTC(seenAsLondon.year, seenAsLondon.month - 1, seenAsLondon.day, seenAsLondon.hour);
+  const guessLondonHourAsUtc = Date.UTC(
+    seenAsLondon.year,
+    seenAsLondon.month - 1,
+    seenAsLondon.day,
+    seenAsLondon.hour,
+    seenAsLondon.minute
+  );
   const offsetMs = guessLondonHourAsUtc - guess.getTime();
   return new Date(guess.getTime() - offsetMs);
 }
@@ -83,8 +90,8 @@ export function addLondonDays(instant: Date, days: number): Date {
   return londonWallTimeToUtc(year, month, day + days, 0);
 }
 
-/** The UTC instant for a specific wall-clock hour on the same Europe/London calendar day as `dayInstant`. */
-export function londonHour(dayInstant: Date, hour: number): Date {
+/** The UTC instant for a specific wall-clock hour(+minute) on the same Europe/London calendar day as `dayInstant`. */
+export function londonHour(dayInstant: Date, hour: number, minute = 0): Date {
   const { year, month, day } = londonDateParts(dayInstant);
-  return londonWallTimeToUtc(year, month, day, hour);
+  return londonWallTimeToUtc(year, month, day, hour, minute);
 }

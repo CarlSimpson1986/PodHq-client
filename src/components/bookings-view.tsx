@@ -3,10 +3,11 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { Booking } from "@/lib/data/member";
+import type { Booking, PodResource } from "@/lib/data/member";
 import { formatDateParam } from "@/lib/booking-dates";
 import { LockIcon } from "@/components/icons";
 import { subscribeToPush } from "@/lib/push/subscribe";
+import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 
 const STATUS_LABELS: Record<Booking["status"], string> = {
   booked: "Booked",
@@ -15,8 +16,14 @@ const STATUS_LABELS: Record<Booking["status"], string> = {
   no_show: "No-show",
 };
 
-const WINDOW_BEFORE_MS = 5 * 60 * 1000;
-const WINDOW_AFTER_MS = 65 * 60 * 1000; // 1hr slot + 5min grace
+// Falls back to 60 (the previous flat assumption) only if a booking's
+// resource somehow can't be found — should never happen in practice, but
+// an unlock-window computation is exactly the wrong place to let a missing
+// lookup silently become NaN.
+function slotDurationFor(resources: PodResource[], resourceId: number): number {
+  return resources.find((r) => r.id === resourceId)?.slotDurationMinutes ?? 60;
+}
+
 // Cancellation policy: cancel more than 2 hours before slot_start and the
 // credit is refunded; inside that window it's forfeited. Mirrors the
 // server-side cutoff in cancel_booking() — this is just a hint shown
@@ -54,7 +61,15 @@ function formatSlot(iso: string) {
   };
 }
 
-export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]; accessComplete: boolean }) {
+export function BookingsView({
+  bookings,
+  accessComplete,
+  resources,
+}: {
+  bookings: Booking[];
+  accessComplete: boolean;
+  resources: PodResource[];
+}) {
   const router = useRouter();
   const [view, setView] = useState<"upcoming" | "past">("upcoming");
   const [unlockingId, setUnlockingId] = useState<number | null>(null);
@@ -204,17 +219,22 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
   }
 
   // A booking stays "upcoming" through the end of its own unlock window
-  // (65 min after the slot starts), not just until the slot's start time —
-  // otherwise it flipped to "past" right as a member arrived to unlock it.
-  // Cancelled/completed/no-show is never "upcoming" regardless of timing.
+  // (slot duration + 5min grace after it starts), not just until the
+  // slot's start time — otherwise it flipped to "past" right as a member
+  // arrived to unlock it. Cancelled/completed/no-show is never "upcoming"
+  // regardless of timing.
   const upcoming = bookings.filter(
     (b) =>
       b.status === "booked" &&
       !cancelledIds.has(b.id) &&
-      new Date(b.slot_start).getTime() + WINDOW_AFTER_MS >= now
+      new Date(b.slot_start).getTime() + unlockWindowAfterMs(slotDurationFor(resources, b.resource_id)) >= now
   );
   const past = bookings.filter(
-    (b) => !(b.status === "booked" && new Date(b.slot_start).getTime() + WINDOW_AFTER_MS >= now)
+    (b) =>
+      !(
+        b.status === "booked" &&
+        new Date(b.slot_start).getTime() + unlockWindowAfterMs(slotDurationFor(resources, b.resource_id)) >= now
+      )
   );
 
   const shown = view === "upcoming" ? upcoming : past;
@@ -260,7 +280,9 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
             const { day, time } = formatSlot(booking.slot_start);
             const start = new Date(booking.slot_start).getTime();
             const inUnlockWindow =
-              view === "upcoming" && now >= start - WINDOW_BEFORE_MS && now <= start + WINDOW_AFTER_MS;
+              view === "upcoming" &&
+              now >= start - UNLOCK_WINDOW_BEFORE_MS &&
+              now <= start + unlockWindowAfterMs(slotDurationFor(resources, booking.resource_id));
             const message = unlockMessages[booking.id];
 
             return (

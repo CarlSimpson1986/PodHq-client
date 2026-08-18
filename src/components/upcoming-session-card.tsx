@@ -4,12 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Booking } from "@/lib/data/member";
 import { LockIcon } from "@/components/icons";
-
-// Same window this app enforces everywhere else Unlock appears
-// (bookings-view.tsx) — door opens 5 min before the slot, stays
-// unlockable through 65 min after (1hr slot + 5min grace).
-const WINDOW_BEFORE_MS = 5 * 60 * 1000;
-const WINDOW_AFTER_MS = 65 * 60 * 1000;
+import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 
 function formatSlot(iso: string) {
   const d = new Date(iso);
@@ -20,7 +15,15 @@ function formatSlot(iso: string) {
   );
 }
 
-export function UpcomingSessionCard({ booking, accessComplete }: { booking: Booking; accessComplete: boolean }) {
+export function UpcomingSessionCard({
+  booking,
+  accessComplete,
+  slotDurationMinutes,
+}: {
+  booking: Booking;
+  accessComplete: boolean;
+  slotDurationMinutes: number;
+}) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000);
@@ -30,7 +33,7 @@ export function UpcomingSessionCard({ booking, accessComplete }: { booking: Book
   const [message, setMessage] = useState("");
 
   const start = new Date(booking.slot_start).getTime();
-  const inUnlockWindow = now >= start - WINDOW_BEFORE_MS && now <= start + WINDOW_AFTER_MS;
+  const inUnlockWindow = now >= start - UNLOCK_WINDOW_BEFORE_MS && now <= start + unlockWindowAfterMs(slotDurationMinutes);
 
   async function unlock() {
     setMessage("");

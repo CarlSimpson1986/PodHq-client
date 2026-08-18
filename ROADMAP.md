@@ -1962,3 +1962,66 @@ spanning the full row under the day-strip, same position as before,
 just impossible to miss now. Only affects gyms with more than one
 resource (currently Hove) — a single-resource gym still shows nothing
 here, unchanged. `npx tsc --noEmit` and `eslint` pass clean.
+
+## Real fix: 30-minute Wellness/Recovery Room slots — same day, 2026-08-18
+
+While actually looking at the new resource-toggle buttons live, the user
+flagged that the Wellness Room needs 30-minute booking slots, not 60 —
+and renamed it to **Recovery Room** in the same breath. Checked the DB:
+`pod_resources.slot_duration_minutes` was already correctly seeded as 30
+for this resource back on 2026-08-17 — the gap was entirely in the app
+never actually reading it. Label rename applied directly as a DB update
+(`pod_resources.label`), no deploy needed since it's read live.
+
+**The real bug, found by actually checking**: `booking-grid.tsx`'s
+`hourSlots()` always generated exactly 24 hourly slots regardless of the
+selected resource, so Recovery Room only ever offered half its real
+bookable capacity (a 30-min resource has twice the start times a 60-min
+one does) and every displayed "18:00" would have booked a slot whose real
+duration didn't match what was shown. Worse: three *other* places each
+independently hardcoded the same "sessions are 60 minutes, unlock stays
+open 65" assumption — `booking-grid.tsx`'s own past-slot and unlock-hint
+checks, `bookings-view.tsx`'s upcoming/past split and Unlock button
+window, and **`/api/unlock`'s actual server-side enforcement** — meaning
+the physical door would have stayed unlockable for 35 minutes longer
+than a real 30-minute Recovery Room session actually runs. Today's own
+`upcoming-session-card.tsx` (built earlier this same session) carried an
+identical copy of the same hardcoded assumption.
+
+**Fixed properly, not patched four times**: new `src/lib/unlock-window.ts`
+(`UNLOCK_WINDOW_BEFORE_MS`, `unlockWindowAfterMs()`, `isWithinUnlockWindow()`)
+derives the window from a resource's own `slotDurationMinutes` instead of
+a copy-pasted constant — same "consolidate a duplicated correctness-
+critical calculation" reasoning podHq's own `resolveGym()` already
+documented for exactly this failure mode. All five call sites (the four
+above, in both podhq-client's UI and its own physical-door API route)
+now route through it. `/api/unlock` also had its `pod_resources` fetch
+moved earlier in the handler, since the window check needs it and
+previously ran before the resource was ever looked up.
+
+`london-time.ts`'s `londonWallTimeToUtc`/`londonHour` gained an optional
+`minute` parameter (defaulting to 0, fully backward compatible — the
+existing test suite and the one other caller in `booking-dates.ts` are
+unaffected) so slot generation can land on `:30` as correctly as `:00`
+across the BST/GMT transition. `booking-grid.tsx`'s `hourSlots()` became
+`slotsForDay(day, durationMinutes)`, generating `(24*60)/duration` slots
+at the resource's own spacing instead of always 24.
+
+`bookings-view.tsx` and its `/bookings` page needed a new `resources`
+prop threaded through (via the already-existing `getPodResourcesForGym`)
+since a booking's own duration wasn't otherwise available there; Home's
+`upcoming-session-card.tsx` similarly gained a `slotDurationMinutes` prop
+computed by `page.tsx` from the same lookup.
+
+**Live-verified**, and a real HMR false alarm caught along the way: the
+first live check after this fix still showed hourly slots for Recovery
+Room, which briefly looked like the fix hadn't worked — a hard reload
+(`Ctrl+Shift+R`) showed the correct 18:00/18:30/19:00 slots immediately,
+confirming it was a stale dev-server bundle (same class of glitch this
+project has hit before), not a real bug. Verified via a throwaway Hove
+member (created directly, pre-confirmed, to skip email verification)
+switching to Recovery Room and seeing genuine half-hour slots. `npx tsc
+--noEmit`, `eslint`, and `npx vitest run` (15 tests, all passing) all
+clean. All throwaway test accounts created this session (the Hove
+view-test member, and two earlier stuck signup-test accounts from
+tonight's email-confirmation troubleshooting) deleted afterward.
