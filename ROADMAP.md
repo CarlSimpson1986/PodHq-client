@@ -1856,3 +1856,52 @@ the user just looking at the live Home page:**
   mechanism — matches standard practice, not a gap.
 
 `npx tsc --noEmit` and `eslint` pass clean on both changed files.
+
+**Follow-up, same session: the "Access" link above was still just
+navigation, not an unlock.** User clarified the actual want after seeing
+it live: tapping "Access" on Home's Upcoming session card should unlock
+the door directly, not send the member to `/bookings` to tap Unlock a
+second time. New `src/components/upcoming-session-card.tsx` (client
+component, extracted out of `page.tsx` which stays a Server Component)
+duplicates `bookings-view.tsx`'s unlock logic (same `WINDOW_BEFORE_MS`/
+`WINDOW_AFTER_MS` constants, same geolocation-then-`/api/unlock` call) —
+deliberate small duplication rather than a shared hook, matching this
+codebase's existing per-component style (each of `booking-grid.tsx`/
+`bookings-view.tsx`/`profile-view.tsx` already owns its own local
+fetch/state logic, no shared "useBookingAction"-style hook exists to
+extend). Three states: access-incomplete → "Complete Access" link (same
+as `bookings-view.tsx`); in-window → live "Access" button that requests
+geolocation and calls `/api/unlock` for real; outside the window → falls
+back to the `/bookings` link from the fix above, plus the same "Unlock
+opens 5 minutes before your session" text.
+
+**Real bug found and fixed in the same pass**: `getNextUpcomingBooking`
+(`src/lib/data/member.ts`) filtered on `slot_start >= now`, so a booking
+dropped off Home's "Upcoming session" card the instant its start time
+passed — exactly when a member is most likely arriving to actually
+unlock it. Extended the cutoff to `now - 65 minutes`, matching
+`bookings-view.tsx`'s own unlock-window grace period, so the card (and
+the new direct-unlock button) stays available for as long as the door
+actually stays unlockable.
+
+**Live-verified end-to-end**, not just type-checked — real bug caught
+along the way doing this properly: the pilot member had no genuine
+booking landing inside the unlock window at the time of testing (a
+16:00 slot visible on `/book` belonged to a different member entirely,
+confirmed before assuming the card was broken when it correctly showed
+"No upcoming sessions"). Inserted a real throwaway booking directly
+(`slot_start` ~2 minutes out — booking creation via the UI is hour-
+aligned only, so this needed a direct insert, same bypass this project's
+own testing has used before) for member 1 / Aylesbury's pod resource,
+logged in locally as the pilot member (password reset via the same
+one-off script pattern used throughout this project), and confirmed the
+Home card rendered the live "Access" button. Clicked it with geolocation
+overridden to the gym's real coordinates (same spoofing technique this
+app's location gate has always been documented as unable to prevent,
+used here deliberately to test rather than defeat it) — got "Unlocked —
+door should open now.", and cross-checked directly against
+`pod_access_events` (not just the UI message): `success: true,
+kisi_response: "200 OK", distance_meters: 0` — a genuine successful Kisi
+call, not a client-side illusion. Throwaway booking and its access-event
+row deleted afterward. `npx tsc --noEmit` and `eslint` pass clean on all
+three changed/new files.

@@ -116,6 +116,12 @@ export async function getActiveMembership(memberId: number): Promise<Membership 
   return data;
 }
 
+// 65 min after slot_start (1hr slot + 5min grace) — matches
+// bookings-view.tsx's own unlock-window grace period, so a booking that
+// already started doesn't drop off Home right as the member arrives to
+// actually unlock it.
+const UNLOCK_WINDOW_AFTER_MS = 65 * 60 * 1000;
+
 export async function getNextUpcomingBooking(memberId: number): Promise<Booking | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -123,7 +129,7 @@ export async function getNextUpcomingBooking(memberId: number): Promise<Booking 
     .select("*")
     .eq("member_id", memberId)
     .eq("status", "booked")
-    .gte("slot_start", new Date().toISOString())
+    .gte("slot_start", new Date(Date.now() - UNLOCK_WINDOW_AFTER_MS).toISOString())
     .order("slot_start", { ascending: true })
     .limit(1)
     .maybeSingle();
