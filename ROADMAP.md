@@ -1824,3 +1824,35 @@ not something caused by today's changes. Fixed by wrapping the fallback
 the same way with a hardcoded `"My Fit Pod <...>"`, matching the per-gym
 format rather than adding a new env var for something that's app-wide
 branding anyway. `npx tsc --noEmit` and `eslint` pass clean.
+
+**Two more small real bugs found and fixed the same session, both from
+the user just looking at the live Home page:**
+
+- Home's "Upcoming session" card (`src/app/page.tsx`) had a "View
+  booking" button that linked to `/book?date=...` — the day-grid page for
+  *creating* a new booking, not a view of the existing one at all. It
+  never showed the booking's own details or its Unlock/Cancel controls.
+  Stale relative to the 2026-08-11 decision to move Unlock onto
+  `/bookings` specifically so it sits next to the actual booking — this
+  card just never got updated to match. Fixed: now links to `/bookings`.
+  Relabelled "View booking" → **"Access"** (the user's call, after also
+  noting the card already shows the date/time itself, so a button that
+  just re-displayed that would be redundant — the real value of the link
+  is reaching the actions on `/bookings`, not re-showing info already on
+  screen). `formatDateParam` import removed as unused once the date-param
+  link was dropped.
+- `bookings-view.tsx`'s Unlock area rendered nothing at all — no button,
+  no explanation — whenever a booking was upcoming but outside its
+  5-minute-before unlock window, silently leaving the member with no clue
+  why there was nothing to tap. Added a plain-text explanation ("Unlock
+  opens 5 minutes before your session.") for that case. The *other* half
+  of the original ask — a proactive "you're too far away" warning ahead
+  of tapping Unlock — was considered and deliberately not built:
+  geolocation prompts need a direct user gesture to fire reliably, and a
+  member is normally still travelling to the gym when the window opens,
+  so an early distance warning would just be noise, not something
+  actionable. The existing reactive check (on tapping Unlock, server
+  rejects with a clear message if too far away) stays as the real
+  mechanism — matches standard practice, not a gap.
+
+`npx tsc --noEmit` and `eslint` pass clean on both changed files.
