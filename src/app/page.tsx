@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getCreditBalance, getActiveMembership, getNextUpcomingBooking } from "@/lib/data/member";
-import { formatDateParam } from "@/lib/booking-dates";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { BottomNav } from "@/components/bottom-nav";
 
@@ -70,10 +69,10 @@ export default async function HomePage() {
                 <p className="text-base font-semibold">Upcoming session</p>
                 <p className="mt-1 text-sm text-card-light-muted">{formatSlot(upcomingBooking.slot_start)}</p>
                 <Link
-                  href={`/book?date=${formatDateParam(new Date(upcomingBooking.slot_start))}`}
+                  href="/bookings"
                   className="mt-3 inline-block rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
                 >
-                  View booking
+                  Access
                 </Link>
               </>
             ) : (

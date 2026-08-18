@@ -296,6 +296,9 @@ export function BookingsView({ bookings, accessComplete }: { bookings: Booking[]
                     ))}
                 </div>
                 {inUnlockWindow && message && <p className="mt-2 text-xs text-card-light-muted">{message}</p>}
+                {view === "upcoming" && !inUnlockWindow && (
+                  <p className="mt-2 text-xs text-card-light-muted">Unlock opens 5 minutes before your session.</p>
+                )}
 
                 {view === "upcoming" &&
                   (confirmingCancelId === booking.id ? (
