@@ -39,6 +39,17 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
+  // Present only when this event originated on a gym's own Stripe Connect
+  // account (event.account), never for the shared platform account — every
+  // *secondary* Stripe API call this handler makes below (retrieving a
+  // PaymentIntent, a Subscription, listing Invoice Payments, updating a
+  // Customer) needs to be told the same account explicitly, or it 404s
+  // against the platform account's own data instead. Resolving which
+  // member/gym a payment belongs to doesn't need this at all — that's
+  // already done via checkout/subscription metadata regardless of which
+  // account processed the payment.
+  const connectRequestOptions = event.account ? { stripeAccount: event.account } : undefined;
+
   if (event.type === "checkout.session.completed") {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
 
@@ -169,9 +180,11 @@ export async function POST(request: NextRequest) {
     // actually used, since Checkout Sessions don't expose it directly.
     const paymentIntentId = resolvePaymentIntentId(checkoutSession.payment_intent);
     const usedPaymentMethodId = paymentIntentId
-      ? resolvePaymentMethodId((await stripe.paymentIntents.retrieve(paymentIntentId)).payment_method)
+      ? resolvePaymentMethodId(
+          (await stripe.paymentIntents.retrieve(paymentIntentId, undefined, connectRequestOptions)).payment_method
+        )
       : null;
-    await saveStripeCustomerId(admin, memberId, checkoutSession.customer, usedPaymentMethodId);
+    await saveStripeCustomerId(admin, memberId, checkoutSession.customer, usedPaymentMethodId, connectRequestOptions);
   }
 
   // Staff-initiated "charge card on file" (podHq's /pods/members/[id] sell
@@ -276,7 +289,13 @@ export async function POST(request: NextRequest) {
       await notifyFireAndForget({ eventType: "membership_started", to: contact.email, subject, html, memberId, gym: contact.gym });
     }
 
-    await saveStripeCustomerId(admin, memberId, subscription.customer, resolvePaymentMethodId(subscription.default_payment_method));
+    await saveStripeCustomerId(
+      admin,
+      memberId,
+      subscription.customer,
+      resolvePaymentMethodId(subscription.default_payment_method),
+      connectRequestOptions
+    );
   }
 
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
@@ -325,7 +344,9 @@ export async function POST(request: NextRequest) {
     if (subscriptionId) {
       const stripe = getStripeClient();
       const subscription = await stripe.subscriptions.retrieve(
-        typeof subscriptionId === "string" ? subscriptionId : subscriptionId.id
+        typeof subscriptionId === "string" ? subscriptionId : subscriptionId.id,
+        undefined,
+        connectRequestOptions
       );
       const memberId = Number(subscription.metadata?.member_id);
       const creditsPerPeriod = Number(subscription.metadata?.credits_per_period);
@@ -340,7 +361,7 @@ export async function POST(request: NextRequest) {
       // replaced by the Invoice Payments API) — the default payment's
       // reference has to be looked up separately to store it for a future
       // refund.
-      const invoicePayments = await stripe.invoicePayments.list({ invoice: invoice.id });
+      const invoicePayments = await stripe.invoicePayments.list({ invoice: invoice.id }, connectRequestOptions);
       const defaultPayment = invoicePayments.data.find((p) => p.is_default) ?? invoicePayments.data[0];
       const paymentIntentId =
         defaultPayment?.payment.type === "payment_intent" ? resolvePaymentIntentId(defaultPayment.payment.payment_intent) : null;
@@ -471,7 +492,8 @@ async function saveStripeCustomerId(
   admin: ReturnType<typeof createAdminClient>,
   memberId: number,
   customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined,
-  defaultPaymentMethodId: string | null
+  defaultPaymentMethodId: string | null,
+  requestOptions?: Stripe.RequestOptions
 ) {
   if (!customer) return;
   const customerId = typeof customer === "string" ? customer : customer.id;
@@ -490,7 +512,11 @@ async function saveStripeCustomerId(
   if (defaultPaymentMethodId) {
     const stripe = getStripeClient();
     try {
-      await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: defaultPaymentMethodId } });
+      await stripe.customers.update(
+        customerId,
+        { invoice_settings: { default_payment_method: defaultPaymentMethodId } },
+        requestOptions
+      );
     } catch (err) {
       console.error("[stripe-webhook] failed to set default payment method", {
         memberId,
