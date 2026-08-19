@@ -28,6 +28,15 @@ working across both apps in the same session.
   left off, without needing to reconstruct it from the diff or chat history.
 - Keep it proportionate: a small fix can be a sentence or two appended to the
   relevant stage; a new feature gets its own stage entry as usual.
+- `ROADMAP.md` is `@`-included here, so it loads into every session's
+  context automatically — keep it lean. Older history (Stages 1-9,
+  2026-08-05 → 2026-08-15) lives in `ROADMAP-ARCHIVE.md`, split out
+  2026-08-19 once the main file hit its context limit; that archive is
+  reference-only, read on demand, and deliberately **not** `@`-included.
+  If `ROADMAP.md` grows too large again, split it the same way: move the
+  oldest dated entries out to a new numbered file (`ROADMAP-ARCHIVE-2.md`,
+  etc.), leave a pointer note at the top of `ROADMAP.md`, and update this
+  paragraph.
 
 ## Conventions
 - All components: functional, TypeScript, named exports
