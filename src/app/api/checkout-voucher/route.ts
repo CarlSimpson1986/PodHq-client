@@ -3,6 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
+import { getGymStripeAccountId } from "@/lib/data/stripe-config";
 import { checkoutVoucherSchema } from "@/lib/validation/gift-voucher";
 import { generateVoucherCode, creditsForVoucherAmount } from "@/lib/gift-voucher";
 
@@ -50,29 +51,33 @@ export async function POST(request: NextRequest) {
 
   const origin = request.nextUrl.origin;
   const stripe = getStripeClient();
-  const checkoutSession = await stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_method_types: ["card"],
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "gbp",
-          unit_amount: Math.round(amountGBP * 100),
-          product_data: { name: `Gift Voucher — £${amountGBP.toFixed(2)}` },
+  const stripeAccountId = await getGymStripeAccountId(member.gym);
+  const checkoutSession = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "gbp",
+            unit_amount: Math.round(amountGBP * 100),
+            product_data: { name: `Gift Voucher — £${amountGBP.toFixed(2)}` },
+          },
         },
+      ],
+      metadata: {
+        type: "gift_voucher",
+        code,
+        amount_gbp: String(amountGBP),
+        credits: String(credits),
+        purchaser_member_id: String(member.id),
       },
-    ],
-    metadata: {
-      type: "gift_voucher",
-      code,
-      amount_gbp: String(amountGBP),
-      credits: String(credits),
-      purchaser_member_id: String(member.id),
+      success_url: `${origin}/gift-voucher/success?code=${code}`,
+      cancel_url: `${origin}/gift-voucher?purchase=cancelled`,
     },
-    success_url: `${origin}/gift-voucher/success?code=${code}`,
-    cancel_url: `${origin}/gift-voucher?purchase=cancelled`,
-  });
+    stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+  );
 
   if (!checkoutSession.url) {
     return NextResponse.json({ status: "error", message: "Could not start checkout." }, { status: 500 });

@@ -3,6 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
+import { getGymStripeAccountId } from "@/lib/data/stripe-config";
 import { getCreditPackageById, hasMemberClaimedItem } from "@/lib/data/catalog";
 import { checkoutSchema } from "@/lib/validation/checkout";
 
@@ -54,31 +55,40 @@ export async function POST(request: NextRequest) {
 
   const origin = request.nextUrl.origin;
   const stripe = getStripeClient();
-  const checkoutSession = await stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_method_types: ["card"],
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "gbp",
-          unit_amount: Math.round(pkg.priceGBP * 100),
-          product_data: { name: `${pkg.name} — ${pkg.label}` },
+  // A gym with its own Stripe Connect account (Hove onward) gets the
+  // Checkout Session created directly against that account — money and
+  // Stripe's processing fee land there, not on the shared platform
+  // account. null (no connected account yet) falls back to the platform
+  // account exactly as every gym behaved before Connect existed.
+  const stripeAccountId = await getGymStripeAccountId(member.gym);
+  const checkoutSession = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "gbp",
+            unit_amount: Math.round(pkg.priceGBP * 100),
+            product_data: { name: `${pkg.name} — ${pkg.label}` },
+          },
         },
+      ],
+      // Read back by the webhook to know who to credit and by how much —
+      // the webhook has no session/cookie context of its own (it's Stripe's
+      // server calling us, not the member's browser).
+      metadata: {
+        member_id: String(member.id),
+        credits: String(pkg.credits),
+        packageId: pkg.id,
+        creditType: pkg.creditType,
       },
-    ],
-    // Read back by the webhook to know who to credit and by how much —
-    // the webhook has no session/cookie context of its own (it's Stripe's
-    // server calling us, not the member's browser).
-    metadata: {
-      member_id: String(member.id),
-      credits: String(pkg.credits),
-      packageId: pkg.id,
-      creditType: pkg.creditType,
+      success_url: `${origin}/book?purchase=success`,
+      cancel_url: `${origin}/buy-credits?purchase=cancelled`,
     },
-    success_url: `${origin}/book?purchase=success`,
-    cancel_url: `${origin}/buy-credits?purchase=cancelled`,
-  });
+    stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+  );
 
   if (!checkoutSession.url) {
     return NextResponse.json({ status: "error", message: "Could not start checkout." }, { status: 500 });
