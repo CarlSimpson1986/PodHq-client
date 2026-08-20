@@ -22,6 +22,13 @@ import {
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Stripe's "connect" flag is set once, at endpoint creation, and can't be
+  // toggled on an existing endpoint — a gym's own Connect account (direct
+  // charges via `stripeAccount`) delivers events under the "Connected
+  // accounts" scope, which only a separate connect:true endpoint receives.
+  // That endpoint has its own distinct signing secret, so this route has to
+  // verify against both rather than the one shared secret originally assumed.
+  const webhookSecretConnect = process.env.STRIPE_WEBHOOK_SECRET_CONNECT;
 
   if (!signature || !webhookSecret) {
     return NextResponse.json({ status: "error", message: "Webhook not configured." }, { status: 500 });
@@ -34,7 +41,14 @@ export async function POST(request: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch {
-    return NextResponse.json({ status: "error", message: "Invalid signature." }, { status: 400 });
+    if (!webhookSecretConnect) {
+      return NextResponse.json({ status: "error", message: "Invalid signature." }, { status: 400 });
+    }
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecretConnect);
+    } catch {
+      return NextResponse.json({ status: "error", message: "Invalid signature." }, { status: 400 });
+    }
   }
 
   const admin = createAdminClient();
