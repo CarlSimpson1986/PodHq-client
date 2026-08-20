@@ -9,6 +9,7 @@ type PackageWithClaimStatus = CreditPackage & { alreadyClaimed: boolean };
 export function BuyCreditsList({ packages }: { packages: PackageWithClaimStatus[] }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState("");
 
   async function buy(packageId: string) {
     if (pendingId) return;
@@ -18,7 +19,7 @@ export function BuyCreditsList({ packages }: { packages: PackageWithClaimStatus[
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId }),
+        body: JSON.stringify({ packageId, ...(couponCode.trim() ? { couponCode: couponCode.trim() } : {}) }),
       });
       const body = await res.json();
       if (body.status !== "ok" || !body.url) {
@@ -35,6 +36,16 @@ export function BuyCreditsList({ packages }: { packages: PackageWithClaimStatus[
 
   return (
     <div className="space-y-3">
+      <div>
+        <label className="mb-1 block text-xs font-medium text-card-light-muted">Have a coupon code?</label>
+        <input
+          type="text"
+          value={couponCode}
+          onChange={(e) => setCouponCode(e.target.value)}
+          placeholder="Enter code"
+          className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm uppercase text-card-light-foreground placeholder:normal-case placeholder:text-card-light-muted"
+        />
+      </div>
       {error && <p className="text-sm text-danger">{error}</p>}
       {packages.map((pkg) => (
         <div key={pkg.id} className="flex items-center justify-between rounded-xl border border-card-light-border p-5">
