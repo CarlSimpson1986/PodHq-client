@@ -24,7 +24,15 @@ export default async function ProfilePage() {
   return (
     <ProfileView
       memberName={member.name}
+      email={user.email ?? null}
       gym={member.gym}
+      mobileNumber={member.mobile_number}
+      gender={member.gender}
+      addressLine1={member.address_line1}
+      addressLine2={member.address_line2}
+      addressCity={member.address_city}
+      addressPostcode={member.address_postcode}
+      waiverSignedAt={member.waiver_signed_at}
       membership={membership}
       accessComplete={isAccessComplete(member)}
     />

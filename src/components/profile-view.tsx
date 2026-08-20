@@ -58,14 +58,35 @@ function ListRow({
   );
 }
 
+function formatAddress(parts: (string | null)[]) {
+  const filled = parts.filter(Boolean);
+  return filled.length > 0 ? filled.join(", ") : null;
+}
+
 export function ProfileView({
   memberName,
+  email,
   gym,
+  mobileNumber,
+  gender,
+  addressLine1,
+  addressLine2,
+  addressCity,
+  addressPostcode,
+  waiverSignedAt,
   membership,
   accessComplete,
 }: {
   memberName: string;
+  email: string | null;
   gym: string;
+  mobileNumber: string | null;
+  gender: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressPostcode: string | null;
+  waiverSignedAt: string | null;
   membership: Membership | null;
   accessComplete: boolean;
 }) {
@@ -185,6 +206,34 @@ export function ProfileView({
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Booking</h2>
             <div className="rounded-xl border border-card-light-border">
               <ListRow href="/bookings" label="Bookings" icon={DumbbellIcon} />
+            </div>
+          </section>
+
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Your details</h2>
+            <div className="space-y-3 rounded-xl border border-card-light-border p-4 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-card-light-muted">Email</span>
+                <span className="text-right font-medium">{email ?? "Not provided"}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-card-light-muted">Mobile</span>
+                <span className="text-right font-medium">{mobileNumber ?? "Not provided"}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-card-light-muted">Gender</span>
+                <span className="text-right font-medium">{gender ?? "Not provided"}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-card-light-muted">Address</span>
+                <span className="text-right font-medium">
+                  {formatAddress([addressLine1, addressLine2, addressCity, addressPostcode]) ?? "Not provided"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-card-light-muted">Waiver signed</span>
+                <span className="text-right font-medium">{waiverSignedAt ? formatDate(waiverSignedAt) : "Not signed"}</span>
+              </div>
             </div>
           </section>
 
