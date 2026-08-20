@@ -107,6 +107,12 @@ export async function POST(request: NextRequest) {
           tier_name: tier.name,
           credits_per_period: String(tier.creditsPerPeriod),
           credit_type: tier.creditType,
+          // Combo tiers only — read back by the webhook on every renewal,
+          // since credit_type is never stored on the memberships row
+          // itself. See podHq's 0042_catalog_items_combo_credits.sql.
+          ...(tier.creditsPerPeriodSecondary && tier.creditTypeSecondary
+            ? { credits_per_period_secondary: String(tier.creditsPerPeriodSecondary), credit_type_secondary: tier.creditTypeSecondary }
+            : {}),
         },
       },
       success_url: `${origin}/book?membership=success`,

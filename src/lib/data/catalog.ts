@@ -59,7 +59,7 @@ export async function getMembershipTiers(gym: string): Promise<MembershipTier[]>
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("catalog_items")
-    .select("item_id, name, label, credits, credit_type, price_gbp")
+    .select("item_id, name, label, credits, credit_type, credits_secondary, credit_type_secondary, price_gbp")
     .eq("gym", gym)
     .eq("type", "membership")
     .eq("enabled", true)
@@ -72,6 +72,8 @@ export async function getMembershipTiers(gym: string): Promise<MembershipTier[]>
     label: row.label,
     creditsPerPeriod: row.credits,
     creditType: row.credit_type,
+    creditsPerPeriodSecondary: row.credits_secondary,
+    creditTypeSecondary: row.credit_type_secondary,
     priceGBP: row.price_gbp,
   }));
 }
