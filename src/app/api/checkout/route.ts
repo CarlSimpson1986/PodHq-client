@@ -61,6 +61,10 @@ export async function POST(request: NextRequest) {
   // account. null (no connected account yet) falls back to the platform
   // account exactly as every gym behaved before Connect existed.
   const stripeAccountId = await getGymStripeAccountId(member.gym);
+  // Hove's Founding Member offer — 20% off every PAYG purchase, applied
+  // automatically here (never a code the member enters). See podHq's
+  // 0043_founding_member.sql — staff-granted only, revoked on cancel.
+  const priceGBP = member.founding_member ? pkg.priceGBP * 0.8 : pkg.priceGBP;
   const checkoutSession = await stripe.checkout.sessions.create(
     {
       mode: "payment",
@@ -70,7 +74,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
           price_data: {
             currency: "gbp",
-            unit_amount: Math.round(pkg.priceGBP * 100),
+            unit_amount: Math.round(priceGBP * 100),
             product_data: { name: `${pkg.name} — ${pkg.label}` },
           },
         },

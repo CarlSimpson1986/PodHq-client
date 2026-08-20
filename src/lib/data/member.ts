@@ -14,6 +14,10 @@ export interface Member {
   address_postcode: string | null;
   waiver_signed_name: string | null;
   waiver_signed_at: string | null;
+  // Hove's Founding Member offer — staff-granted in podHq (member profile
+  // page), never automatic here. Grants 20% off every PAYG purchase; see
+  // podHq's 0043_founding_member.sql.
+  founding_member: boolean;
 }
 
 // Gate for the physical door Unlock only (not booking/credits) — a member

@@ -336,6 +336,17 @@ export async function POST(request: NextRequest) {
     if (event.type === "customer.subscription.deleted") {
       const memberId = Number(subscription.metadata?.member_id);
       const tierName = subscription.metadata?.tier_name;
+
+      // Hove's Founding Member offer: "cancel = lose it permanently, no
+      // re-entry." Unconditional — a no-op for members who were never
+      // founding members. See podHq's 0043_founding_member.sql.
+      if (memberId) {
+        const { error: revokeError } = await admin.from("members").update({ founding_member: false }).eq("id", memberId);
+        if (revokeError) {
+          console.error("[stripe-webhook] failed to revoke founding member status", { error: revokeError.message, memberId });
+        }
+      }
+
       if (memberId && tierName) {
         const contact = await resolveMemberContact(memberId);
         if (contact) {
