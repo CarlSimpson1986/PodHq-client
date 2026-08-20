@@ -402,6 +402,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "error", message: "Could not grant credits." }, { status: 500 });
       }
 
+      // Combo memberships grant a second credit type from the same
+      // invoice — see 0042_catalog_items_combo_credits.sql (podHq repo).
+      // A distinct stripe_event_id suffix, not event.id itself: the
+      // primary insert above already claims event.id under the unique
+      // constraint, so reusing it here would collide and silently skip
+      // the secondary grant, not just guard against redelivery.
+      const secondaryCredits = Number(subscription.metadata?.credits_per_period_secondary);
+      const secondaryType = subscription.metadata?.credit_type_secondary;
+      if (secondaryCredits && secondaryType) {
+        const { error: secondaryError } = await admin.from("credits").insert({
+          member_id: memberId,
+          amount: secondaryCredits,
+          reason: "membership",
+          credit_type: secondaryType,
+          stripe_event_id: `${event.id}:secondary`,
+          stripe_payment_intent_id: paymentIntentId,
+        });
+        if (secondaryError && secondaryError.code !== "23505") {
+          console.error("[stripe-webhook] failed to grant secondary membership credits", { error: secondaryError.message });
+          return NextResponse.json({ status: "error", message: "Could not grant secondary credits." }, { status: 500 });
+        }
+      }
+
       // customer.subscription.created (above) already emails
       // membership_started, and Stripe always invoices the first period
       // too — without this gate a brand-new member would get both emails

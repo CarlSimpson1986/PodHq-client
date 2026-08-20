@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { MembershipTier } from "@/lib/membership-tiers";
+
+// Derived, not stored — same categorization podHq's Setup catalog table
+// uses (src/components/setup/catalog-view.tsx). Combo tiers (secondary
+// set) group separately regardless of their primary credit type.
+const CATEGORY_ORDER = ["Gym", "Recovery Room", "Combination"] as const;
+function categoryFor(tier: MembershipTier): (typeof CATEGORY_ORDER)[number] {
+  if (tier.creditTypeSecondary) return "Combination";
+  if (tier.creditType === "recovery") return "Recovery Room";
+  return "Gym";
+}
 
 export function BuyMembershipList({
   tiers,
@@ -13,6 +23,10 @@ export function BuyMembershipList({
 }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const categories = useMemo(() => CATEGORY_ORDER.filter((cat) => tiers.some((t) => categoryFor(t) === cat)), [tiers]);
+  const [selectedCategory, setSelectedCategory] = useState<(typeof CATEGORY_ORDER)[number] | null>(categories[0] ?? null);
+  const visibleTiers = selectedCategory ? tiers.filter((t) => categoryFor(t) === selectedCategory) : tiers;
 
   async function buy(tierId: string) {
     if (pendingId) return;
@@ -46,7 +60,25 @@ export function BuyMembershipList({
           the new one.
         </p>
       )}
-      {tiers.map((tier) => {
+      {categories.length > 1 && (
+        <div className="flex gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory(cat)}
+              className={
+                selectedCategory === cat
+                  ? "rounded-lg bg-card-light-foreground px-3 py-1.5 text-sm font-semibold text-white"
+                  : "rounded-lg border border-card-light-border px-3 py-1.5 text-sm text-card-light-muted hover:text-card-light-foreground"
+              }
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+      {visibleTiers.map((tier) => {
         const isCurrent = tier.id === currentTierId;
         return (
           <div key={tier.id} className="flex items-center justify-between rounded-xl border border-card-light-border p-5">
