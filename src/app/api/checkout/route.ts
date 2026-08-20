@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
 import { getGymStripeAccountId } from "@/lib/data/stripe-config";
 import { getCreditPackageById, hasMemberClaimedItem } from "@/lib/data/catalog";
+import { findApplicableCoupon, redeemCoupon, applyDiscount } from "@/lib/data/coupons";
 import { checkoutSchema } from "@/lib/validation/checkout";
 
 export async function POST(request: NextRequest) {
@@ -53,6 +54,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // A coupon the member typed in takes priority over the automatic
+  // Founding Member discount rather than stacking with it — an explicit
+  // code is a deliberate choice, the founding discount is passive.
+  // Claimed atomically now (before payment) via redeem_coupon() — see
+  // podHq's 0044_coupons.sql for the accepted abandoned-checkout tradeoff.
+  let priceGBP = member.founding_member ? pkg.priceGBP * 0.8 : pkg.priceGBP;
+  if (parsed.data.couponCode) {
+    const coupon = await findApplicableCoupon(member.gym, parsed.data.couponCode, pkg.catalogItemId);
+    if (!coupon) {
+      return NextResponse.json({ status: "error", message: "That coupon code isn't valid for this item." }, { status: 400 });
+    }
+    const claimed = await redeemCoupon(coupon.id, member.id, pkg.catalogItemId);
+    if (!claimed) {
+      return NextResponse.json({ status: "error", message: "That coupon has already been used or is no longer available." }, { status: 409 });
+    }
+    priceGBP = applyDiscount(pkg.priceGBP, coupon);
+  }
+
   const origin = request.nextUrl.origin;
   const stripe = getStripeClient();
   // A gym with its own Stripe Connect account (Hove onward) gets the
@@ -61,10 +80,6 @@ export async function POST(request: NextRequest) {
   // account. null (no connected account yet) falls back to the platform
   // account exactly as every gym behaved before Connect existed.
   const stripeAccountId = await getGymStripeAccountId(member.gym);
-  // Hove's Founding Member offer — 20% off every PAYG purchase, applied
-  // automatically here (never a code the member enters). See podHq's
-  // 0043_founding_member.sql — staff-granted only, revoked on cancel.
-  const priceGBP = member.founding_member ? pkg.priceGBP * 0.8 : pkg.priceGBP;
   const checkoutSession = await stripe.checkout.sessions.create(
     {
       mode: "payment",

@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
 import { getGymStripeAccountId } from "@/lib/data/stripe-config";
 import { getMembershipTierById } from "@/lib/data/catalog";
+import { findApplicableCoupon, redeemCoupon, applyDiscount } from "@/lib/data/coupons";
 import { checkoutMembershipSchema } from "@/lib/validation/checkout-membership";
 
 export async function POST(request: NextRequest) {
@@ -80,6 +81,24 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Claimed atomically now (before payment) via redeem_coupon() — see
+  // podHq's 0044_coupons.sql. Applied to the recurring price directly
+  // (every renewal, not just the first payment) — simplest behaviour,
+  // matching how the Founding Member PAYG discount already works; revisit
+  // if a first-payment-only promo is ever actually needed.
+  let priceGBP = tier.priceGBP;
+  if (parsed.data.couponCode) {
+    const coupon = await findApplicableCoupon(member.gym, parsed.data.couponCode, tier.catalogItemId);
+    if (!coupon) {
+      return NextResponse.json({ status: "error", message: "That coupon code isn't valid for this item." }, { status: 400 });
+    }
+    const claimed = await redeemCoupon(coupon.id, member.id, tier.catalogItemId);
+    if (!claimed) {
+      return NextResponse.json({ status: "error", message: "That coupon has already been used or is no longer available." }, { status: 409 });
+    }
+    priceGBP = applyDiscount(tier.priceGBP, coupon);
+  }
+
   const origin = request.nextUrl.origin;
   const checkoutSession = await stripe.checkout.sessions.create(
     {
@@ -90,7 +109,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
           price_data: {
             currency: "gbp",
-            unit_amount: Math.round(tier.priceGBP * 100),
+            unit_amount: Math.round(priceGBP * 100),
             recurring: { interval: "month" },
             product_data: { name: `${tier.name} — ${tier.label}` },
           },
