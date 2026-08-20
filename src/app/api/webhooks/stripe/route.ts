@@ -30,7 +30,11 @@ export async function POST(request: NextRequest) {
   // verify against both rather than the one shared secret originally assumed.
   const webhookSecretConnect = process.env.STRIPE_WEBHOOK_SECRET_CONNECT;
 
-  if (!signature || !webhookSecret) {
+  // Either secret alone is enough to serve requests — a gym-config with no
+  // platform endpoint yet configured (e.g. this Connect-only pilot, before
+  // any gym has a live platform-account checkout) must not 500 just because
+  // STRIPE_WEBHOOK_SECRET is unset while STRIPE_WEBHOOK_SECRET_CONNECT is.
+  if (!signature || (!webhookSecret && !webhookSecretConnect)) {
     return NextResponse.json({ status: "error", message: "Webhook not configured." }, { status: 500 });
   }
 
@@ -39,6 +43,7 @@ export async function POST(request: NextRequest) {
 
   let event: Stripe.Event;
   try {
+    if (!webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET not configured");
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch {
     if (!webhookSecretConnect) {
