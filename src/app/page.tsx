@@ -12,6 +12,7 @@ import {
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { BottomNav } from "@/components/bottom-nav";
 import { UpcomingSessionCard } from "@/components/upcoming-session-card";
+import { OnboardingTour } from "@/components/onboarding-tour";
 
 export default async function HomePage() {
   const session = await createSessionClient();
@@ -37,7 +38,7 @@ export default async function HomePage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <div className="bg-card px-6 pb-8 pt-12 sm:pt-16">
+      <div id="tour-greeting" className="bg-card px-6 pb-8 pt-12 sm:pt-16">
         <div className="mx-auto w-full max-w-md">
           <h1 className="text-2xl font-semibold text-foreground">Hello, {member.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{member.gym}</p>
@@ -59,28 +60,31 @@ export default async function HomePage() {
             </div>
           )}
 
-          {upcomingBooking ? (
-            <UpcomingSessionCard
-              booking={upcomingBooking}
-              accessComplete={isAccessComplete(member)}
-              slotDurationMinutes={resources.find((r) => r.id === upcomingBooking.resource_id)?.slotDurationMinutes ?? 60}
-            />
-          ) : (
-            <div className="rounded-xl border border-card-light-border p-5 text-center">
-              <p className="text-base font-semibold">No upcoming sessions</p>
-              <p className="mt-1 text-sm text-card-light-muted">Book a session to set your goals in motion.</p>
-              <Link
-                href="/book"
-                className="mt-3 inline-block rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
-              >
-                Book Session
-              </Link>
-            </div>
-          )}
+          <div id="tour-session-card">
+            {upcomingBooking ? (
+              <UpcomingSessionCard
+                booking={upcomingBooking}
+                accessComplete={isAccessComplete(member)}
+                slotDurationMinutes={resources.find((r) => r.id === upcomingBooking.resource_id)?.slotDurationMinutes ?? 60}
+              />
+            ) : (
+              <div className="rounded-xl border border-card-light-border p-5 text-center">
+                <p className="text-base font-semibold">No upcoming sessions</p>
+                <p className="mt-1 text-sm text-card-light-muted">Book a session to set your goals in motion.</p>
+                <Link
+                  href="/book"
+                  className="mt-3 inline-block rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
+                >
+                  Book Session
+                </Link>
+              </div>
+            )}
+          </div>
 
-          <p className="text-center text-sm text-card-light-muted">{credits} credits available</p>
+          <p id="tour-credits" className="text-center text-sm text-card-light-muted">{credits} credits available</p>
         </div>
       </div>
+      <OnboardingTour tourCompletedAt={member.tour_completed_at} />
       <BottomNav />
     </main>
   );

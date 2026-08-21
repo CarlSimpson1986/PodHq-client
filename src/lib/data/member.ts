@@ -18,6 +18,10 @@ export interface Member {
   // page), never automatic here. Grants 20% off every PAYG purchase; see
   // podHq's 0043_founding_member.sql.
   founding_member: boolean;
+  // Set once the home-screen guided tour (driver.js) has been shown —
+  // null means "never seen it", so it auto-launches once per member
+  // regardless of device, then stays off. See 0045_member_tour.sql.
+  tour_completed_at: string | null;
 }
 
 // Gate for the physical door Unlock only (not booking/credits) — a member

@@ -7,10 +7,10 @@ import { HomeIcon, DumbbellIcon, ShopIcon, UserIcon, DownloadIcon } from "@/comp
 import { useInstallPrompt } from "@/lib/use-install-prompt";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: HomeIcon },
-  { href: "/book", label: "Book", icon: DumbbellIcon },
-  { href: "/shop", label: "Shop", icon: ShopIcon },
-  { href: "/profile", label: "Profile", icon: UserIcon },
+  { href: "/", label: "Home", icon: HomeIcon, tourId: undefined },
+  { href: "/book", label: "Book", icon: DumbbellIcon, tourId: "tour-nav-book" },
+  { href: "/shop", label: "Shop", icon: ShopIcon, tourId: "tour-nav-shop" },
+  { href: "/profile", label: "Profile", icon: UserIcon, tourId: "tour-nav-profile" },
 ];
 
 // Fixed at the bottom of every member-facing page (Home/Book/Shop/Profile),
@@ -45,6 +45,7 @@ export function BottomNav() {
           return (
             <Link
               key={item.href}
+              id={item.tourId}
               href={item.href}
               className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium ${
                 active ? "text-foreground" : "text-muted-foreground"
