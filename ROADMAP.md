@@ -165,3 +165,56 @@ if a member manually replays the tour on the *same* page load where they
 just completed it for the first time, it re-fires the (idempotent, harmless)
 completion POST a second time. Not worth the added complexity of tracking
 a separate "already marked" flag for a one-extra-request edge case.
+
+**Same-day follow-up: static FAQ built, the "?" icon now a menu.** Second
+half of this session's POD work — the deferred FAQ piece, scoped down to
+a genuinely static list (no LLM, no ongoing cost) per the earlier
+discussion: build the cheap version first, only invest in a fuller RAG/
+tool-calling agent if real usage shows it's needed. Content sourced from
+the three questions Hove staff actually report members asking most
+(`src/lib/faq.ts`), not guessed — cancellation, the 2-hour booking-credit
+cutoff, and the under-16 waiver policy (the last one required reading the
+franchisee's actual waiver PDF, which turned out to be a generic adult
+waiver template that had never actually been adapted — no age threshold,
+no parent/guardian signature line. Flagged to the user directly rather
+than drafting FAQ copy off a document that didn't state the real policy;
+the real policy came from the user directly, not the document).
+
+New `/faq` page (`faq-view.tsx`, single-open accordion, same auth/
+`PageHero`/`BottomNav` pattern as every other member page), and the "?"
+button (`onboarding-tour.tsx`) is now a small menu — "Replay app tour" /
+"FAQ" — rather than immediately replaying the tour, since both now live
+behind the same icon as originally scoped. Replaying the tour from `/faq`
+navigates home and force-launches it there via a `?tour=replay` query
+param, since the tour's steps target home-screen-only elements.
+
+**Two real bugs found and fixed during live testing, not just built and
+assumed working:**
+- A hydration-mismatch/ordering bug in the `?tour=replay` handler —
+  calling `router.replace()` to strip the query param *before* the tour
+  had actually started risked a race where the URL-driven re-render
+  interfered with the pending timer. Fixed by only stripping the param
+  *after* `driver().drive()` runs, both inside the same `setTimeout`
+  callback.
+- **A stale service worker serving old JS to the browser even after
+  clearing `.next` and hard-reloading** — this app's PWA service worker
+  (`sw.js`) was still registered from an earlier local dev session, and
+  because Next dev doesn't content-hash chunk filenames the way a
+  production build does, a cache-first SW kept serving the exact same
+  chunk URL with stale bytes through every reload. Symptom was a
+  React hydration-mismatch error showing genuinely old component output
+  (the pre-menu-redesign single-button version) fighting the correctly
+  updated server-rendered HTML. Fixed for this testing session by
+  unregistering the service worker and clearing the Cache Storage
+  directly via devtools JS — not a code bug, but a real local-dev gotcha
+  worth remembering (same class of issue as Stage 28's stale-chunk note,
+  this time traced to its actual root cause rather than just "hard
+  reload fixed it").
+
+**Verified live end-to-end** via a second throwaway test member
+(`podhq-test-faq@example.com`): "?" menu opens correctly with both
+options; FAQ page renders all three questions with accurate content;
+accordion correctly shows one answer open at a time; "Replay app tour"
+from the FAQ page correctly navigates home and launches the tour there.
+Test account and scripts deleted after. `npx tsc --noEmit`, `eslint`, and
+`next build` all pass clean.

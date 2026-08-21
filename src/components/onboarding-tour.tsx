@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { driver, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
@@ -51,18 +53,26 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
     element: "#tour-help-button",
     popover: {
       title: "Need this again?",
-      description: "Tap here any time to replay this tour.",
+      description: "Tap here any time to replay this tour or browse the FAQ.",
     },
   },
 ];
 
 // Guided first-login walkthrough (driver.js). Auto-runs once per member —
 // tourCompletedAt is null until the tour finishes or is closed early, then
-// the "?" button below replays it on demand without touching that flag
-// again. v1 is deliberately scoped to the home screen only (no cross-page
-// steps) — see podhq-client's ROADMAP.md for why.
+// the "?" menu below can replay it on demand without touching that flag
+// again, or open the static FAQ (/faq) — same icon hosts both, confirmed
+// with the user this is the intended long-term home for the FAQ/chat
+// assistant idea too. v1 is deliberately scoped to the home screen only
+// (no cross-page steps) — see podhq-client's ROADMAP.md for why. A
+// `?tour=replay` query param lets other pages (the FAQ page's "Replay app
+// tour" button) ask this component to force-launch it here.
 export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | null }) {
   const driverRef = useRef<Driver | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     driverRef.current = driver({
@@ -79,6 +89,18 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
       steps: STEPS,
     });
 
+    if (searchParams.get("tour") === "replay") {
+      // Strip the query param only *after* the tour has actually started —
+      // doing it first risked a race where the URL change (and the RSC
+      // re-fetch Next.js does for it) remounted this component before the
+      // pending timer fired, silently dropping the force-launch.
+      const timer = setTimeout(() => {
+        driverRef.current?.drive();
+        router.replace("/", { scroll: false });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+
     if (tourCompletedAt === null) {
       // Let the home screen finish rendering before highlighting elements.
       const timer = setTimeout(() => driverRef.current?.drive(), 300);
@@ -87,15 +109,50 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
   return (
-    <button
-      type="button"
-      id="tour-help-button"
-      onClick={() => driverRef.current?.drive()}
-      aria-label="Replay app tour"
-      className="fixed right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground shadow-lg"
-    >
-      ?
-    </button>
+    <div ref={menuRef} className="fixed right-4 top-4 z-20">
+      <button
+        type="button"
+        id="tour-help-button"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-label="Help"
+        aria-expanded={menuOpen}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground shadow-lg"
+      >
+        ?
+      </button>
+      {menuOpen && (
+        <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-xl border border-card-light-border bg-card-light shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              driverRef.current?.drive();
+            }}
+            className="block w-full px-4 py-3 text-left text-sm font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
+          >
+            Replay app tour
+          </button>
+          <Link
+            href="/faq"
+            onClick={() => setMenuOpen(false)}
+            className="block w-full border-t border-card-light-border px-4 py-3 text-left text-sm font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
+          >
+            FAQ
+          </Link>
+        </div>
+      )}
+    </div>
   );
 }
