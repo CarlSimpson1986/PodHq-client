@@ -5,7 +5,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
 import { getGymStripeAccountId } from "@/lib/data/stripe-config";
 import { getMembershipTierById } from "@/lib/data/catalog";
-import { findApplicableCoupon, redeemCoupon, applyDiscount } from "@/lib/data/coupons";
+import { findApplicablePromoCode, redeemPromoCode, applyDiscount } from "@/lib/data/promo-codes";
 import { checkoutMembershipSchema } from "@/lib/validation/checkout-membership";
 
 export async function POST(request: NextRequest) {
@@ -81,22 +81,22 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Claimed atomically now (before payment) via redeem_coupon() — see
-  // podHq's 0044_coupons.sql. Applied to the recurring price directly
+  // Claimed atomically now (before payment) via redeem_promo_code() — see
+  // podHq's 0044_promo_codes.sql. Applied to the recurring price directly
   // (every renewal, not just the first payment) — simplest behaviour,
   // matching how the Founding Member PAYG discount already works; revisit
   // if a first-payment-only promo is ever actually needed.
   let priceGBP = tier.priceGBP;
-  if (parsed.data.couponCode) {
-    const coupon = await findApplicableCoupon(member.gym, parsed.data.couponCode, tier.catalogItemId);
-    if (!coupon) {
-      return NextResponse.json({ status: "error", message: "That coupon code isn't valid for this item." }, { status: 400 });
+  if (parsed.data.promoCode) {
+    const promoCode = await findApplicablePromoCode(member.gym, parsed.data.promoCode, tier.catalogItemId);
+    if (!promoCode) {
+      return NextResponse.json({ status: "error", message: "That promo code isn't valid for this item." }, { status: 400 });
     }
-    const claimed = await redeemCoupon(coupon.id, member.id, tier.catalogItemId);
+    const claimed = await redeemPromoCode(promoCode.id, member.id, tier.catalogItemId);
     if (!claimed) {
-      return NextResponse.json({ status: "error", message: "That coupon has already been used or is no longer available." }, { status: 409 });
+      return NextResponse.json({ status: "error", message: "That promo code has already been used or is no longer available." }, { status: 409 });
     }
-    priceGBP = applyDiscount(tier.priceGBP, coupon);
+    priceGBP = applyDiscount(tier.priceGBP, promoCode);
   }
 
   const origin = request.nextUrl.origin;

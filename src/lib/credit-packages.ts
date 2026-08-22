@@ -1,7 +1,8 @@
 export interface CreditPackage {
   id: string;
-  // catalog_items' numeric PK — needed for coupon lookups (coupon_items
-  // references this, not the text slug). See podHq's 0044_coupons.sql.
+  // catalog_items' numeric PK — needed for promo code lookups
+  // (promo_code_items references this, not the text slug). See podHq's
+  // 0044_promo_codes.sql.
   catalogItemId: number;
   name: string;
   label: string;
