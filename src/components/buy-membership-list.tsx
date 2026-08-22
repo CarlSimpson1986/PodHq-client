@@ -23,7 +23,7 @@ export function BuyMembershipList({
 }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [couponCode, setCouponCode] = useState("");
+  const [promoCode, setPromoCode] = useState("");
 
   const categories = useMemo(() => CATEGORY_ORDER.filter((cat) => tiers.some((t) => categoryFor(t) === cat)), [tiers]);
   const [selectedCategory, setSelectedCategory] = useState<(typeof CATEGORY_ORDER)[number] | null>(categories[0] ?? null);
@@ -37,7 +37,7 @@ export function BuyMembershipList({
       const res = await fetch("/api/checkout-membership", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tierId, ...(couponCode.trim() ? { couponCode: couponCode.trim() } : {}) }),
+        body: JSON.stringify({ tierId, ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}) }),
       });
       const body = await res.json();
       if (body.status !== "ok" || !body.url) {
@@ -55,11 +55,11 @@ export function BuyMembershipList({
   return (
     <div className="space-y-3">
       <div>
-        <label className="mb-1 block text-xs font-medium text-card-light-muted">Have a coupon code?</label>
+        <label className="mb-1 block text-xs font-medium text-card-light-muted">Have a promo code?</label>
         <input
           type="text"
-          value={couponCode}
-          onChange={(e) => setCouponCode(e.target.value)}
+          value={promoCode}
+          onChange={(e) => setPromoCode(e.target.value)}
           placeholder="Enter code"
           className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm uppercase text-card-light-foreground placeholder:normal-case placeholder:text-card-light-muted"
         />
