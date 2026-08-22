@@ -84,7 +84,7 @@ export function bookingCancelledEmail(input: {
 }): EmailContent {
   const refundLine = input.refunded
     ? "Your credit has been refunded."
-    : "This was within 2 hours of your session, so the credit was not refunded.";
+    : "This was within 3 hours of your session, so the credit was not refunded.";
   return {
     subject: "Booking cancelled",
     html: emailShell(`

@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { driver, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
+import { HelpChatView } from "@/components/help-chat-view";
 
 const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
   {
@@ -53,7 +52,7 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
     element: "#tour-help-button",
     popover: {
       title: "Need this again?",
-      description: "Tap here any time to replay this tour or browse the FAQ.",
+      description: "Tap here any time to replay this tour or chat with our help assistant.",
     },
   },
 ];
@@ -61,18 +60,19 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
 // Guided first-login walkthrough (driver.js). Auto-runs once per member —
 // tourCompletedAt is null until the tour finishes or is closed early, then
 // the "?" menu below can replay it on demand without touching that flag
-// again, or open the static FAQ (/faq) — same icon hosts both, confirmed
-// with the user this is the intended long-term home for the FAQ/chat
-// assistant idea too. v1 is deliberately scoped to the home screen only
-// (no cross-page steps) — see podhq-client's ROADMAP.md for why. A
-// `?tour=replay` query param lets other pages (the FAQ page's "Replay app
-// tour" button) ask this component to force-launch it here.
+// again, or open the Chat panel. v1 is deliberately scoped to the home
+// screen only (no cross-page steps) — see podhq-client's ROADMAP.md for
+// why. The static FAQ page (and its own "Replay app tour" button, which
+// used to force-launch the tour from there via a `?tour=replay` query
+// param) was removed 2026-08-22 once Chat graduated to a real LLM
+// covering the same 3 questions plus the full Ts & Cs — this is now the
+// only page with a "?" button, so that cross-page mechanism no longer has
+// a caller.
 export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | null }) {
   const driverRef = useRef<Driver | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     driverRef.current = driver({
@@ -88,18 +88,6 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
       },
       steps: STEPS,
     });
-
-    if (searchParams.get("tour") === "replay") {
-      // Strip the query param only *after* the tour has actually started —
-      // doing it first risked a race where the URL change (and the RSC
-      // re-fetch Next.js does for it) remounted this component before the
-      // pending timer fired, silently dropping the force-launch.
-      const timer = setTimeout(() => {
-        driverRef.current?.drive();
-        router.replace("/", { scroll: false });
-      }, 300);
-      return () => clearTimeout(timer);
-    }
 
     if (tourCompletedAt === null) {
       // Let the home screen finish rendering before highlighting elements.
@@ -144,13 +132,34 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
           >
             Replay app tour
           </button>
-          <Link
-            href="/faq"
-            onClick={() => setMenuOpen(false)}
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              setChatOpen(true);
+            }}
             className="block w-full border-t border-card-light-border px-4 py-3 text-left text-sm font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
           >
-            FAQ
-          </Link>
+            Chat
+          </button>
+        </div>
+      )}
+      {chatOpen && (
+        <div className="fixed inset-x-4 bottom-4 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl sm:inset-x-auto sm:right-4 sm:w-96">
+          <div className="flex items-center justify-between border-b border-card-light-border px-4 py-3">
+            <p className="text-sm font-semibold text-card-light-foreground">Chat</p>
+            <button
+              type="button"
+              onClick={() => setChatOpen(false)}
+              aria-label="Close chat"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-card-light-muted hover:bg-card-light-border"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <HelpChatView />
+          </div>
         </div>
       )}
     </div>

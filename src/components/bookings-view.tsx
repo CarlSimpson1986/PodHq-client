@@ -24,11 +24,11 @@ function slotDurationFor(resources: PodResource[], resourceId: number): number {
   return resources.find((r) => r.id === resourceId)?.slotDurationMinutes ?? 60;
 }
 
-// Cancellation policy: cancel more than 2 hours before slot_start and the
+// Cancellation policy: cancel more than 3 hours before slot_start and the
 // credit is refunded; inside that window it's forfeited. Mirrors the
 // server-side cutoff in cancel_booking() — this is just a hint shown
 // before confirming, the DB function is the real enforcement.
-const CANCELLATION_CUTOFF_MS = 2 * 60 * 60 * 1000;
+const CANCELLATION_CUTOFF_MS = 3 * 60 * 60 * 1000;
 
 // Notification.permission has no native "changed" event to subscribe to —
 // this only ever needs the current value, re-read on whatever render
@@ -327,8 +327,8 @@ export function BookingsView({
                     <div className="mt-3 rounded-lg border border-card-light-border p-3">
                       <p className="text-xs text-card-light-muted">
                         {start - now > CANCELLATION_CUTOFF_MS
-                          ? "This is more than 2 hours away, so your credit will be refunded."
-                          : "This is within 2 hours of your session, so your credit will not be refunded — you'll lose it."}
+                          ? "This is more than 3 hours away, so your credit will be refunded."
+                          : "This is within 3 hours of your session, so your credit will not be refunded — you'll lose it."}
                       </p>
                       {cancelErrors[booking.id] && (
                         <p className="mt-2 text-xs text-danger">{cancelErrors[booking.id]}</p>

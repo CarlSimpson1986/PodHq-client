@@ -17,7 +17,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "I missed my booking — can I get my credit back?",
     answer:
-      "Cancel the booking from the Bookings page more than 2 hours before your session and the credit is automatically returned. Cancelling within that 2-hour window, or not showing up, forfeits the credit.",
+      "Cancel the booking from the Bookings page more than 3 hours before your session and the credit is automatically returned. Cancelling within that 3-hour window, or not showing up, forfeits the credit.",
   },
   {
     question: "Can I bring my under-16 in?",
