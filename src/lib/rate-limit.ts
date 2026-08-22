@@ -17,7 +17,8 @@ const LIMIT_PER_MINUTE = 100;
  */
 export async function checkRateLimit(
   userId: string,
-  route: string
+  route: string,
+  limitPerMinute: number = LIMIT_PER_MINUTE
 ): Promise<{ allowed: boolean }> {
   const admin = createAdminClient();
   const windowStart = new Date();
@@ -34,5 +35,5 @@ export async function checkRateLimit(
     return { allowed: true };
   }
 
-  return { allowed: (data as number) <= LIMIT_PER_MINUTE };
+  return { allowed: (data as number) <= limitPerMinute };
 }
