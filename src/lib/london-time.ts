@@ -90,6 +90,12 @@ export function addLondonDays(instant: Date, days: number): Date {
   return londonWallTimeToUtc(year, month, day + days, 0);
 }
 
+/** `instant`'s Europe/London calendar day as a "YYYY-MM-DD" string, for a `date` column — a late-night log shouldn't silently land on the wrong day by using server-local/UTC instead. */
+export function londonDateString(instant: Date): string {
+  const { year, month, day } = londonDateParts(instant);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** The UTC instant for a specific wall-clock hour(+minute) on the same Europe/London calendar day as `dayInstant`. */
 export function londonHour(dayInstant: Date, hour: number, minute = 0): Date {
   const { year, month, day } = londonDateParts(dayInstant);

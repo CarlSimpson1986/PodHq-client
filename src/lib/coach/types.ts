@@ -62,3 +62,21 @@ export const ACTIVITY_MULTIPLIER_BY_SESSIONS_PER_WEEK: Record<number, number> = 
   5: 1.725,
   6: 1.725,
 };
+
+export const MEALS = ["breakfast", "lunch", "dinner", "snacks"] as const;
+export type Meal = (typeof MEALS)[number];
+
+export const MEAL_LABELS: Record<Meal, string> = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snacks: "Snacks",
+};
+
+// Which lookup found a logged food — recorded per entry so a diary row
+// can always say where its numbers came from. "manual" is the MyFitnessPal-
+// style "create a custom food" escape hatch, shown only when a search
+// genuinely returns nothing (Carl confirmed matching MFP's own pattern,
+// 2026-08-23) — not a general alternative to database search.
+export const FOOD_LOG_SOURCES = ["uk_food_composition", "open_food_facts_barcode", "open_food_facts_search", "manual"] as const;
+export type FoodLogSource = (typeof FOOD_LOG_SOURCES)[number];

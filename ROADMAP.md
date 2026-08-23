@@ -13,191 +13,170 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 2026-08-06); ended that scope 2026-08-16 with the multi-gym signup
 dropdown — see the archive below for the pilot-era stage detail.
 
-**Stages 1-9 (pilot mechanism proof through gift vouchers, 2026-08-05 →
-2026-08-15) have been moved to `ROADMAP-ARCHIVE.md`**, **2026-08-16
-(OWASP audit) through 2026-08-19 (the Wellness/Recovery Room slot-duration
-fix) have been moved to `ROADMAP-ARCHIVE-2.md`**, **the Stripe Connect
-Hove pilot (2026-08-19) has been moved to `ROADMAP-ARCHIVE-3.md`**, **the
-guided first-login tour and static FAQ, POD phase 1 (2026-08-21) have been
-moved to `ROADMAP-ARCHIVE-4.md`**, **POD phase 2, the real LLM chat bot
-(2026-08-22), has been moved to `ROADMAP-ARCHIVE-5.md`**, and **the Hove
-AI Coach trial beta's Stages 1-4 — trial data model through the
-onboarding/generate/log/RPE loop (2026-08-23) — have been moved to
-`ROADMAP-ARCHIVE-6.md`** — all split out to keep this file within Claude
-Code's ~15,000-character `@`-import limit. All archives are
+**Older history has been split into numbered archive files** —
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-8.md`, covering the pilot
+mechanism proof (2026-08-05) through the Nutrition/Leaderboard/Challenges
+plan's Stage 6 (2026-08-23) — all split out to keep this file within
+Claude Code's ~15,000-character `@`-import limit. All archives are
 reference-only (not auto-loaded by CLAUDE.md); check them for full
-stage-by-stage build history. This file picks up from the Hove AI Coach
-trial beta's Stage 5 (2026-08-23) and is the active, auto-loaded log
-going forward. If this file grows too large again, split it the same way
-into a numbered `ROADMAP-ARCHIVE-7.md`, leave a pointer note at the top
-of this file, and update this paragraph plus `CLAUDE.md`'s
+stage-by-stage build history, or `git log` on this file for the exact
+split points. This file picks up from Stage 7 of the Nutrition/
+Leaderboard/Challenges plan (2026-08-23) and is the active, auto-loaded
+log going forward. If this file grows too large again, split it the same
+way into a numbered `ROADMAP-ARCHIVE-9.md`, leave a pointer note at the
+top of this file, and update this paragraph plus `CLAUDE.md`'s
 session-handoff guidance to match.
 
-## Hove AI Coach trial beta, Stage 5 — 2026-08-23
+## Hove AI Coach — Nutrition, Leaderboard & Challenges, Stage 7 — 2026-08-23
 
-Closes out the plan's remaining polish stage after Stage 4 shipped the
-core trial→onboarding→generate→log→RPE→adjust loop (see
-`ROADMAP-ARCHIVE-6.md`). Carl reviewed the shipped loop live and asked
-for three more things: (1) a workout overview screen plus a demonstration
-image per exercise, (2) a meal-frequency selector instead of free-text
-entry, (3) a dedicated "Coach" hub tab consolidating stats/workouts/
-nutrition/integrations/challenges — "almost like a separate app in the
-main app" — matching the original brief's 5-tab nav spec exactly. Full
-plan agreed via Plan Mode before building
-(`C:\Users\carls\.claude\plans\fluffy-sparking-fox.md`).
+Continues the plan agreed via Plan Mode
+(`C:\Users\carls\.claude\plans\fluffy-sparking-fox.md`) after Stage 6
+shipped deterministic nutrition targets (Harris-Benedict BMR, activity
+multiplier, calorie/macro targets with safety floors — see
+`ROADMAP-ARCHIVE-8.md`). Four stages total: 6 (done), 7 (food search +
+logging, this entry), 8 (leaderboard), 9 (challenges, podHq admin +
+podhq-client member). Separately, YouTube-embed architecture for
+per-exercise technique videos was also built this session (CSP
+`frame-src` allowance for `youtube-nocookie.com`, a `youtubeVideoId?`
+field on `CatalogExercise`, `workout-view.tsx` embeds it when set and
+falls back to the existing auto-loop photos otherwise) — Carl is picking
+the actual 11 video links to fill in.
 
-**Real discrepancy found before building, not assumed away**: the brief
-claims exercise "GIFs from ExerciseDB open source GitHub repo
-(yuhonas/free-exercise-db)." Checked the actual repo directly (Unlicense,
-public domain) — it provides exactly two static JPGs per exercise (start/
-end position), not an animated GIF. Self-hosted the matched pair per
-catalog exercise under `public/exercises/<key>/{0,1}.jpg` and built a
-tap-to-toggle image rather than fabricating a fake GIF from two frames.
+**Real correction from Carl, before any Stage 7 code was written**: "why
+USDA? what about in England?" — a fair challenge to the Stage 6 plan's
+USDA FoodData Central fallback (US-focused) for a UK gym's members.
+Researched real alternatives rather than defending the original choice:
+**Public Health England's own McCance & Widdowson's Composition of Foods
+Integrated Dataset (CoFID)** is a free government dataset (~2,850 usable
+foods after dropping rows missing a name or one of the four macros this
+app needs, out of ~2,890 total) covering exactly this need — no live API
+exists for it (it's a downloadable spreadsheet from
+gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid),
+so it's imported **once** into a new `uk_food_composition` table
+(`podHq/supabase/migrations/0052_uk_food_composition.sql` +
+`0053_uk_food_composition_seed.sql`, generated from the real 2021 xlsx
+via a throwaway parse script, spot-checked against known values —
+grilled chicken breast 148kcal/100g, raw banana 81kcal/100g, both correct)
+rather than called live. This is a genuine architecture improvement, not
+just a UK-flavoured substitute: zero rate-limit risk, zero API-key
+dependency, zero third-party outage risk for the generic-food half of
+search, and it drops the earlier "Carl needs a USDA key" action item
+entirely. Open Food Facts stays as the search fallback for branded/
+packaged UK products (real Tesco/Sainsbury's/Asda coverage confirmed live
+against the real API before writing the client code), plus a direct
+barcode-lookup endpoint that doesn't touch OFF's rate-limited search path
+at all.
 
-**Real equipment correction, mid-build**: Carl supplied Hove's actual pod
-equipment — dumbbells, a cable machine, a power rack with barbell and
-weights, and a leg extension/lying leg curl machine (no chest-press
-machine, kettlebell, or leg-press machine, all of which the placeholder
-catalog had wrongly assumed). `src/lib/coach/exercise-catalog.ts` rebuilt
-to an 11-exercise catalog matching exactly what's really there.
+**Second real correction, same message**: "the UX needs upgrading looks
+very basic — I want it to mimic my fitness pal or nutracheck." Stage 6's
+plain number-card page was deliberately minimal per the original plan,
+but Carl's ask reshaped Stage 7 into a proper diary, not a bigger version
+of the same cards: a calorie ring (consumed/remaining, MFP's signature
+layout) with protein/carbs/fat progress bars underneath; four meal
+sections (Breakfast/Lunch/Dinner/Snacks — `food_log_entries` gained a
+`meal` column) each with their own subtotal and "+ Add" action; an
+add-food sheet with three tabs — **Recent** (the member's own most-
+recently-logged distinct foods, reconstructed to per-100g values so a
+different quantity can be logged next time, one-tap re-log), **Search**
+(debounced 400ms/min-3-chars, CoFID first then Open Food Facts fallback),
+and **Scan** (barcode via the browser's `BarcodeDetector` API against the
+device camera, direct Open Food Facts product lookup — gracefully hidden
+on browsers without `BarcodeDetector`, e.g. Safari/iOS, with Search
+always available as the real fallback, not a broken control left
+visible).
 
-**Stage 5a built**: `workout-view.tsx` gained an `"overview"` phase
-(lists every exercise with muscle group and sets×reps before starting)
-between `"intro"` and the first active exercise; `coach-onboarding-form.tsx`'s
-free-text "meals per day" input became a button-grid selector (2/3/4/5/
-6+), matching the existing sessions-per-week pattern exactly.
+**Built**: `src/lib/nutrition/food-search.ts` (CoFID via `ilike`, Open
+Food Facts search/barcode fallback, 24h in-memory cache — flagged in code
+as weaker than it looks on Vercel's per-instance serverless model, with
+a documented next step if 429s show up in logs). `src/lib/coach/food-log.ts`
+(log/delete/day-totals/recent-foods, denormalized calories/macros at log
+time, same reasoning as `workout_exercises`). Five new
+`/api/member/nutrition/*` routes (food-search, barcode/[barcode], recent,
+log, log/[id] DELETE, day), all IDOR-guarded on delete, all on a tighter
+20/min rate limit for food-search specifically (defense in depth
+alongside the client debounce, protecting OFF's real shared 10/min search
+budget). New `NutritionView` client component replaces Stage 6's static
+cards entirely.
 
-**Stage 5b built**: new `SparkleIcon` (`icons.tsx`) and a 5th `bottom-nav.tsx`
-entry (`/coach`, distinct from the `DumbbellIcon` already used for Book/
-AI-Coach visuals). New `src/app/coach/page.tsx` hub page: full-detail
-status card for all 5 trial states (reusing `getCoachHomeState()`),
-today's-workout action, a "Recent workouts" list
-(`getWorkoutHistory`/`getRecentCompletedSessions` in `coach-profile.ts` /
-`workout-session.ts`), and three honest "coming soon" placeholders
-(Nutrition, Tech integrations — explicitly explains HealthKit/Health
-Connect are native-only per the brief's own §3, Challenges) rather than
-faking output for features not yet built. Home's `ai-coach-section.tsx`
-trimmed to a slim status pointer for `trial_active`/`subscriber` states
-(props reduced to just `{ state }`) now that the Coach tab is the
-dedicated space — avoids duplicating the full action set in two places.
+**Real lint catch, not shipped broken**: three `react-hooks/set-state-in-effect`
+errors from calling `setState` synchronously inside `useEffect` bodies
+(the day-load effect's `setLoading(true)` running before its first
+`await`, a debounce branch's early `setResults([])`, and the barcode
+tab's mount-time support check) — fixed with the same `queueMicrotask`
+deferral podHq's own `promo-codes-view.tsx` already uses for its
+load-on-prop-change effect, plus moving the barcode-support check to a
+lazy `useState` initializer instead of an effect entirely.
 
-**Verified live** via a throwaway member click-through: overview screen
-listed the correct 4 exercises with accurate sets×reps; meal-frequency
-grid submitted correctly; Coach tab rendered and highlighted correctly in
-the bottom nav; hub showed accurate trial state and correct recent-
-workout volume; Home's trimmed card linked correctly into the tab.
-`npx tsc --noEmit`, `eslint`, `npx vitest run`, and `next build` all
-passed clean.
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (32/32
+passing — Stage 6's targets tests still green, no regressions), and
+`next build` all passed clean, including all 5 new API routes and
+`/coach/nutrition` registering correctly. Open Food Facts' real search
+and barcode-lookup endpoints were hit directly (not mocked) to confirm
+the actual field names before writing `food-search.ts` against them.
+CoFID's real 2021 dataset was downloaded from the live gov.uk URL,
+parsed, and spot-checked before committing the seed migration.
 
-**Same-day follow-up, three real corrections from live review, not
-assumed-good after Stage 5a/5b's own verification passed:**
+**Carl ran the three migrations, then asked two more real questions
+before calling it done**: "what happens if something isn't in there?"
+and, once told there was no fallback for a genuinely-missing food, "what
+does MyFitnessPal use?" — researched MFP's actual behaviour rather than
+guessing (a "Create a new food" option on empty search results, saved for
+reuse) and matched it: `FOOD_LOG_SOURCES` gained a `"manual"` value, a
+"Create a custom food" prompt appears under an empty search, and a
+persistent **Custom** tab (not just a not-found fallback) sits alongside
+Recent/Search/Scan — feeds the same per-100g fields into the existing
+`QuantityStep`, no new logging path needed. Custom entries also show up
+under Recent afterwards, same as any other logged food.
 
-1. **Body stats wrongly marked optional.** Carl asked directly why
-   weight/height/age were optional in onboarding given TDEE needs them,
-   and whether body fat % or activity level were missing instead.
-   Checked the actual formula before answering either way: Harris-
-   Benedict BMR (what this app will use) needs weight/height/age/gender,
-   not body fat % (that's Katch-McArdle, a different formula, not needed
-   here) — so body fat %/activity level were correctly excluded, but
-   marking the three real inputs "Optional" was a genuine bug, not a
-   deliberate simplification. Fixed: `coachProfileSchema`
-   (`src/lib/validation/coach-profile.ts`) — `weightKg`/`heightCm`/`age`
-   changed from optional to required numbers; `CoachProfileInput`
-   (`coach-profile.ts`) same; the API route
-   (`api/member/coach-profile/route.ts`) drops its `?? null` fallbacks;
-   `coach-onboarding-form.tsx` step 5's `canAdvance` now requires all
-   three fields non-empty before Continue enables, and its copy changed
-   from "Optional — helps personalise your plan further" to "Needed to
-   work out your daily energy needs once nutrition guidance is
-   available."
-2. **Exercise images required a tap; Carl asked for automatic motion.**
-   `workout-view.tsx` gained an auto-loop `useEffect` (900ms interval,
-   swaps between the two frames, restarts cleanly on exercise change,
-   only runs during the `"active"` phase) so the demonstration reads as
-   continuous motion without requiring interaction — the manual tap
-   still works as a fallback, the caption prompting it was removed.
-3. **No technique/safety guidance per exercise.** Added a `safetyTip`
-   field to every `CatalogExercise` entry — hardcoded, human-reviewed
-   text, deliberately never LLM-generated, same non-negotiable principle
-   already applied to RPE-driven weight progression (`generate-workout.ts`):
-   nothing carrying real physical injury risk gets left to an LLM to
-   improvise. Rendered under the image on the active-exercise screen via
-   a new `getSafetyTip(key)` helper.
+**Second real question, same message**: "how do we get a bar code
+scanner?" — surfaced a gap in the original `BarcodeDetector`-based Scan
+tab that hadn't been stated plainly enough: Safari/iOS implements
+`BarcodeDetector` nowhere, meaning roughly half of UK mobile members
+would silently never see a working scanner. Researched real cross-browser
+alternatives rather than defending the original choice — replaced it with
+`html5-qrcode` (decodes frames itself via canvas, not a native browser
+API, so it works the same on iOS Safari/Android Chrome/desktop),
+dynamically imported so its ~230KB isn't in the main bundle for members
+who never open Scan. **Real bug found while wiring it up**: typing the
+scanner ref as `useRef<import("html5-qrcode").Html5Qrcode | null>` —
+an inline type-only import of a dynamically-imported package — broke
+Next's client-component boundary transform; `NutritionView`'s own import
+resolved to `Promise<undefined>` at render time (a confusing "lazy
+element type" error with no connection to barcode scanning on its face).
+Fixed by typing the ref structurally (`{ stop: () => Promise<void> }`)
+instead of importing the package's type.
 
-**Verified live end-to-end**, a fourth throwaway member walked through
-onboarding → booking → workout: Continue on onboarding step 5 correctly
-stayed disabled until weight/height/age were all filled, then enabled;
-the exercise image visibly auto-switched between start/end position
-across two screenshots one second apart with no click; the correct
-safety tip ("Keep your chest up and core braced. Push through your heels
-and don't let your knees cave inward.") rendered under the Barbell Squat
-image. Test member/booking/session data deleted after.
-`npx tsc --noEmit`, `eslint`, `npx vitest run` (24/24 passing), and
-`next build` all passed clean on this final pass too.
-
-This closes out the full 5-stage Hove AI Coach trial beta plan.
-
-## Hove AI Coach — Nutrition, Leaderboard & Challenges, Stage 6 — 2026-08-23
-
-New multi-stage addition after Carl asked to finish "the whole journey
-including nutrtion and calorie counting and challenge/leader board." Full
-plan agreed via Plan Mode
-(`C:\Users\carls\.claude\plans\fluffy-sparking-fox.md`), pressure-tested
-by a Plan agent before building — real corrections came out of that pass
-(see below), the same "verify before trusting a draft" discipline this
-project has applied throughout. Four stages: 6 (nutrition targets,
-today's work), 7 (food search + logging), 8 (leaderboard), 9 (challenges,
-podHq admin + podhq-client member). Separately, YouTube-embed
-architecture for per-exercise technique videos was also built this
-session (CSP `frame-src` allowance for `youtube-nocookie.com`, a
-`youtubeVideoId?` field on `CatalogExercise`, `workout-view.tsx` embeds it
-when set and falls back to the existing auto-loop photos otherwise) —
-Carl is picking the actual 11 video links to fill in.
-
-**Stage 6 — nutrition targets, pure deterministic math, no logging yet.**
-`src/lib/coach/nutrition-targets.ts`: Harris-Benedict BMR (the formula
-the brief specifies; documented as a known overestimate vs. Mifflin-St
-Jeor for a general population, a revisitable spec choice not a silent
-default), activity multiplier derived from `sessions_per_week` (1-2→1.375,
-3-4→1.55, 5-6→1.725 — deliberately no "sedentary" tier since the schema
-guarantees `sessions_per_week >= 1`), goal-based calorie adjustment
-(weight_loss −500, muscle_gain +300, fitness/strength maintenance),
-protein reusing the existing 1.8g/kg constant unchanged, fat as 27.5% of
-the calorie target (not a flat g/kg — matches actual ISSN/DGE guidance),
-carbs as the remainder. Two new safety constants in `types.ts`:
-`CALORIE_TARGET_FLOOR = 1200` (a lighter member on an aggressive deficit
-could otherwise land below the general medical-supervision-free floor —
-same bug shape as the earlier "wrongly marked optional" mistake, caught
-before shipping this time) and a defensive `Math.max(0, carbsG)` floor for
-the theoretical edge where protein+fat could otherwise exceed a
-floor-clamped calorie target.
-
-**Real correction from the Plan-agent pressure-test, not shipped as
-originally drafted**: fat was originally drafted as a flat 0.8g/kg,
-mirroring the protein constant's style — wrong basis. Sports-nutrition
-guidance specifies fat as a % of energy intake, not a bodyweight ratio;
-a flat g/kg number independent of the calorie target could drive carbs
-negative for a heavier member on a deficit. Changed to 27.5% of the
-calorie target before writing any code.
-
-**Built**: `/coach/nutrition` (same `hasPremium` + `coachProfile` gate as
-`/workout/[bookingId]`) shows the four computed targets — no search/
-logging yet, that's Stage 7. Coach hub's Nutrition placeholder card now
-links here instead of saying "coming soon."
-
-**Verified**: 8 new unit tests (`nutrition-targets.test.ts`) — both
-gender formulas, null/"Prefer not to say" averaging, all three activity
-tiers, each goal's adjustment, the calorie floor actually clamping, and a
-deliberately synthetic extreme (age=1000, beyond any real zod-validated
-input) proving the carbs defensive floor never goes negative. Live
-click-through via a throwaway member with a hand-picked profile
-(80kg/180cm/30/Male/4 sessions/fitness) confirmed the on-screen numbers
-matched the hand-calculated and unit-tested values exactly: 2,873 kcal /
-144g protein / 377g carbs / 88g fat. `npx tsc --noEmit`, `eslint`,
-`npx vitest run` (32/32 passing), and `next build` all passed clean. Test
+**Verified live end-to-end** via a throwaway member (gender Female,
+65kg/165cm/28/3 sessions/fitness — targets hand-checked: 2,230kcal/117g
+protein/287g carbs/68g fat, all matched exactly): searched a real CoFID
+food ("porridge oats, unfortified", 381kcal/100g, matching the earlier
+spot-check), logged 50g, confirmed the quantity-scaled macros and the
+day's calorie ring/macro bars updated correctly against the real
+unrounded per-100g values (10.9g protein × 0.5 → 5.45g, not naively
+rounded from the already-rounded 11g shown per 100g); deleted it,
+confirmed totals reset to zero; created a custom food ("Carl's Homemade
+Chicken Curry", 180/15/8/10), logged it, confirmed it appeared correctly
+under Lunch and under Recent for reuse; opened Scan and confirmed
+`html5-qrcode` loads and starts without crashing, correctly showing a
+graceful "Camera access denied or unavailable" message with no real
+camera attached to the test environment — a genuine physical-camera scan
+still needs testing on a real device, the one piece automated
+verification can't cover. `npx tsc --noEmit`, `eslint`, `npx vitest run`
+(32/32), and `next build` all passed clean on this final pass too. Test
 member and scratch scripts deleted after.
 
-**Action items only Carl can do, ahead of Stage 7**: sign up for a free
-USDA FoodData Central API key and add `USDA_FDC_API_KEY` to `.env.local`;
-pick a contact string for the Open Food Facts `User-Agent` header;
-confirm (or override) the 1200kcal safety floor.
+**Minor known rounding quirk, not fixed**: the pre-log quantity preview
+rounds from the food's live unrounded per-100g values, while the stored
+entry rounds to one decimal place first, then displays round to whole
+numbers — occasionally shows a 1g/1kcal difference between the preview
+and what's saved (e.g. previewed as 5g protein, stored/displayed as 6g).
+Never off by more than rounding noise; not worth the complexity of a
+single shared rounding path for this beta.
+
+This closes out Stage 7. Coach hub's Nutrition card already links to a
+fully working diary, not just targets.
+
+**Action item only Carl can do, still open**: pick a contact string for
+the Open Food Facts `User-Agent` header (`OPEN_FOOD_FACTS_CONTACT` env
+var — falls back to an honest placeholder if unset, so this isn't
+blocking, just recommended before real member traffic hits it).
