@@ -3,22 +3,22 @@ import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, hasPremium, getNextUpcomingBooking } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
-import { getRecentCompletedSessions } from "@/lib/coach/workout-session";
+import { getExercisePerformanceHistory } from "@/lib/coach/exercise-performance";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { CoachBottomNav } from "@/components/coach-bottom-nav";
 import { DumbbellIcon } from "@/components/icons";
 import { SectionHeading } from "@/components/coach-section";
+import { ExerciseTrendChart } from "@/components/exercise-trend-chart";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" });
-}
-
-// The Workout tab — full session history, moved out of the Dashboard
-// (Stage 10a had this as a "Workouts" section there) once the Coach
-// section got its own dedicated nav. Same hasPremium + coachProfile gate
+// The Training tab — renamed from "Workout" and reworked (Carl's call,
+// 2026-08-23, mid-session): the flat chronological session list read as
+// less useful than seeing actual progress, so it's replaced with a
+// week-by-week peak-weight graph per exercise instead — the same signal
+// generate-workout.ts's RPE-driven adjustments are already tracking
+// under the hood, just made visible. Same hasPremium + coachProfile gate
 // as every other Coach page.
-export default async function CoachWorkoutPage() {
+export default async function CoachTrainingPage() {
   const session = await createSessionClient();
   const {
     data: { user },
@@ -42,14 +42,14 @@ export default async function CoachWorkoutPage() {
     redirect("/coach-onboarding");
   }
 
-  const [upcomingBooking, recentSessions] = await Promise.all([
+  const [upcomingBooking, performanceHistory] = await Promise.all([
     getNextUpcomingBooking(member.id),
-    getRecentCompletedSessions(member.id, 20),
+    getExercisePerformanceHistory(member.id),
   ]);
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Workout" subtitle="Your training history" icon={DumbbellIcon} iconHref="/profile" />
+      <PageHero title="Training" subtitle="Your progress" icon={DumbbellIcon} iconHref="/profile" />
       <div className="card-light flex-1 space-y-8 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-8">
           <section>
@@ -71,21 +71,15 @@ export default async function CoachWorkoutPage() {
           </section>
 
           <section>
-            <SectionHeading>History</SectionHeading>
-            {recentSessions.length === 0 ? (
-              <p className="text-sm text-card-light-muted">Complete your first session to see it here.</p>
+            <SectionHeading>Progress by exercise</SectionHeading>
+            {performanceHistory.length === 0 ? (
+              <p className="text-sm text-card-light-muted">Complete a few sessions to see your progress here.</p>
             ) : (
-              <ul className="space-y-2">
-                {recentSessions.map((s) => (
-                  <li key={s.sessionId} className="flex items-center justify-between rounded-lg border border-card-light-border p-4">
-                    <div>
-                      <p className="text-sm font-semibold">{formatDate(s.createdAt)}</p>
-                      <p className="text-xs text-card-light-muted">{s.muscleGroups.join(", ")}</p>
-                    </div>
-                    <p className="text-sm text-card-light-muted">{Math.round(s.totalVolumeKg)}kg</p>
-                  </li>
+              <div className="space-y-4">
+                {performanceHistory.map((performance) => (
+                  <ExerciseTrendChart key={performance.exerciseKey} performance={performance} />
                 ))}
-              </ul>
+              </div>
             )}
           </section>
         </div>

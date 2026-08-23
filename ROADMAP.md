@@ -199,3 +199,42 @@ Same-day, mid-build: Carl asked for two more Coach-section changes —
 renaming the Workout tab to "Training" and replacing its flat
 chronological history list with a week-by-week performance graph per
 exercise. Picked up immediately after this stage; see the next entry.
+
+## Hove AI Coach — Training Tab Rework — 2026-08-23
+
+`/coach/workout` renamed to `/coach/training` (route, nav label, and page
+title all moved together — pre-launch, no external links to break). The
+flat chronological "History" list is gone, replaced with a real
+week-by-week peak-weight graph per exercise: `src/lib/coach/exercise-performance.ts`
+(new — 8-week window, follows `getRecentCompletedSessions`'s exact
+three-query batching shape, buckets by London-midnight-normalized day
+counts so a late-Sunday-night session lands in a consistent week bucket
+regardless of time-of-day/DST, same convention as `checkin-state.ts`'s
+`daysBetweenMidnights`) and `ExerciseTrendChart`
+(`src/components/exercise-trend-chart.tsx` — a small hand-rolled SVG bar
+chart, no charting-library dependency added for an 8-bar sparkline,
+matching how this app avoids extra packages where plain markup does the
+job). The metric is peak weight lifted per exercise per week — the same
+signal `generate-workout.ts`'s RPE-driven adjustments are already
+optimising session to session, just made visible instead of hidden.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (40/40),
+`next build` all clean (the deleted `/coach/workout` route's stale
+generated Next types needed a `.next` cache clear + dev-server restart
+to actually disappear from `tsc`'s output — a real gotcha, not a false
+alarm, worth remembering for any future route rename). Live-verified via
+the playground member's real 2 months of seeded data: Training tab shows
+correct climbing bar charts per exercise (Barbell Bench Press → 42.5kg,
+Barbell Squat → 40kg, matching the RPE-driven progression the seed script
+itself simulated), nav bar correctly relabelled "Training" and
+highlighted active.
+
+Carl also raised program periodization mid-build — rotating exercise
+selection/rep ranges every ~12 weeks to avoid plateaus and keep
+engagement, with a countdown to the change and a suggested "shift or
+keep" rather than an automatic switch — plus a direct, important
+question: is it actually responsible for an algorithm to autonomously
+escalate training difficulty with no human in the loop? Real design
+question, not yet built — needs its own focused pass given it touches
+`generate-workout.ts` itself (the most safety-sensitive part of this
+app) rather than being a UI change like the two above.
