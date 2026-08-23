@@ -4,12 +4,20 @@ import { TrialBanner } from "@/components/trial-banner";
 import { DumbbellIcon } from "@/components/icons";
 
 // Renders the home screen's AI Coach area per the state derived by
-// getCoachHomeState(). Stage 3/4 (workout generation, RPE, session data)
-// aren't built yet — trial_active and subscriber deliberately don't show
-// fabricated stats (streaks, PBs) here, just accurate status and the next
-// real action (book a session). See ROADMAP.md's "Hove AI Coach trial
-// beta" entry.
-export function AICoachSection({ state }: { state: CoachHomeState }) {
+// getCoachHomeState(). trial_active/subscriber show a real "View my
+// workout" link once both a coach profile exists and there's a booking to
+// generate one against (Stage 4) — otherwise they point at whichever step
+// is actually missing, never a dead end. See ROADMAP.md's "Hove AI Coach
+// trial beta" entry.
+export function AICoachSection({
+  state,
+  hasCoachProfile,
+  upcomingBookingId,
+}: {
+  state: CoachHomeState;
+  hasCoachProfile: boolean;
+  upcomingBookingId: number | null;
+}) {
   switch (state.kind) {
     case "no_trial":
       return <TrialBanner />;
@@ -33,9 +41,7 @@ export function AICoachSection({ state }: { state: CoachHomeState }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-warning">
             AI Coach · Trial · {state.daysRemaining} {state.daysRemaining === 1 ? "day" : "days"} remaining
           </p>
-          <p className="mt-2 text-sm text-card-light-muted">
-            Your personalised workout is ready when you book your next session.
-          </p>
+          <CoachAction hasCoachProfile={hasCoachProfile} upcomingBookingId={upcomingBookingId} />
           <Link
             href="/buy-membership"
             className="mt-3 inline-block text-sm font-semibold text-card-light-foreground underline"
@@ -65,10 +71,40 @@ export function AICoachSection({ state }: { state: CoachHomeState }) {
       return (
         <div className="rounded-xl border border-card-light-border p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-success">{state.tierName} member</p>
-          <p className="mt-2 text-sm text-card-light-muted">
-            Your AI Coach is ready — book a session to get your next personalised workout.
-          </p>
+          <CoachAction hasCoachProfile={hasCoachProfile} upcomingBookingId={upcomingBookingId} />
         </div>
       );
   }
+}
+
+// Shared by trial_active/subscriber — three real states, not fabricated
+// ones: set up the profile, book a session, or go do today's workout.
+function CoachAction({ hasCoachProfile, upcomingBookingId }: { hasCoachProfile: boolean; upcomingBookingId: number | null }) {
+  if (!hasCoachProfile) {
+    return (
+      <>
+        <p className="mt-2 text-sm text-card-light-muted">Answer a few quick questions to set up your AI Coach.</p>
+        <Link
+          href="/coach-onboarding"
+          className="mt-3 inline-block rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+        >
+          Set up my AI Coach
+        </Link>
+      </>
+    );
+  }
+  if (upcomingBookingId) {
+    return (
+      <>
+        <p className="mt-2 text-sm text-card-light-muted">Your personalised workout is ready.</p>
+        <Link
+          href={`/workout/${upcomingBookingId}`}
+          className="mt-3 inline-block rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+        >
+          View my workout
+        </Link>
+      </>
+    );
+  }
+  return <p className="mt-2 text-sm text-card-light-muted">Book a session to get your next personalised workout.</p>;
 }

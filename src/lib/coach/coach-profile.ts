@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Goal, ExperienceLevel } from "@/lib/coach/types";
+import type { Goal, ExperienceLevel, FoodPreference } from "@/lib/coach/types";
 
 export interface CoachProfile {
   id: number;
@@ -12,6 +12,13 @@ export interface CoachProfile {
   weight_kg: number | null;
   height_cm: number | null;
   age: number | null;
+  // Collected up front alongside the fitness questions (Carl's call,
+  // 2026-08-23: one onboarding pass, not a second one when nutrition
+  // itself ships) — unused by generate-workout.ts, waiting for that
+  // future feature.
+  meal_count_preference: number | null;
+  food_allergies: string | null;
+  food_preferences: FoodPreference | null;
 }
 
 // Same session-verified-first, admin-client-second pattern as every other
@@ -23,6 +30,45 @@ export async function getCoachProfile(memberId: number): Promise<CoachProfile | 
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+export interface CoachProfileInput {
+  goal: Goal;
+  experienceLevel: ExperienceLevel;
+  injuries: string | null;
+  sessionsPerWeek: number;
+  weightKg: number | null;
+  heightCm: number | null;
+  age: number | null;
+  mealCountPreference: number | null;
+  foodAllergies: string | null;
+  foodPreferences: FoodPreference | null;
+}
+
+// One-shot onboarding submission — no partial-save concept (unlike the
+// /access flow's per-step pages), since a coach profile isn't useful to
+// read until every field is answered.
+export async function createCoachProfile(memberId: number, input: CoachProfileInput): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("coach_profiles").upsert(
+    {
+      member_id: memberId,
+      goal: input.goal,
+      experience_level: input.experienceLevel,
+      injuries: input.injuries,
+      sessions_per_week: input.sessionsPerWeek,
+      weight_kg: input.weightKg,
+      height_cm: input.heightCm,
+      age: input.age,
+      meal_count_preference: input.mealCountPreference,
+      food_allergies: input.foodAllergies,
+      food_preferences: input.foodPreferences,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "member_id" }
+  );
+
+  if (error) throw new Error(error.message);
 }
 
 export interface ExerciseHistoryEntry {
@@ -68,7 +114,7 @@ export async function getWorkoutHistory(
   const exerciseIds = exercises.map((e) => e.id);
   const { data: sets, error: setsError } = await admin
     .from("workout_sets")
-    .select("exercise_id, weight_target_kg, rpe, completed_at")
+    .select("exercise_id, set_number, weight_target_kg, rpe, completed_at")
     .in("exercise_id", exerciseIds)
     .not("completed_at", "is", null);
 
@@ -76,20 +122,30 @@ export async function getWorkoutHistory(
 
   // Most recent completed set per exercise_key. sessionOrder ranks
   // sessions[0] (newest, since sessions is ordered descending by
-  // created_at) as 0 — lower rank wins. Tracked in a parallel map since
-  // ExerciseHistoryEntry itself doesn't carry a rank.
+  // created_at) as 0 — lower rank wins. Within the SAME session, multiple
+  // sets share a rank (3 sets per exercise), so set_number breaks the tie
+  // toward the highest — RPE is only ever recorded on the last set of an
+  // exercise (matching Zing's own "how difficult was that set" placement,
+  // confirmed once per exercise not per set), so picking an earlier set
+  // at the same rank would silently read lastRpe as null even though it
+  // was actually recorded. Tracked in parallel maps since
+  // ExerciseHistoryEntry itself doesn't carry a rank/set_number.
   const sessionOrder = new Map(sessions.map((s, i) => [s.id, i]));
   const exerciseById = new Map(exercises.map((e) => [e.id, e]));
   const latestByKey = new Map<string, ExerciseHistoryEntry>();
   const bestRankByKey = new Map<string, number>();
+  const bestSetNumberByKey = new Map<string, number>();
 
   for (const set of sets ?? []) {
     const exercise = exerciseById.get(set.exercise_id);
     if (!exercise) continue;
     const thisRank = sessionOrder.get(exercise.session_id) ?? Infinity;
     const bestRank = bestRankByKey.get(exercise.exercise_key) ?? Infinity;
-    if (thisRank < bestRank) {
+    const bestSetNumber = bestSetNumberByKey.get(exercise.exercise_key) ?? -1;
+    const isBetter = thisRank < bestRank || (thisRank === bestRank && set.set_number > bestSetNumber);
+    if (isBetter) {
       bestRankByKey.set(exercise.exercise_key, thisRank);
+      bestSetNumberByKey.set(exercise.exercise_key, set.set_number);
       latestByKey.set(exercise.exercise_key, {
         exerciseKey: exercise.exercise_key,
         lastWeightKg: set.weight_target_kg,

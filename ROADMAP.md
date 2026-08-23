@@ -160,5 +160,67 @@ history, not just synthetic fixtures) — deleted after, per this project's
 established pattern. `npx tsc --noEmit`, `eslint`, `npx vitest run`
 (24/24 passing), and `next build` all pass clean.
 
-Stage 4 (workout-generation API route + active-session UI + RPE capture +
-session summary) is next.
+## Hove AI Coach trial beta, Stage 4 — 2026-08-23
+
+**Real gap found before building, not during**: nothing in Stages 1-3 let
+a member actually answer the coach-onboarding questions — the plan's
+Stage 3/4 split assumed a `coach_profiles` row existed by the time
+workout generation ran. Folded a minimal onboarding flow into Stage 4 as
+a hard prerequisite, not scope creep.
+
+**Onboarding scope changed mid-session, deliberately.** Originally scoped
+to ask nutrition questions separately, later, when the nutrition feature
+itself ships (avoiding friction on this beta's actual metric — trial
+activation). User overrode this: "all onboarding should be done at once."
+Added meal count/food allergies/dietary preference to the same pass
+(`0050_coach_profiles_nutrition.sql`), and simplified nutrition scope at
+the same time — dropped the brief's post-workout protein-timing window
+and training-day carb cycling entirely (well-supported by current
+literature, not just simpler: total daily protein matters far more than
+timing precision once you're past competitive-athlete territory). Daily
+protein target set to a flat **1.8g/kg bodyweight** — checked against
+current sports-nutrition consensus first (ISSN/ACSM, Morton et al. 2018:
+1.4-2.2g/kg range, ~1.6g/kg plateau for muscle-building benefit) rather
+than accepting "1g/lb" (2.2g/kg, the gym-culture default) at face value —
+1.8g/kg sits just above the evidence-based plateau without the more
+aggressive ceiling number, Carl's explicit call given "not pro
+bodybuilders." Nutrition itself (meal plans, macro output) is still not
+built — this onboarding only collects the data ahead of that feature.
+
+**Built**: `/coach-onboarding` (6-step flow — goal, experience, injuries,
+sessions/week, body stats, diet — single-submit, no partial-save unlike
+`/access`'s per-step pages since a coach profile isn't useful until
+complete) → `POST /api/member/coach-profile`. `POST /api/member/workout/generate`
+(IDOR-guarded on the booking, idempotent per booking via the Stage 3
+unique index, gated on `hasPremium`) creates the plan via Stage 3's
+engine and narrates an intro via `coach-bot.ts`.
+`POST /api/member/workout/[sessionId]/log-set` and `.../complete` handle
+active-session logging and the post-session summary. RPE is asked once
+per exercise (its last set), not per set — matches Zing's own placement,
+confirmed from the earlier screenshot walkthrough — which required a real
+fix to `getWorkoutHistory()`'s tiebreaker (multiple sets share a session
+rank; without preferring the highest `set_number`, an earlier
+RPE-less set could silently win over the one that actually recorded it).
+Home screen (`ai-coach-section.tsx`) now links to whichever step is
+actually next — set up the coach, book a session, or view today's
+workout — never a dead end.
+
+**Verified live end-to-end** via a throwaway member clicking through the
+real UI: full 6-step onboarding submitted correctly; booked a session;
+generated workout correctly excluded every knee-tagged exercise (stated
+injury: "Bad knee") across all 4 selected exercises; logged all 12 sets
+with varying RPE (Easy/Hard/Just Right/Killer) through the real active-
+session flow including the RPE-only-on-last-set behavior; completed
+session showed **exactly correct** numbers — chest press (RPE 2) 30kg →
+31.25kg, lat pulldown/seated row (RPE 4-5) 30kg → 28.75kg, shoulder press
+(RPE 3, unchanged) correctly omitted from the narration, total volume
+3000kg matching the real per-exercise math by hand. Real Groq narration
+throughout, no truncation. Test member/booking/session data deleted
+after. `npx tsc --noEmit`, `eslint`, `npx vitest run`, and `next build`
+all pass clean.
+
+This closes out the plan's core loop — trial → onboarding → generate →
+log → RPE → adjust next time — the actual thing this multi-stage
+detour was for. Nutrition, community challenges, and the full
+GIF-exercise-library polish remain deliberately out of scope for this
+beta.
