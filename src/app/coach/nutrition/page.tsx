@@ -7,10 +7,13 @@ import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
 import { AppleIcon } from "@/components/icons";
+import { NutritionView } from "@/components/nutrition-view";
 
-// Stage 6 — targets only, no logging yet (that's Stage 7). Same
-// hasPremium + coachProfile gate as /workout/[bookingId], since targets
-// are computed from the coach profile and aren't useful without one.
+// Same hasPremium + coachProfile gate as /workout/[bookingId], since
+// targets are computed from the coach profile and aren't useful without
+// one. Stage 6 shipped targets only; Stage 7 adds the MyFitnessPal/
+// Nutracheck-style diary (calorie ring, macro bars, meal sections,
+// search/recent/barcode logging) via NutritionView.
 export default async function NutritionPage() {
   const session = await createSessionClient();
   const {
@@ -39,52 +42,13 @@ export default async function NutritionPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Nutrition" subtitle="Your daily targets" icon={AppleIcon} iconHref="/profile" />
-      <div className="card-light flex-1 space-y-6 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md space-y-6">
-          {!targets ? (
-            <div className="rounded-xl border border-card-light-border p-5">
-              <p className="text-sm font-semibold">Body stats needed</p>
-              <p className="mt-1 text-sm text-card-light-muted">
-                Your weight, height and age from onboarding are needed to work out your daily targets.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-xl border border-card-light-border p-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Daily calorie target</p>
-                <p className="mt-1 text-3xl font-semibold">{targets.calories.toLocaleString("en-GB")} kcal</p>
-                <p className="mt-2 text-sm text-card-light-muted">
-                  Based on your body stats, weekly sessions, and goal — recalculates automatically if any of those change.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <MacroCard label="Protein" grams={targets.proteinG} />
-                <MacroCard label="Carbs" grams={targets.carbsG} />
-                <MacroCard label="Fat" grams={targets.fatG} />
-              </div>
-
-              <div className="rounded-xl border border-dashed border-card-light-border p-5 opacity-70">
-                <p className="text-sm font-semibold">Meal logging</p>
-                <p className="mt-1 text-sm text-card-light-muted">
-                  Search and log what you eat against these targets — coming soon.
-                </p>
-              </div>
-            </>
-          )}
+      <PageHero title="Nutrition" subtitle="Your daily diary" icon={AppleIcon} iconHref="/profile" />
+      <div className="card-light flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md">
+          <NutritionView targets={targets} />
         </div>
       </div>
       <BottomNav />
     </main>
-  );
-}
-
-function MacroCard({ label, grams }: { label: string; grams: number }) {
-  return (
-    <div className="rounded-xl border border-card-light-border p-4 text-center">
-      <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{grams}g</p>
-    </div>
   );
 }
