@@ -106,5 +106,51 @@ Membership" card correctly disappearing). Test member, booking, and
 membership row all deleted after. `npx tsc --noEmit`, `eslint`,
 `npx vitest run`, and `next build` all pass clean.
 
-Stage 3 (coach profile + workout data model + deterministic RPE-based
-progression engine) is next.
+**Stage 3 — coach profile + workout data model + deterministic RPE engine,
+done and verified live.** `podHq/supabase/migrations/0048_coach_profiles.sql`
+(one row per member — goal/experience/injuries/sessions-per-week/body
+stats, separate table matching the members/memberships split, not more
+`members` columns) and `0049_workout_sessions.sql` (`workout_sessions` →
+`workout_exercises` → `workout_sets`, the last carrying `rpe smallint` —
+the actual column the whole Zing-inspired feature request was for).
+`src/lib/coach/generate-workout.ts` is pure deterministic code, no LLM —
+per this session's confirmed decision, an LLM never computes training
+loads directly: RPE 1-2 (Effortless/Easy) trends weight up ~5%, 3 (Just
+Right) holds it, 4-5 (Hard/Killer) trends it down ~5%, rounded to the
+nearest 1.25kg plate; muscle-group rotation avoids whatever the immediately
+preceding session trained; injury keywords (free text, matched against a
+small placeholder exercise catalog in `exercise-catalog.ts` — generic
+private-pod-gym equipment, NOT Hove's real inventory, needs adjusting
+before real members see it) exclude unsafe exercises even if that leaves
+fewer than a full session. `src/lib/coach-bot.ts` narrates the plan
+Groq→Claude, matching `help-bot.ts`'s provider-swap shape — deliberately
+never the source of the numbers, only the voice.
+
+**Real bug found and fixed during verification**: `openai/gpt-oss-120b`
+(the same model `help-bot.ts` already uses live) is a reasoning model —
+it spends completion tokens on a hidden `reasoning` field before the
+actual reply, so `coach-bot.ts`'s original `max_tokens: 150` was silently
+truncating narration mid-sentence, non-deterministically, roughly as often
+as not. Fixed with `reasoning_effort: "low"` (a real documented Groq
+parameter — this is a short narration task, not a reasoning task) plus a
+`max_tokens: 300` backstop; confirmed clean across 3 repeated runs after.
+**`help-bot.ts` uses the same model with `max_tokens: 300` and no
+`reasoning_effort` set** — same latent risk, just less likely to bite
+given the bigger budget. Not touched this session (out of Stage 3's
+scope, and it's a separately-shipped, already-verified route) — worth
+applying the same `reasoning_effort: "low"` fix there too in a future
+session.
+
+**Verified live**: a permanent unit-test file
+(`src/lib/coach/generate-workout.test.ts`, 9 tests — RPE-based weight
+trending in all directions, rep targets by goal, rotation, injury
+exclusion including the "filtering leaves almost nothing" edge case) plus
+a throwaway DB-integration test exercising the real `getWorkoutHistory()`
+against real Supabase data (confirmed the migrations landed correctly,
+and that rotation/RPE-adjustment work correctly when fed genuine DB
+history, not just synthetic fixtures) — deleted after, per this project's
+established pattern. `npx tsc --noEmit`, `eslint`, `npx vitest run`
+(24/24 passing), and `next build` all pass clean.
+
+Stage 4 (workout-generation API route + active-session UI + RPE capture +
+session summary) is next.
