@@ -53,15 +53,24 @@ export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[
   }));
 }
 
+// Extracted from selectExercises's own filter so the exercise-swap flow
+// (workout-session.ts) can validate a member-chosen replacement against
+// the exact same injury exclusion generation itself uses, rather than a
+// second copy of this logic that could drift.
+export function getInjuryExcludedKeys(injuries: string | null): string[] {
+  const lower = (injuries ?? "").toLowerCase();
+  return EXERCISE_CATALOG.filter((exercise) => exercise.avoidIfInjury.some((keyword) => lower.includes(keyword))).map(
+    (exercise) => exercise.key
+  );
+}
+
 function selectExercises(
   profile: CoachProfile,
   lastSession: RecentSessionSummary | null,
   activeBlock: { blockType: BlockType } | null
 ): CatalogExercise[] {
-  const injuries = (profile.injuries ?? "").toLowerCase();
-  const safe = EXERCISE_CATALOG.filter(
-    (exercise) => !exercise.avoidIfInjury.some((keyword) => injuries.includes(keyword))
-  );
+  const excludedKeys = new Set(getInjuryExcludedKeys(profile.injuries));
+  const safe = EXERCISE_CATALOG.filter((exercise) => !excludedKeys.has(exercise.key));
 
   // A Strength block softly prefers compound lifts (heavier loads at
   // lower reps are a real place a poorly-chosen isolation exercise would
@@ -97,7 +106,10 @@ function computeWeightKg(exercise: CatalogExercise, profile: CoachProfile, prior
 // discount — computeWeightKg/adjustForRpe/roundToNearestPlate themselves
 // stay byte-identical, the actual weight-picking mechanism this app's
 // safety review has already covered is untouched by which block is active.
-function computeWeightKgForBlock(
+// Exported for reuse by the exercise-swap flow (workout-session.ts),
+// which needs to pick a starting weight for a newly-swapped-in exercise
+// via the exact same RPE-history/deload-discount logic as generation.
+export function computeWeightKgForBlock(
   exercise: CatalogExercise,
   profile: CoachProfile,
   prior: ExerciseHistoryEntry | undefined,

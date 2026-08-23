@@ -1,7 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCoachProfile, getWorkoutHistory, type CoachProfile } from "@/lib/coach/coach-profile";
-import { generateWorkout, type GeneratedExercise } from "@/lib/coach/generate-workout";
+import {
+  generateWorkout,
+  getInjuryExcludedKeys,
+  computeWeightKgForBlock,
+  type GeneratedExercise,
+} from "@/lib/coach/generate-workout";
+import { EXERCISE_CATALOG } from "@/lib/coach/exercise-catalog";
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { getActiveBlock } from "@/lib/coach/training-block-state";
@@ -26,10 +32,23 @@ export interface WorkoutExercise {
   sets: WorkoutSet[];
 }
 
-export interface WorkoutSessionDetail {
+// What loadSessionDetail alone can produce — it has no coach-profile
+// access, so it can't compute excludedExerciseKeys itself. Callers that
+// have (or can cheaply get) the member's profile attach that field on
+// top; see WorkoutSessionDetail.
+interface SessionExerciseDetail {
   sessionId: number;
   status: string;
   exercises: WorkoutExercise[];
+}
+
+export interface WorkoutSessionDetail extends SessionExerciseDetail {
+  // Catalog keys the member's stated injuries exclude — same set
+  // generation itself filters against (getInjuryExcludedKeys). Lets the
+  // client build a safe exercise-swap candidate list without a second
+  // round trip, while the actual swap is still independently
+  // re-validated server-side.
+  excludedExerciseKeys: string[];
 }
 
 // Stage 12c real risk: the safe fallback on any error resolving the
@@ -64,7 +83,16 @@ export async function getOrCreateWorkoutSession(
   const { data: existing } = await admin.from("workout_sessions").select("id, status").eq("booking_id", bookingId).maybeSingle();
 
   if (existing) {
-    return { detail: await loadSessionDetail(existing.id), introNarration: null };
+    // Doesn't require a coach profile here (unlike the fresh-generation
+    // path below) — an already-generated session must still load even if
+    // something odd happened to the profile afterward; a missing profile
+    // just means no exclusion data to offer for swapping.
+    const existingProfile = await getCoachProfile(memberId);
+    const detail = await loadSessionDetail(existing.id);
+    return {
+      detail: { ...detail, excludedExerciseKeys: getInjuryExcludedKeys(existingProfile?.injuries ?? null) },
+      introNarration: null,
+    };
   }
 
   const profile = await getCoachProfile(memberId);
@@ -94,7 +122,8 @@ export async function getOrCreateWorkoutSession(
     console.error("[workout] narration failed", { error: (error as Error).message });
   }
 
-  return { detail: await loadSessionDetail(session.id), introNarration };
+  const detail = await loadSessionDetail(session.id);
+  return { detail: { ...detail, excludedExerciseKeys: getInjuryExcludedKeys(profile.injuries) }, introNarration };
 }
 
 async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise[]): Promise<void> {
@@ -123,7 +152,7 @@ async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise
   }
 }
 
-export async function loadSessionDetail(sessionId: number): Promise<WorkoutSessionDetail> {
+export async function loadSessionDetail(sessionId: number): Promise<SessionExerciseDetail> {
   const admin = createAdminClient();
 
   const { data: session, error: sessionError } = await admin.from("workout_sessions").select("id, status").eq("id", sessionId).single();
@@ -176,6 +205,81 @@ export async function getSessionOwnerMemberId(sessionId: number): Promise<number
   const { data, error } = await admin.from("workout_sessions").select("member_id").eq("id", sessionId).maybeSingle();
   if (error) throw new Error(error.message);
   return data?.member_id ?? null;
+}
+
+// Swaps one exercise in an as-yet-unstarted session for a same-muscle-
+// group alternative, chosen by the member on the overview screen before
+// tapping "Start workout". Never trusts the client's copy of what's
+// allowed — re-derives eligibility, the muscle-group match, the injury
+// exclusion, and the duplicate check from live data, the same "never
+// trust client" posture as the training-block confirm route.
+export async function swapExercise(
+  memberId: number,
+  sessionId: number,
+  exerciseId: number,
+  newExerciseKey: string
+): Promise<WorkoutSessionDetail> {
+  const admin = createAdminClient();
+
+  const detail = await loadSessionDetail(sessionId);
+  const exerciseRow = detail.exercises.find((e) => e.id === exerciseId);
+  if (!exerciseRow) {
+    throw new Error("exercise_not_found");
+  }
+
+  // Real gate the exercise-swap design almost got wrong: workout_sessions
+  // .status never leaves 'generated' until completeSession() sets it to
+  // 'completed' — there is no in-progress status value — so checking
+  // status here would wrongly allow a swap mid-session. The real signal
+  // is whether any set in this session has actually been logged yet.
+  const hasProgress = detail.exercises.some((e) => e.sets.some((s) => s.completedAt));
+  if (hasProgress) {
+    throw new Error("session_already_started");
+  }
+
+  const newExercise = EXERCISE_CATALOG.find((e) => e.key === newExerciseKey);
+  if (!newExercise || newExercise.muscleGroup !== exerciseRow.muscleGroup) {
+    throw new Error("invalid_exercise");
+  }
+
+  const profile = await getCoachProfile(memberId);
+  if (!profile) {
+    throw new Error("coach_profile_missing");
+  }
+
+  const excludedKeys = getInjuryExcludedKeys(profile.injuries);
+  if (excludedKeys.includes(newExerciseKey)) {
+    throw new Error("invalid_exercise");
+  }
+
+  const otherKeys = detail.exercises.filter((e) => e.id !== exerciseId).map((e) => e.key);
+  if (otherKeys.includes(newExerciseKey)) {
+    throw new Error("duplicate_exercise");
+  }
+
+  const { history } = await getWorkoutHistory(memberId);
+  const activeBlock = await resolveActiveBlock(memberId, profile);
+  const prior = history.find((h) => h.exerciseKey === newExerciseKey);
+  const weightTargetKg = computeWeightKgForBlock(newExercise, profile, prior, activeBlock);
+
+  // A plain UPDATE — never delete+reinsert — so sort_order (and every
+  // set's id/set_number) is preserved automatically.
+  const { error: exerciseUpdateError } = await admin
+    .from("workout_exercises")
+    .update({ exercise_key: newExercise.key, name: newExercise.name })
+    .eq("id", exerciseId);
+  if (exerciseUpdateError) throw new Error(exerciseUpdateError.message);
+
+  // Only weight_target_kg changes — reps_target/sets are session-wide
+  // (driven by goal/block), not per-exercise, so they're left untouched.
+  const { error: setsUpdateError } = await admin
+    .from("workout_sets")
+    .update({ weight_target_kg: weightTargetKg })
+    .eq("exercise_id", exerciseId);
+  if (setsUpdateError) throw new Error(setsUpdateError.message);
+
+  const updated = await loadSessionDetail(sessionId);
+  return { ...updated, excludedExerciseKeys: excludedKeys };
 }
 
 export async function logSet(
