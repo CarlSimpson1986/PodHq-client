@@ -1,6 +1,6 @@
 import { EXERCISE_CATALOG, type CatalogExercise } from "@/lib/coach/exercise-catalog";
 import type { CoachProfile, ExerciseHistoryEntry, RecentSessionSummary } from "@/lib/coach/coach-profile";
-import type { Goal } from "@/lib/coach/types";
+import { REP_TARGET_BY_BLOCK, DELOAD_WEIGHT_MULTIPLIER, DELOAD_SETS_PER_EXERCISE, type Goal, type BlockType } from "@/lib/coach/types";
 
 const EXERCISE_COUNT = 4;
 const SETS_PER_EXERCISE = 3;
@@ -29,39 +29,59 @@ export interface GenerateWorkoutInput {
   profile: CoachProfile;
   history: ExerciseHistoryEntry[];
   lastSession: RecentSessionSummary | null;
+  // Optional (Stage 12) — absent means today's exact goal-based behavior,
+  // byte-identical to before blocks existed. Only ever set once Stage 12c
+  // wires a real caller; deliberately not wired yet in this stage so
+  // adding block support here changes nothing live.
+  activeBlock?: { blockType: BlockType };
 }
 
 export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[] {
-  const { profile, history, lastSession } = input;
-  const eligible = selectExercises(profile, lastSession);
-  const repsTarget = REP_TARGET_BY_GOAL[profile.goal];
+  const { profile, history, lastSession, activeBlock } = input;
+  const eligible = selectExercises(profile, lastSession, activeBlock ?? null);
+  const repsTarget = activeBlock ? REP_TARGET_BY_BLOCK[activeBlock.blockType] : REP_TARGET_BY_GOAL[profile.goal];
+  const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
 
   return eligible.map((exercise) => ({
     key: exercise.key,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup,
-    sets: SETS_PER_EXERCISE,
+    sets,
     repsTarget,
-    weightTargetKg: computeWeightKg(exercise, profile, historyByKey.get(exercise.key)),
+    weightTargetKg: computeWeightKgForBlock(exercise, profile, historyByKey.get(exercise.key), activeBlock),
   }));
 }
 
-function selectExercises(profile: CoachProfile, lastSession: RecentSessionSummary | null): CatalogExercise[] {
+function selectExercises(
+  profile: CoachProfile,
+  lastSession: RecentSessionSummary | null,
+  activeBlock: { blockType: BlockType } | null
+): CatalogExercise[] {
   const injuries = (profile.injuries ?? "").toLowerCase();
   const safe = EXERCISE_CATALOG.filter(
     (exercise) => !exercise.avoidIfInjury.some((keyword) => injuries.includes(keyword))
   );
+
+  // A Strength block softly prefers compound lifts (heavier loads at
+  // lower reps are a real place a poorly-chosen isolation exercise would
+  // be a program-quality issue) — but only ever narrows *within* the
+  // already injury-safe set, and falls back to the full safe set exactly
+  // the way the muscle-group rotation below already does, rather than
+  // ever re-including something injury-excluded or compounding two
+  // narrowing filters into an over-constrained pool.
+  const blockPreferred = activeBlock?.blockType === "strength" ? safe.filter((exercise) => exercise.isCompound) : safe;
+  const blockPool = blockPreferred.length >= EXERCISE_COUNT ? blockPreferred : safe;
 
   // Rotate away from muscle groups trained last session where possible —
   // only apply the rotation if it still leaves enough exercises to fill a
   // session; a small catalog or heavy injury filtering can otherwise
   // starve the list to nothing.
   const rotated = lastSession
-    ? safe.filter((exercise) => !lastSession.muscleGroups.includes(exercise.muscleGroup))
-    : safe;
+    ? blockPool.filter((exercise) => !lastSession.muscleGroups.includes(exercise.muscleGroup))
+    : blockPool;
 
-  const pool = rotated.length >= EXERCISE_COUNT ? rotated : safe;
+  const pool = rotated.length >= EXERCISE_COUNT ? rotated : blockPool;
   return pool.slice(0, EXERCISE_COUNT);
 }
 
@@ -70,6 +90,24 @@ function computeWeightKg(exercise: CatalogExercise, profile: CoachProfile, prior
     return exercise.startingWeightKg[profile.experience_level];
   }
   return roundToNearestPlate(adjustForRpe(prior.lastWeightKg, prior.lastRpe));
+}
+
+// Blocks only ever change which repsTarget/exercise pool feed into the
+// existing RPE-driven logic above, plus (deload only) a fixed post-hoc
+// discount — computeWeightKg/adjustForRpe/roundToNearestPlate themselves
+// stay byte-identical, the actual weight-picking mechanism this app's
+// safety review has already covered is untouched by which block is active.
+function computeWeightKgForBlock(
+  exercise: CatalogExercise,
+  profile: CoachProfile,
+  prior: ExerciseHistoryEntry | undefined,
+  activeBlock: { blockType: BlockType } | undefined
+): number {
+  const raw = computeWeightKg(exercise, profile, prior);
+  if (activeBlock?.blockType === "deload") {
+    return roundToNearestPlate(raw * DELOAD_WEIGHT_MULTIPLIER);
+  }
+  return raw;
 }
 
 // RPE 1-2 (Effortless/Easy) trends the weight up, 3 (Just Right) holds it,

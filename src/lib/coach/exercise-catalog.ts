@@ -24,6 +24,11 @@ export interface CatalogExercise {
   // Undefined until chosen; workout-view.tsx falls back to the auto-loop
   // start/end photo pair when unset.
   youtubeVideoId?: string;
+  // Squat/RDL/bench/lat pulldown/seated row/shoulder press vs. curl/
+  // pushdown/leg extension/leg curl/plank — used to softly prefer
+  // compound lifts during a Strength training block (see
+  // generate-workout.ts's selectExercises).
+  isCompound: boolean;
 }
 
 // Matches Hove's actual pod equipment (confirmed by Carl, 2026-08-23):
@@ -42,6 +47,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     // not 0.
     startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Keep your chest up and core braced. Push through your heels and don't let your knees cave inward.",
+    isCompound: true,
   },
   {
     key: "romanian_deadlift",
@@ -50,6 +56,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back", "knee"],
     startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Keep the bar close to your legs and your back flat. Hinge at the hips — don't round your lower back.",
+    isCompound: true,
   },
   {
     key: "barbell_bench_press",
@@ -58,6 +65,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders"],
     startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Feet flat on the floor, shoulder blades pulled back. Control the bar down — don't bounce it off your chest.",
+    isCompound: true,
   },
   {
     key: "lat_pulldown",
@@ -66,6 +74,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders"],
     startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
     safetyTip: "Pull with your back, not your arms. Avoid leaning back excessively or using momentum.",
+    isCompound: true,
   },
   {
     key: "seated_row",
@@ -74,6 +83,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back"],
     startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
     safetyTip: "Keep your back straight and squeeze your shoulder blades together. Don't round forward at the start.",
+    isCompound: true,
   },
   {
     key: "dumbbell_shoulder_press",
@@ -82,6 +92,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders"],
     startingWeightKg: { beginner: 6, intermediate: 10, advanced: 16 },
     safetyTip: "Brace your core and avoid arching your lower back. Press straight up, not forward.",
+    isCompound: true,
   },
   {
     key: "dumbbell_bicep_curl",
@@ -90,6 +101,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: [],
     startingWeightKg: { beginner: 4, intermediate: 8, advanced: 12 },
     safetyTip: "Keep your elbows close to your body and avoid swinging the weight. Control the lowering phase.",
+    isCompound: false,
   },
   {
     key: "tricep_pushdown",
@@ -98,6 +110,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders"],
     startingWeightKg: { beginner: 10, intermediate: 20, advanced: 30 },
     safetyTip: "Keep your elbows pinned to your sides. Avoid leaning your whole body into the movement.",
+    isCompound: false,
   },
   {
     key: "leg_extension",
@@ -106,6 +119,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["knee"],
     startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
     safetyTip: "Move through a controlled range — avoid snapping your knees straight at the top.",
+    isCompound: false,
   },
   {
     key: "lying_leg_curl",
@@ -114,6 +128,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["knee"],
     startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
     safetyTip: "Keep your hips pressed into the pad. Avoid using momentum to swing the weight up.",
+    isCompound: false,
   },
   {
     key: "plank",
@@ -122,6 +137,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back"],
     startingWeightKg: { beginner: 0, intermediate: 0, advanced: 0 },
     safetyTip: "Keep your body in a straight line from head to heels — don't let your hips sag or pike up.",
+    isCompound: false,
   },
 ];
 
