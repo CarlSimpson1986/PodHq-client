@@ -4,19 +4,22 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, hasPremium, getNextUpcomingBooking } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getExercisePerformanceHistory } from "@/lib/coach/exercise-performance";
+import { getWeeklyConsistency } from "@/lib/coach/consistency";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { CoachBottomNav } from "@/components/coach-bottom-nav";
 import { DumbbellIcon } from "@/components/icons";
-import { SectionHeading } from "@/components/coach-section";
-import { ExerciseTrendChart } from "@/components/exercise-trend-chart";
+import { SectionHeading, ComingSoonCard } from "@/components/coach-section";
+import { ExerciseProgressAccordion } from "@/components/exercise-progress-accordion";
+import { ConsistencyChart } from "@/components/consistency-chart";
 
 // The Training tab — renamed from "Workout" and reworked (Carl's call,
-// 2026-08-23, mid-session): the flat chronological session list read as
-// less useful than seeing actual progress, so it's replaced with a
-// week-by-week peak-weight graph per exercise instead — the same signal
-// generate-workout.ts's RPE-driven adjustments are already tracking
-// under the hood, just made visible. Same hasPremium + coachProfile gate
+// 2026-08-23, mid-session, in two passes): first replaced the flat
+// chronological session list with a week-by-week peak-weight graph per
+// exercise; then, once eleven stacked charts read as noisy, moved that
+// section behind a collapsed disclosure and added a consistency graph
+// (sessions completed vs. the member's own sessions_per_week goal) plus
+// a "current training block" slot. Same hasPremium + coachProfile gate
 // as every other Coach page.
 export default async function CoachTrainingPage() {
   const session = await createSessionClient();
@@ -42,9 +45,10 @@ export default async function CoachTrainingPage() {
     redirect("/coach-onboarding");
   }
 
-  const [upcomingBooking, performanceHistory] = await Promise.all([
+  const [upcomingBooking, performanceHistory, consistency] = await Promise.all([
     getNextUpcomingBooking(member.id),
     getExercisePerformanceHistory(member.id),
+    getWeeklyConsistency(member.id),
   ]);
 
   return (
@@ -71,16 +75,25 @@ export default async function CoachTrainingPage() {
           </section>
 
           <section>
-            <SectionHeading>Progress by exercise</SectionHeading>
+            <SectionHeading>Progress</SectionHeading>
             {performanceHistory.length === 0 ? (
               <p className="text-sm text-card-light-muted">Complete a few sessions to see your progress here.</p>
             ) : (
-              <div className="space-y-4">
-                {performanceHistory.map((performance) => (
-                  <ExerciseTrendChart key={performance.exerciseKey} performance={performance} />
-                ))}
-              </div>
+              <ExerciseProgressAccordion performanceHistory={performanceHistory} />
             )}
+          </section>
+
+          <section>
+            <SectionHeading>Current training block</SectionHeading>
+            <ComingSoonCard
+              title="Training blocks"
+              body="Rotating exercise selection and rep ranges every few weeks to keep progress moving — coming soon."
+            />
+          </section>
+
+          <section>
+            <SectionHeading>Consistency</SectionHeading>
+            <ConsistencyChart weeks={consistency} targetPerWeek={coachProfile.sessions_per_week} />
           </section>
         </div>
       </div>
