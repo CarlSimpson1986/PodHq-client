@@ -134,13 +134,18 @@ separate, narrower decision (see above).
 
 **Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (32/32),
 and `next build` all passed clean, including the two new `/coach/workout`
-and `/coach/profile` routes. Live-verified via the playground member:
-dashboard renders correctly slimmed down, `CoachBottomNav` confirmed
-present and correctly anchored to the real viewport bottom via direct
-DOM measurement (`position: fixed`, bottom edge matching
-`window.innerHeight`) after the browser screenshot tool's own viewport-
-scaling mismatch (documented earlier in this project's history) made it
-look absent in a screenshot when it wasn't. Full click-through of every
-new tab was cut short by an in-session tool rate limit — Profile/Workout
-tab navigation and the profile-edit save flow still need a real
-click-through pass before this is called fully verified.
+and `/coach/profile` routes. Live-verified via the playground member,
+resumed after a session rate-limit pause: `CoachBottomNav` confirmed
+correctly anchored to the real viewport bottom (initially looked absent
+in a screenshot due to the browser tool's own viewport-scaling mismatch,
+confirmed correct via direct DOM measurement first, then confirmed
+visually once scrolled into frame); Profile pre-fills real seeded data
+(goal/experience/sessions/weight/height/meals all matching), editing
+weight and saving showed "Saved.", and the new value (83kg) survived a
+full page reload — a real write, not just a client-side optimistic
+update; Workout tab shows the correct next-session state ("No session
+booked") and the full real 20-session history; "Exit" correctly
+navigates to `/` and the main app's own `BottomNav` renders normally
+there, completing the round trip. Nav highlighting confirmed correct on
+the Workout tab (active state genuinely distinct from the others, not
+just present).
