@@ -170,6 +170,20 @@ export function SparkleIcon({ className }: IconProps) {
   );
 }
 
+// The Coach nested nav's "Exit" item — deliberately not LogoutIcon (that
+// means signing out of the account, a different action) and deliberately
+// not HomeIcon (the main nav already uses that for the real Home tab;
+// reusing it here would recreate the exact "two things called Home"
+// confusion this nested nav was designed to avoid). A plain back arrow
+// reads unambiguously as "leave this nav, go back."
+export function ArrowLeftIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M19 12H5M11 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // The /coach/nutrition page header icon (Stage 6).
 export function AppleIcon({ className }: IconProps) {
   return (
