@@ -14,169 +14,77 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-8.md`, covering the pilot
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-9.md`, covering the pilot
 mechanism proof (2026-08-05) through the Nutrition/Leaderboard/Challenges
-plan's Stage 6 (2026-08-23) — all split out to keep this file within
+plan's Stage 7 (2026-08-23) — all split out to keep this file within
 Claude Code's ~15,000-character `@`-import limit. All archives are
 reference-only (not auto-loaded by CLAUDE.md); check them for full
 stage-by-stage build history, or `git log` on this file for the exact
-split points. This file picks up from Stage 7 of the Nutrition/
-Leaderboard/Challenges plan (2026-08-23) and is the active, auto-loaded
-log going forward. If this file grows too large again, split it the same
-way into a numbered `ROADMAP-ARCHIVE-9.md`, leave a pointer note at the
-top of this file, and update this paragraph plus `CLAUDE.md`'s
-session-handoff guidance to match.
+split points. This file picks up from the Coach Dashboard's Stage 10a
+(2026-08-23) and is the active, auto-loaded log going forward. If this
+file grows too large again, split it the same way into a numbered
+`ROADMAP-ARCHIVE-10.md`, leave a pointer note at the top of this file,
+and update this paragraph plus `CLAUDE.md`'s session-handoff guidance to
+match.
 
-## Hove AI Coach — Nutrition, Leaderboard & Challenges, Stage 7 — 2026-08-23
+## Hove AI Coach — Coach Dashboard, Stage 10a — 2026-08-23
 
-Continues the plan agreed via Plan Mode
-(`C:\Users\carls\.claude\plans\fluffy-sparking-fox.md`) after Stage 6
-shipped deterministic nutrition targets (Harris-Benedict BMR, activity
-multiplier, calorie/macro targets with safety floors — see
-`ROADMAP-ARCHIVE-8.md`). Four stages total: 6 (done), 7 (food search +
-logging, this entry), 8 (leaderboard), 9 (challenges, podHq admin +
-podhq-client member). Separately, YouTube-embed architecture for
-per-exercise technique videos was also built this session (CSP
-`frame-src` allowance for `youtube-nocookie.com`, a `youtubeVideoId?`
-field on `CatalogExercise`, `workout-view.tsx` embeds it when set and
-falls back to the existing auto-loop photos otherwise) — Carl is picking
-the actual 11 video links to fill in.
+Carl asked for the Coach section to become "a different window with more
+options at the bottom" — Home/Coach-home/Profile/Workout/Nutrition as a
+second bottom tab bar. Pushed back with real evidence rather than
+building it as asked: nested tab bars are a documented anti-pattern
+(Apple HIG, Material Design both warn against them — ambiguous back-
+navigation, and here it would put a duplicate "Home" tab in the app
+meaning two different things depending which bar you're on). Agreed
+instead to keep the single existing 5-tab bottom nav unchanged and make
+`/coach` itself a richer dashboard with in-page sections. Full plan for
+this plus two follow-on features (weekly check-in, habit tracker) agreed
+via Plan Mode, pressure-tested by a Plan agent first (real corrections:
+`check_ins.completed_at` must never be nullable — no "pending" row
+concept, matching the "row exists = happened" convention already used by
+`food_log_entries`; `habit_logs`' RLS join is 2-level not 3-level;
+nutrition/habit adherence averages need an explicit zero-data guard
+returning `null`, not `0`, or an empty week silently reads as a false
+"under target" achievement).
 
-**Real correction from Carl, before any Stage 7 code was written**: "why
-USDA? what about in England?" — a fair challenge to the Stage 6 plan's
-USDA FoodData Central fallback (US-focused) for a UK gym's members.
-Researched real alternatives rather than defending the original choice:
-**Public Health England's own McCance & Widdowson's Composition of Foods
-Integrated Dataset (CoFID)** is a free government dataset (~2,850 usable
-foods after dropping rows missing a name or one of the four macros this
-app needs, out of ~2,890 total) covering exactly this need — no live API
-exists for it (it's a downloadable spreadsheet from
-gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid),
-so it's imported **once** into a new `uk_food_composition` table
-(`podHq/supabase/migrations/0052_uk_food_composition.sql` +
-`0053_uk_food_composition_seed.sql`, generated from the real 2021 xlsx
-via a throwaway parse script, spot-checked against known values —
-grilled chicken breast 148kcal/100g, raw banana 81kcal/100g, both correct)
-rather than called live. This is a genuine architecture improvement, not
-just a UK-flavoured substitute: zero rate-limit risk, zero API-key
-dependency, zero third-party outage risk for the generic-food half of
-search, and it drops the earlier "Carl needs a USDA key" action item
-entirely. Open Food Facts stays as the search fallback for branded/
-packaged UK products (real Tesco/Sainsbury's/Asda coverage confirmed live
-against the real API before writing the client code), plus a direct
-barcode-lookup endpoint that doesn't touch OFF's rate-limited search path
-at all.
+**Stage 10a — pure layout restructure**, zero new tables/queries.
+`src/app/coach/page.tsx` reorganized into named sections (Today,
+Check-in, Workouts, Nutrition, Habits, Coming soon) over the exact same
+data it already fetched (`getActiveMembership`, `getCoachProfile`,
+`getNextUpcomingBooking`, `getCoachHomeState`, `getRecentCompletedSessions`)
+— a `SectionHeading` helper, no new logic. Check-in and Habits render
+honest `ComingSoonCard` placeholders until Stage 10b/11 ship real content
+into them, same posture as the pre-existing Tech integrations/Challenges
+placeholders.
 
-**Second real correction, same message**: "the UX needs upgrading looks
-very basic — I want it to mimic my fitness pal or nutracheck." Stage 6's
-plain number-card page was deliberately minimal per the original plan,
-but Carl's ask reshaped Stage 7 into a proper diary, not a bigger version
-of the same cards: a calorie ring (consumed/remaining, MFP's signature
-layout) with protein/carbs/fat progress bars underneath; four meal
-sections (Breakfast/Lunch/Dinner/Snacks — `food_log_entries` gained a
-`meal` column) each with their own subtotal and "+ Add" action; an
-add-food sheet with three tabs — **Recent** (the member's own most-
-recently-logged distinct foods, reconstructed to per-100g values so a
-different quantity can be logged next time, one-tap re-log), **Search**
-(debounced 400ms/min-3-chars, CoFID first then Open Food Facts fallback),
-and **Scan** (barcode via the browser's `BarcodeDetector` API against the
-device camera, direct Open Food Facts product lookup — gracefully hidden
-on browsers without `BarcodeDetector`, e.g. Safari/iOS, with Search
-always available as the real fallback, not a broken control left
-visible).
+**Verified live** via the persistent playground member (2 months of
+seeded history, `playground@myfitpod.test` — see below): every section
+renders correctly post-restructure — Today's Gold-member status card,
+Workouts showing the real seeded session history unchanged, Nutrition
+link intact, new Habits/Check-in placeholders, Coming soon section
+unchanged. A pure refactor should be behaviourally invisible except for
+layout, and it was. `npx tsc --noEmit`, `eslint`, `npx vitest run`
+(32/32), and `next build` all passed clean.
 
-**Built**: `src/lib/nutrition/food-search.ts` (CoFID via `ilike`, Open
-Food Facts search/barcode fallback, 24h in-memory cache — flagged in code
-as weaker than it looks on Vercel's per-instance serverless model, with
-a documented next step if 429s show up in logs). `src/lib/coach/food-log.ts`
-(log/delete/day-totals/recent-foods, denormalized calories/macros at log
-time, same reasoning as `workout_exercises`). Five new
-`/api/member/nutrition/*` routes (food-search, barcode/[barcode], recent,
-log, log/[id] DELETE, day), all IDOR-guarded on delete, all on a tighter
-20/min rate limit for food-search specifically (defense in depth
-alongside the client debounce, protecting OFF's real shared 10/min search
-budget). New `NutritionView` client component replaces Stage 6's static
-cards entirely.
+**New: a persistent dev-only playground member**, not cleaned up after
+each session like every other test member in this project's history —
+Carl asked to "test it in dev" himself. `playground@myfitpod.test` /
+`Playground123!`, Aylesbury Berryfields, active Gold membership (not a
+trial, so `hasPremium()` stays true regardless of how far back the
+backfilled history goes — a 7-day trial clock wouldn't make sense
+against 2 months of data), muscle_gain coach profile. Backfilled via a
+one-off script (not a migration — this is member data, not schema): 32
+workout sessions over ~2 months (Mon/Tue/Thu/Fri pattern, 3 alternating
+splits, RPE-driven progressive overload simulated forward using the same
+`adjustForRpe` logic as `generate-workout.ts`) and 208 nutrition log
+entries across ~51 of the last 60 days (one skipped day a week, real
+per-100g values queried from the live `uk_food_composition` table so the
+diary is self-consistent with what search would actually return). Stays
+in dev indefinitely for Carl's own exploration — not part of the
+verify-then-delete throwaway-member pattern used everywhere else.
 
-**Real lint catch, not shipped broken**: three `react-hooks/set-state-in-effect`
-errors from calling `setState` synchronously inside `useEffect` bodies
-(the day-load effect's `setLoading(true)` running before its first
-`await`, a debounce branch's early `setResults([])`, and the barcode
-tab's mount-time support check) — fixed with the same `queueMicrotask`
-deferral podHq's own `promo-codes-view.tsx` already uses for its
-load-on-prop-change effect, plus moving the barcode-support check to a
-lazy `useState` initializer instead of an effect entirely.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (32/32
-passing — Stage 6's targets tests still green, no regressions), and
-`next build` all passed clean, including all 5 new API routes and
-`/coach/nutrition` registering correctly. Open Food Facts' real search
-and barcode-lookup endpoints were hit directly (not mocked) to confirm
-the actual field names before writing `food-search.ts` against them.
-CoFID's real 2021 dataset was downloaded from the live gov.uk URL,
-parsed, and spot-checked before committing the seed migration.
-
-**Carl ran the three migrations, then asked two more real questions
-before calling it done**: "what happens if something isn't in there?"
-and, once told there was no fallback for a genuinely-missing food, "what
-does MyFitnessPal use?" — researched MFP's actual behaviour rather than
-guessing (a "Create a new food" option on empty search results, saved for
-reuse) and matched it: `FOOD_LOG_SOURCES` gained a `"manual"` value, a
-"Create a custom food" prompt appears under an empty search, and a
-persistent **Custom** tab (not just a not-found fallback) sits alongside
-Recent/Search/Scan — feeds the same per-100g fields into the existing
-`QuantityStep`, no new logging path needed. Custom entries also show up
-under Recent afterwards, same as any other logged food.
-
-**Second real question, same message**: "how do we get a bar code
-scanner?" — surfaced a gap in the original `BarcodeDetector`-based Scan
-tab that hadn't been stated plainly enough: Safari/iOS implements
-`BarcodeDetector` nowhere, meaning roughly half of UK mobile members
-would silently never see a working scanner. Researched real cross-browser
-alternatives rather than defending the original choice — replaced it with
-`html5-qrcode` (decodes frames itself via canvas, not a native browser
-API, so it works the same on iOS Safari/Android Chrome/desktop),
-dynamically imported so its ~230KB isn't in the main bundle for members
-who never open Scan. **Real bug found while wiring it up**: typing the
-scanner ref as `useRef<import("html5-qrcode").Html5Qrcode | null>` —
-an inline type-only import of a dynamically-imported package — broke
-Next's client-component boundary transform; `NutritionView`'s own import
-resolved to `Promise<undefined>` at render time (a confusing "lazy
-element type" error with no connection to barcode scanning on its face).
-Fixed by typing the ref structurally (`{ stop: () => Promise<void> }`)
-instead of importing the package's type.
-
-**Verified live end-to-end** via a throwaway member (gender Female,
-65kg/165cm/28/3 sessions/fitness — targets hand-checked: 2,230kcal/117g
-protein/287g carbs/68g fat, all matched exactly): searched a real CoFID
-food ("porridge oats, unfortified", 381kcal/100g, matching the earlier
-spot-check), logged 50g, confirmed the quantity-scaled macros and the
-day's calorie ring/macro bars updated correctly against the real
-unrounded per-100g values (10.9g protein × 0.5 → 5.45g, not naively
-rounded from the already-rounded 11g shown per 100g); deleted it,
-confirmed totals reset to zero; created a custom food ("Carl's Homemade
-Chicken Curry", 180/15/8/10), logged it, confirmed it appeared correctly
-under Lunch and under Recent for reuse; opened Scan and confirmed
-`html5-qrcode` loads and starts without crashing, correctly showing a
-graceful "Camera access denied or unavailable" message with no real
-camera attached to the test environment — a genuine physical-camera scan
-still needs testing on a real device, the one piece automated
-verification can't cover. `npx tsc --noEmit`, `eslint`, `npx vitest run`
-(32/32), and `next build` all passed clean on this final pass too. Test
-member and scratch scripts deleted after.
-
-**Minor known rounding quirk, not fixed**: the pre-log quantity preview
-rounds from the food's live unrounded per-100g values, while the stored
-entry rounds to one decimal place first, then displays round to whole
-numbers — occasionally shows a 1g/1kcal difference between the preview
-and what's saved (e.g. previewed as 5g protein, stored/displayed as 6g).
-Never off by more than rounding noise; not worth the complexity of a
-single shared rounding path for this beta.
-
-This closes out Stage 7. Coach hub's Nutrition card already links to a
-fully working diary, not just targets.
-
-**Action item only Carl can do, still open**: pick a contact string for
-the Open Food Facts `User-Agent` header (`OPEN_FOOD_FACTS_CONTACT` env
-var — falls back to an honest placeholder if unset, so this isn't
-blocking, just recommended before real member traffic hits it).
+Next: Stage 10b (weekly check-in — `check_ins` table, due-state machine,
+auto-generated weekly review, honestly-stubbed Q&A) and Stage 11 (habit
+tracker), per the approved plan. Stages 8 (leaderboard) and 9
+(challenges) remain queued ahead of these in the plan file but were not
+what Carl asked for this session — not abandoned, just not next.
