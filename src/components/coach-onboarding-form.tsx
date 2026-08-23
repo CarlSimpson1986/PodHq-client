@@ -1,0 +1,287 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { GOALS, EXPERIENCE_LEVELS, FOOD_PREFERENCES, type Goal, type ExperienceLevel, type FoodPreference } from "@/lib/coach/types";
+
+const GOAL_LABELS: Record<Goal, string> = {
+  weight_loss: "Lose weight",
+  muscle_gain: "Build muscle",
+  fitness: "Get fitter",
+  strength: "Get stronger",
+};
+
+const EXPERIENCE_LABELS: Record<ExperienceLevel, { title: string; subtitle: string }> = {
+  beginner: { title: "Beginner", subtitle: "I'm new to fitness" },
+  intermediate: { title: "Intermediate", subtitle: "I work out from time to time" },
+  advanced: { title: "Advanced", subtitle: "I exercise regularly" },
+};
+
+const FOOD_PREFERENCE_LABELS: Record<FoodPreference, string> = {
+  none: "No restrictions",
+  vegetarian: "Vegetarian",
+  vegan: "Vegan",
+  pescatarian: "Pescatarian",
+  halal: "Halal",
+  other: "Other",
+};
+
+const TOTAL_STEPS = 6;
+
+const inputClass =
+  "w-full rounded-lg border border-card-light-border bg-white px-4 py-3 text-base text-card-light-foreground placeholder:text-card-light-muted focus:border-card-light-foreground focus:outline-none";
+const buttonClass =
+  "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
+const optionClass = (selected: boolean) =>
+  `w-full rounded-lg border px-4 py-3 text-left text-sm font-medium ${
+    selected
+      ? "border-card-light-foreground bg-card-light-foreground text-white"
+      : "border-card-light-border text-card-light-foreground hover:bg-card-border/10"
+  }`;
+
+interface FormState {
+  goal: Goal | null;
+  experienceLevel: ExperienceLevel | null;
+  injuries: string;
+  sessionsPerWeek: number | null;
+  weightKg: string;
+  heightCm: string;
+  age: string;
+  mealCountPreference: string;
+  foodAllergies: string;
+  foodPreferences: FoodPreference | null;
+}
+
+const INITIAL_STATE: FormState = {
+  goal: null,
+  experienceLevel: null,
+  injuries: "",
+  sessionsPerWeek: null,
+  weightKg: "",
+  heightCm: "",
+  age: "",
+  mealCountPreference: "",
+  foodAllergies: "",
+  foodPreferences: null,
+};
+
+export function CoachOnboardingForm() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState<FormState>(INITIAL_STATE);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  const canAdvance =
+    (step === 1 && form.goal !== null) ||
+    (step === 2 && form.experienceLevel !== null) ||
+    step === 3 ||
+    (step === 4 && form.sessionsPerWeek !== null) ||
+    step === 5 ||
+    step === 6;
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/member/coach-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goal: form.goal,
+          experienceLevel: form.experienceLevel,
+          injuries: form.injuries,
+          sessionsPerWeek: form.sessionsPerWeek,
+          weightKg: form.weightKg ? Number(form.weightKg) : undefined,
+          heightCm: form.heightCm ? Number(form.heightCm) : undefined,
+          age: form.age ? Number(form.age) : undefined,
+          mealCountPreference: form.mealCountPreference ? Number(form.mealCountPreference) : undefined,
+          foodAllergies: form.foodAllergies,
+          foodPreferences: form.foodPreferences ?? undefined,
+        }),
+      });
+      const body = await res.json();
+      if (body.status !== "ok") {
+        setError(body.message ?? "Something went wrong.");
+        return;
+      }
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex gap-1.5">
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+          <div key={i} className={`h-1 flex-1 rounded-full ${i < step ? "bg-accent" : "bg-card-light-border"}`} />
+        ))}
+      </div>
+
+      {step === 1 && (
+        <fieldset className="space-y-5">
+          <legend className="mb-1.5 block text-base font-semibold">What&apos;s your main goal?</legend>
+          <div className="space-y-2">
+            {GOALS.map((goal) => (
+              <button key={goal} type="button" onClick={() => update("goal", goal)} className={optionClass(form.goal === goal)}>
+                {GOAL_LABELS[goal]}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {step === 2 && (
+        <fieldset className="space-y-5">
+          <legend className="mb-1.5 block text-base font-semibold">What&apos;s your current fitness level?</legend>
+          <div className="space-y-2">
+            {EXPERIENCE_LEVELS.map((level) => (
+              <button
+                key={level}
+                type="button"
+                onClick={() => update("experienceLevel", level)}
+                className={optionClass(form.experienceLevel === level)}
+              >
+                <span className="block font-semibold">{EXPERIENCE_LABELS[level].title}</span>
+                <span className="block text-xs opacity-80">{EXPERIENCE_LABELS[level].subtitle}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-5">
+          <label htmlFor="injuries" className="mb-1.5 block text-base font-semibold">
+            Any injuries or limitations?
+          </label>
+          <textarea
+            id="injuries"
+            rows={3}
+            placeholder="Nothing to work around"
+            className={inputClass}
+            value={form.injuries}
+            onChange={(e) => update("injuries", e.target.value)}
+          />
+          <p className="text-xs text-card-light-muted">Leave blank if nothing to note.</p>
+        </div>
+      )}
+
+      {step === 4 && (
+        <fieldset className="space-y-5">
+          <legend className="mb-1.5 block text-base font-semibold">How many sessions per week?</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <button key={n} type="button" onClick={() => update("sessionsPerWeek", n)} className={optionClass(form.sessionsPerWeek === n)}>
+                <span className="block text-center">{n}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {step === 5 && (
+        <div className="space-y-5">
+          <p className="text-base font-semibold">Your body stats</p>
+          <p className="-mt-3 text-xs text-card-light-muted">Optional — helps personalise your plan further.</p>
+          <div>
+            <label htmlFor="weightKg" className="mb-1.5 block text-sm text-card-light-muted">
+              Weight (kg)
+            </label>
+            <input id="weightKg" type="number" inputMode="decimal" className={inputClass} value={form.weightKg} onChange={(e) => update("weightKg", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="heightCm" className="mb-1.5 block text-sm text-card-light-muted">
+              Height (cm)
+            </label>
+            <input id="heightCm" type="number" inputMode="decimal" className={inputClass} value={form.heightCm} onChange={(e) => update("heightCm", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="age" className="mb-1.5 block text-sm text-card-light-muted">
+              Age
+            </label>
+            <input id="age" type="number" inputMode="numeric" className={inputClass} value={form.age} onChange={(e) => update("age", e.target.value)} />
+          </div>
+        </div>
+      )}
+
+      {step === 6 && (
+        <div className="space-y-5">
+          <p className="text-base font-semibold">A bit about your diet</p>
+          <p className="-mt-3 text-xs text-card-light-muted">Optional — for when nutrition guidance is available.</p>
+          <div>
+            <label htmlFor="mealCountPreference" className="mb-1.5 block text-sm text-card-light-muted">
+              Meals per day
+            </label>
+            <input
+              id="mealCountPreference"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={8}
+              className={inputClass}
+              value={form.mealCountPreference}
+              onChange={(e) => update("mealCountPreference", e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="foodAllergies" className="mb-1.5 block text-sm text-card-light-muted">
+              Food allergies
+            </label>
+            <textarea
+              id="foodAllergies"
+              rows={2}
+              placeholder="None"
+              className={inputClass}
+              value={form.foodAllergies}
+              onChange={(e) => update("foodAllergies", e.target.value)}
+            />
+          </div>
+          <fieldset>
+            <legend className="mb-1.5 block text-sm text-card-light-muted">Dietary preference</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {FOOD_PREFERENCES.map((pref) => (
+                <button
+                  key={pref}
+                  type="button"
+                  onClick={() => update("foodPreferences", pref)}
+                  className={optionClass(form.foodPreferences === pref)}
+                >
+                  {FOOD_PREFERENCE_LABELS[pref]}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+      )}
+
+      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+
+      <div className="mt-6 flex gap-3">
+        {step > 1 && (
+          <button type="button" onClick={() => setStep((s) => s - 1)} className="rounded-lg border border-card-light-border px-4 py-3 text-sm font-semibold text-card-light-foreground">
+            Back
+          </button>
+        )}
+        {step < TOTAL_STEPS ? (
+          <button type="button" disabled={!canAdvance} onClick={() => setStep((s) => s + 1)} className={buttonClass}>
+            Continue
+          </button>
+        ) : (
+          <button type="button" onClick={handleSubmit} disabled={loading} className={buttonClass}>
+            {loading ? "Saving..." : "Finish"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

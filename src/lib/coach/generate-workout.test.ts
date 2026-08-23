@@ -13,6 +13,9 @@ function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
     weight_kg: 75,
     height_cm: 178,
     age: 30,
+    meal_count_preference: null,
+    food_allergies: null,
+    food_preferences: null,
     ...overrides,
   };
 }
