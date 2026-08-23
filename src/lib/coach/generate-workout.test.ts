@@ -114,3 +114,77 @@ describe("generateWorkout — injury avoidance", () => {
     expect(result.every((e) => e.key === "dumbbell_bicep_curl")).toBe(true);
   });
 });
+
+describe("generateWorkout — training blocks (Stage 12)", () => {
+  it("uses the block's rep target instead of the goal's, when a block is active", () => {
+    // profile() defaults to muscle_gain (goal reps target 10) — a strength
+    // block (target 5) must still win, proving the block overrides goal.
+    const result = generateWorkout({
+      profile: profile({ goal: "muscle_gain" }),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "strength" },
+    });
+    expect(result[0].repsTarget).toBe(5);
+  });
+
+  it("falls back to the goal-based rep target with no active block — byte-identical to pre-Stage-12 behavior", () => {
+    const result = generateWorkout({ profile: profile({ goal: "strength" }), history: [], lastSession: null });
+    expect(result[0].repsTarget).toBe(5);
+  });
+
+  it("drops to 2 sets during a deload block instead of the usual 3", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "deload" },
+    });
+    expect(result[0].sets).toBe(2);
+  });
+
+  it("discounts weight by the deload multiplier, rounded to the nearest plate", () => {
+    const withoutBlock = generateWorkout({
+      profile: profile(),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3 }],
+      lastSession: null,
+    });
+    const withDeload = generateWorkout({
+      profile: profile(),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3 }],
+      lastSession: null,
+      activeBlock: { blockType: "deload" },
+    });
+    const baseline = withoutBlock.find((e) => e.key === "barbell_bench_press")!.weightTargetKg;
+    const deload = withDeload.find((e) => e.key === "barbell_bench_press")!.weightTargetKg;
+    // 40 * 0.85 = 34, rounds down to the nearest 1.25kg plate increment.
+    expect(baseline).toBe(40);
+    expect(deload).toBe(33.75);
+  });
+
+  it("softly prefers compound lifts during a strength block", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "strength" },
+    });
+    const compoundKeys = ["barbell_squat", "romanian_deadlift", "barbell_bench_press", "lat_pulldown", "seated_row", "dumbbell_shoulder_press"];
+    expect(result.every((e) => compoundKeys.includes(e.key))).toBe(true);
+  });
+
+  it("still never includes an unsafe exercise under a strength block, even though the compound pool is exhausted by injury filtering", () => {
+    // Same "knee, back, shoulders" case as the goal-based test above — the
+    // compound preference must fall back to the full safe set (just the
+    // one isolation exercise left) exactly like the muscle-group rotation
+    // already does, never re-including something injury-excluded.
+    const result = generateWorkout({
+      profile: profile({ injuries: "knee, back, shoulders" }),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "strength" },
+    });
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((e) => e.key === "dumbbell_bicep_curl")).toBe(true);
+  });
+});
