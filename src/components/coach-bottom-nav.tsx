@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Exit", icon: ArrowLeftIcon },
   { href: "/coach", label: "Dashboard", icon: SparkleIcon },
   { href: "/coach/profile", label: "Profile", icon: UserIcon },
-  { href: "/coach/workout", label: "Workout", icon: DumbbellIcon },
+  { href: "/coach/training", label: "Training", icon: DumbbellIcon },
   { href: "/coach/nutrition", label: "Nutrition", icon: AppleIcon },
 ];
 
