@@ -1,8 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCoachProfile, getWorkoutHistory } from "@/lib/coach/coach-profile";
+import { getCoachProfile, getWorkoutHistory, type CoachProfile } from "@/lib/coach/coach-profile";
 import { generateWorkout, type GeneratedExercise } from "@/lib/coach/generate-workout";
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
+import { getBlockHistory } from "@/lib/coach/training-blocks";
+import { getActiveBlock } from "@/lib/coach/training-block-state";
+import type { BlockType } from "@/lib/coach/types";
 
 export interface WorkoutSet {
   id: number;
@@ -29,7 +32,22 @@ export interface WorkoutSessionDetail {
   exercises: WorkoutExercise[];
 }
 
-const SETS_PER_EXERCISE = 3;
+// Stage 12c real risk: the safe fallback on any error resolving the
+// active block is undefined (today's already-safety-reviewed goal-based
+// generation), never a hardcoded block type — a caught error must never
+// silently produce e.g. "strength".
+async function resolveActiveBlock(memberId: number, coachProfile: CoachProfile): Promise<{ blockType: BlockType } | undefined> {
+  try {
+    const blockHistory = await getBlockHistory(memberId);
+    const active = getActiveBlock(coachProfile, blockHistory);
+    return { blockType: active.blockType };
+  } catch (error) {
+    console.error("[workout] failed to resolve active training block, falling back to goal-based generation", {
+      error: (error as Error).message,
+    });
+    return undefined;
+  }
+}
 
 // Fetches an existing workout_session (with exercises/sets) for a booking,
 // or generates + persists a new one. Idempotent on booking_id's unique
@@ -55,7 +73,8 @@ export async function getOrCreateWorkoutSession(
   }
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
-  const plan = generateWorkout({ profile, history, lastSession });
+  const activeBlock = await resolveActiveBlock(memberId, profile);
+  const plan = generateWorkout({ profile, history, lastSession, activeBlock });
 
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
@@ -90,7 +109,10 @@ async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise
       .single();
     if (exerciseError) throw new Error(exerciseError.message);
 
-    const setsToInsert = Array.from({ length: SETS_PER_EXERCISE }).map((_, setIndex) => ({
+    // Reads the per-exercise sets count off the generated plan item — a
+    // deload block returns fewer sets than the usual 3, and hardcoding a
+    // constant here would silently defeat that volume reduction.
+    const setsToInsert = Array.from({ length: exercise.sets }).map((_, setIndex) => ({
       exercise_id: exerciseRow.id,
       set_number: setIndex + 1,
       reps_target: exercise.repsTarget,
@@ -206,7 +228,8 @@ export async function completeSession(
   }
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
-  const nextPlan = generateWorkout({ profile, history, lastSession });
+  const activeBlock = await resolveActiveBlock(memberId, profile);
+  const nextPlan = generateWorkout({ profile, history, lastSession, activeBlock });
 
   const changes: WeightChangePreview[] = nextPlan
     .map((next) => {
