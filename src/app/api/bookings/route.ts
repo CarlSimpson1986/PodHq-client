@@ -94,6 +94,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Could not create booking." }, { status: 500 });
   }
 
+  // Trial-clock start (Hove beta): gated on trial_started_at being null,
+  // not on booking count — a long-tenured member who activates the trial
+  // later still has plenty of booking history, so "first booking ever"
+  // would never fire for them. Gating on the null timestamp instead means
+  // "first booking since activating," and only ever fires once.
+  if (member.trial_activated_at && !member.trial_started_at) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const { error: trialError } = await admin
+      .from("members")
+      .update({ trial_started_at: now.toISOString(), trial_expires_at: expiresAt.toISOString() })
+      .eq("id", member.id);
+    if (trialError) {
+      console.error("[bookings] failed to start trial clock", { error: trialError.message });
+    }
+  }
+
   if (user.email) {
     // Count excludes the booking we just created — 0 prior rows means this
     // is genuinely their first, not just their first of the day.

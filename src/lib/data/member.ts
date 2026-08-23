@@ -22,6 +22,14 @@ export interface Member {
   // null means "never seen it", so it auto-launches once per member
   // regardless of device, then stays off. See 0045_member_tour.sql.
   tour_completed_at: string | null;
+  // 7-day free AI Coach trial (Hove beta) — see 0047_member_trial.sql for
+  // what each of the three stamps means. trial_activated_at alone means
+  // "tapped Start my free trial but hasn't booked yet"; trial_started_at/
+  // trial_expires_at are only set once, on the first booking after
+  // activation (see the hook in bookings/route.ts).
+  trial_activated_at: string | null;
+  trial_started_at: string | null;
+  trial_expires_at: string | null;
 }
 
 // Gate for the physical door Unlock only (not booking/credits) — a member
@@ -122,6 +130,18 @@ export async function getActiveMembership(memberId: number): Promise<Membership 
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+// AI Coach access (Hove beta): an active trial or any active paid
+// membership grants the identical feature set — Silver/Gold/Platinum
+// differ only by session-count allocation, not by AI Coach access, so
+// this deliberately doesn't inspect which tier the membership is.
+export async function hasPremium(member: Member): Promise<boolean> {
+  if (member.trial_expires_at && new Date(member.trial_expires_at) > new Date()) {
+    return true;
+  }
+  const membership = await getActiveMembership(member.id);
+  return membership !== null;
 }
 
 // 65 min after slot_start (1hr slot + 5min grace) — matches

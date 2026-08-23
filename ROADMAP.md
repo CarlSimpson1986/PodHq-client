@@ -112,3 +112,53 @@ Verified live end-to-end via the user's own real account (their staff email alre
 **Follow-up 2026-08-23: magic-link localhost redirect confirmed not a production bug, fixed for local dev.** Checked Supabase's Authentication → URL Configuration directly: Site URL and both real callback URLs (`podhq-client.vercel.app`, `podhq.vercel.app`) were already correctly in the allow list — `emailRedirectTo` is built from the live request's own origin (`src/app/api/auth/signup/route.ts`), so production magic links were never actually broken, only local testing was (`localhost:3000` wasn't allow-listed, so Supabase fell back to the production Site URL). User added `http://localhost:3000/auth/callback` to the allow list themselves via the dashboard.
 
 **Follow-up 2026-08-23: signup-email-ambiguity resolved without reopening enumeration.** The identical response for "new signup" vs. "email already registered" wasn't an oversight — it's a deliberate anti-enumeration control (see the comment in `signup/route.ts`). Giving the two cases distinct messages would let an attacker probe whether any given email is registered anywhere in the shared Supabase project (including staff logins), so instead of splitting the message, reworded the one shared `GENERIC_MESSAGE` (`signup/route.ts` and its UI fallback in `signup/page.tsx`) to explain both outcomes up front: "Check your email — we've sent a confirmation link, or a sign-in link if you already have an account." Response stays byte-identical either way. `npx tsc --noEmit`, `eslint`, `npx vitest run`, and `next build` all pass clean. Not re-verified via a live signup click-through this time — both code paths were confirmed by reading the route to return the same exported constant, and a live test would have fired a real "new signup" staff-notification email, which wasn't worth it for a pure string change.
+
+## Hove AI Coach trial beta, Stage 1 — 2026-08-23
+
+New initiative, separate from POD: a 7-day free AI Coach trial + tier
+funnel, scoped down from the full `MyFitPod-App-Brief.docx` platform
+rebuild to a beta specifically for Hove. Silver/Gold/Platinum differ only
+by session-count allocation — every paid tier and every active trial gets
+the identical AI Coach feature set (priority booking, Recovery Suite
+gating, and challenge-tier pricing were explicitly stripped out as tier
+differentiators after discussion). Nutrition, community challenges, the
+full 1,300+-exercise GIF library, and push/email Heartbeat beyond one
+trial-ending nudge are all deferred — this beta is only testing whether
+the trial→subscription funnel converts. Full 5-stage plan agreed with the
+user before building (`C:\Users\carls\.claude\plans\fluffy-sparking-fox.md`);
+building and verifying one stage at a time, same discipline as every other
+feature in this project.
+
+Session also triggered by the user reviewing competitor screenshots (Zing
+Coach) and asking specifically for its post-set RPE (rate-of-perceived-
+exertion) mechanic — added to `MyFitPod-App-Brief.docx` itself first (two
+new bullets in §9), then designed into this build's Stage 3 deterministic
+weight-progression logic so it's real from day one, not bolted on later.
+
+**Stage 1 — trial data model + activation mechanics, done and verified
+live.** `podHq/supabase/migrations/0047_member_trial.sql`: three nullable
+timestamps on `members` (`trial_activated_at`/`trial_started_at`/
+`trial_expires_at`), same "nullable timestamp, not boolean" reasoning as
+`tour_completed_at` (0045). `hasPremium(member)` (`src/lib/data/member.ts`)
+combines trial-expiry with the existing `getActiveMembership()` check — no
+changes to billing/webhook code at all. New `POST /api/member/start-trial`
+stamps `trial_activated_at` (idempotent). Trial-clock hook added to
+`src/app/api/bookings/route.ts`: deliberately gated on `trial_started_at
+IS NULL` rather than reusing the route's existing "first booking ever"
+count, since that would never fire for an existing Hove member with
+booking history who activates the trial later — the null-gate means
+"first booking since activating" instead, correctly and with no extra
+query.
+
+**Verified live** via a throwaway member/auth-user (cleaned up after):
+confirmed the migration's columns exist, activated the trial, booked a
+session (stamped both timestamps correctly, ~7 days out), booked a second
+session (confirmed no re-stamp). First verification pass gave a false
+"FAIL" from a test-script bug (strict string comparison of two
+differently-formatted-but-identical timestamps — Postgres returns
+`+00:00`, JS produces `Z`); fixed by comparing parsed epoch values instead,
+which is what actually matters. `npx tsc --noEmit`, `eslint`,
+`npx vitest run`, and `next build` all pass clean.
+
+Stage 2 (trial banner/preview/confirmation UI + four-state home screen)
+is next.
