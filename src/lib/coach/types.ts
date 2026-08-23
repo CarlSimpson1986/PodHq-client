@@ -31,3 +31,34 @@ export const RPE_SCALE: { value: number; label: string }[] = [
   { value: 4, label: "Hard" },
   { value: 5, label: "Killer" },
 ];
+
+// Daily calorie target hard floor — Carl's call to confirm (2026-08-23),
+// same kind of explicit sign-off as PROTEIN_TARGET_G_PER_KG above: without
+// this, a lighter member on an aggressive deficit (weight_loss goal, low
+// TDEE) can compute below the ~1200kcal/day general safety floor most
+// health bodies cite as unsafe without medical supervision. See
+// nutrition-targets.ts.
+export const CALORIE_TARGET_FLOOR = 1200;
+
+// Fat target as a % of the calorie target, not a flat g/kg — ISSN/DGE
+// position stands specify fat as a share of total energy intake (20-30%
+// range), not a bodyweight ratio the way protein is. 0.275 is the
+// midpoint of that range. See nutrition-targets.ts.
+export const FAT_PERCENT_OF_TARGET = 0.275;
+
+// Activity multiplier for TDEE, derived from coach_profiles.sessions_per_week
+// rather than a separate onboarding question — reuses data already
+// collected. Deliberately has no "sedentary" (1.2) tier: sessions_per_week
+// is DB-constrained to >= 1, so nobody in this feature's population is
+// sedentary by definition, and defaulting anyone to 1.2 would
+// systematically underestimate calories for the whole member base.
+// Standard PAL-based multiplier table (WHO activity categories), restricted
+// to the 1-6 range this app actually collects.
+export const ACTIVITY_MULTIPLIER_BY_SESSIONS_PER_WEEK: Record<number, number> = {
+  1: 1.375,
+  2: 1.375,
+  3: 1.55,
+  4: 1.55,
+  5: 1.725,
+  6: 1.725,
+};
