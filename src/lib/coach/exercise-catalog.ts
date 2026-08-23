@@ -36,7 +36,11 @@ export interface CatalogExercise {
 // a leg extension/lying leg curl machine — plus bodyweight (plank, no
 // equipment needed). Replaces the earlier generic placeholder list
 // (which included a chest-press machine, kettlebell, and leg-press
-// machine Hove doesn't actually have).
+// machine Hove doesn't actually have). There's also a Peloton
+// treadmill/bike (confirmed same day) — not represented here since it's
+// cardio, not a resistance exercise this catalog generates working sets
+// for, but it's what the warm-up's pulse raiser uses (see
+// warmup-cooldown.ts).
 export const EXERCISE_CATALOG: CatalogExercise[] = [
   {
     key: "barbell_squat",

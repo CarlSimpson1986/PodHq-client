@@ -109,7 +109,28 @@ export async function getOrCreateWorkoutSession(
     .insert({ member_id: memberId, booking_id: bookingId, resource_id: resourceId, status: "generated" })
     .select("id")
     .single();
-  if (sessionError) throw new Error(sessionError.message);
+
+  if (sessionError) {
+    // A concurrent request for the same booking (React Strict Mode's
+    // dev-only double-effect-fire is the known trigger, but any duplicate
+    // in-flight request would hit this the same way) can win the race
+    // between our existence check above and this insert. The unique index
+    // on booking_id is the real guard — recover by loading whatever that
+    // other request already created instead of surfacing a 500; we never
+    // reach insertExercisesAndSets below, so there's no risk of a
+    // duplicate plan being written for this session.
+    if (sessionError.code === "23505") {
+      const { data: winner, error: winnerError } = await admin
+        .from("workout_sessions")
+        .select("id")
+        .eq("booking_id", bookingId)
+        .single();
+      if (winnerError) throw new Error(winnerError.message);
+      const detail = await loadSessionDetail(winner.id);
+      return { detail: { ...detail, excludedExerciseKeys: getInjuryExcludedKeys(profile.injuries) }, introNarration: null };
+    }
+    throw new Error(sessionError.message);
+  }
 
   await insertExercisesAndSets(session.id, plan);
 
