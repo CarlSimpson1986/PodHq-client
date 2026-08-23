@@ -18,12 +18,15 @@ const NAV_ITEMS = [
 // Profile), matching GymFlow's own tab bar (Coach added Stage 5 — the
 // brief's original nav spec always had 5 tabs; Stages 1-4 used a card on
 // Home since there was nothing to link a whole tab to yet). Not shown on
-// the auth pages (login/signup/forgot-password) or the buy-credits/
-// buy-membership/gift-voucher sub-pages reached *through* Shop, or the
-// coach-onboarding/workout sub-pages reached *through* Coach — those keep
-// the "Back to booking"-style link pattern instead, same as GymFlow's own
-// sub-screens don't repeat the tab bar's exact highlighted state for a
-// screen that isn't one of the 5 tabs.
+// the auth pages (login/signup/forgot-password), the buy-credits/
+// buy-membership/gift-voucher sub-pages reached *through* Shop (those keep
+// a "Back"-style link instead), or anywhere under /coach — the whole
+// Coach section has its own nested nav bar (CoachBottomNav, see
+// coach-bottom-nav.tsx) rather than this one, since it grew enough
+// content (dashboard, profile, workout, nutrition) that Carl asked for it
+// to feel like its own app-within-the-app, not more sections on one page.
+// /coach-onboarding and /workout/[bookingId] still use neither bar —
+// deliberately focused, no-nav-chrome flows.
 export function BottomNav() {
   const pathname = usePathname();
   const { installable, ios, promptInstall } = useInstallPrompt();

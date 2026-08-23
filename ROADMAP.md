@@ -88,3 +88,59 @@ auto-generated weekly review, honestly-stubbed Q&A) and Stage 11 (habit
 tracker), per the approved plan. Stages 8 (leaderboard) and 9
 (challenges) remain queued ahead of these in the plan file but were not
 what Carl asked for this session — not abandoned, just not next.
+
+**Same-day follow-up: Carl said "I still don't think you are getting
+what I mean by separate coaching hub."** Concrete mockups of three real
+options (themed-but-same-nav, full-screen takeover, second bottom tab
+bar) resolved it — he meant the second bottom tab bar all along, with
+full awareness of the duplicate-"Home" risk already flagged, wanting it
+built anyway with that fixed rather than avoided. Reworked accordingly:
+new `CoachBottomNav` (`src/components/coach-bottom-nav.tsx`) replaces the
+main `BottomNav` entirely on every `/coach/*` page — Exit / Dashboard /
+Profile / Workout / Nutrition. The first item is deliberately labelled
+**"Exit"** with its own new icon (`ArrowLeftIcon`), not "Home" — solves
+the actual risk (two nav bars both showing "Home" meaning different
+things) without abandoning the pattern Carl wanted. `/coach` itself
+slimmed back down to just Today/Check-in/Habits/Coming soon now that
+Workouts and Nutrition have their own dedicated tabs
+(`/coach/workout`, existing `/coach/nutrition`) — addresses a real
+follow-up concern Carl raised ("is there too much on one page?") once
+check-in/habits were going to add real content on top of what Stage 10a
+had stacked there.
+
+**Real gap closed in passing**: `/coach/profile` is a genuine new page,
+not just nav-shell filler — there was previously no way to edit
+weight/goals/injuries/etc. after the one-time onboarding flow.
+`CoachProfileEditForm` reuses the existing `coachProfileSchema` and the
+already-upsert `POST /api/member/coach-profile` route verbatim, just as
+a flat single-page form instead of onboarding's 6-step wizard (nothing
+to walk a returning member through — they're editing, not starting
+fresh). `/coach/workout` is the Workout tab: next-session link plus full
+history, moved out of the dashboard rather than duplicated.
+
+**Business-case exchange worth recording, not just the nav decision**:
+Carl asked directly whether all of this (nested nav, check-in, habits)
+was too much scope for a beta whose original purpose was just testing
+trial-to-subscription conversion. Real concern, raised honestly rather
+than just continuing to build. Carl's counter, checked rather than
+assumed: gym-industry/exercise-adherence research (PubMed literature on
+unsupervised fitness-center attrition, retention-industry data) does
+support "lack of a plan/guidance" as a leading, well-evidenced reason
+new members quit in the first 30-90 days — so building out real
+guidance depth (check-in, habits) is a defensible priority, not just
+scope creep. That argument supports the check-in/habit substance
+specifically; it doesn't itself argue for the nav shape, which was a
+separate, narrower decision (see above).
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (32/32),
+and `next build` all passed clean, including the two new `/coach/workout`
+and `/coach/profile` routes. Live-verified via the playground member:
+dashboard renders correctly slimmed down, `CoachBottomNav` confirmed
+present and correctly anchored to the real viewport bottom via direct
+DOM measurement (`position: fixed`, bottom edge matching
+`window.innerHeight`) after the browser screenshot tool's own viewport-
+scaling mismatch (documented earlier in this project's history) made it
+look absent in a screenshot when it wasn't. Full click-through of every
+new tab was cut short by an in-session tool rate limit — Profile/Workout
+tab navigation and the profile-edit save flow still need a real
+click-through pass before this is called fully verified.

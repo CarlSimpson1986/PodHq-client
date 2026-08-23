@@ -5,7 +5,7 @@ import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { computeNutritionTargets } from "@/lib/coach/nutrition-targets";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
-import { BottomNav } from "@/components/bottom-nav";
+import { CoachBottomNav } from "@/components/coach-bottom-nav";
 import { AppleIcon } from "@/components/icons";
 import { NutritionView } from "@/components/nutrition-view";
 
@@ -48,7 +48,7 @@ export default async function NutritionPage() {
           <NutritionView targets={targets} />
         </div>
       </div>
-      <BottomNav />
+      <CoachBottomNav />
     </main>
   );
 }

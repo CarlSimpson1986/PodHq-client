@@ -1,31 +1,24 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership, getNextUpcomingBooking } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
-import { getRecentCompletedSessions } from "@/lib/coach/workout-session";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
-import { BottomNav } from "@/components/bottom-nav";
+import { CoachBottomNav } from "@/components/coach-bottom-nav";
 import { TrialBanner } from "@/components/trial-banner";
 import { SparkleIcon } from "@/components/icons";
+import { SectionHeading, ComingSoonCard } from "@/components/coach-section";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" });
-}
-
-// The dashboard shell (Stage 10a) — named sections (Today, Check-in,
-// Workouts, Nutrition, Habits) over the exact same data the page already
-// fetched pre-restructure, no new queries. Check-in and Habits are honest
-// placeholders until Stage 10b/11 ship real content into them, same
-// "coming soon, not faked" posture as every other placeholder here. See
-// ROADMAP.md's "Hove AI Coach — Nutrition, Leaderboard & Challenges"
-// entries for the fuller history (Stage 5 built the original single-card
-// hub; this splits it into a real dashboard after Carl asked for more
-// structure and was talked out of a second bottom nav bar in favour of
-// this).
+// The Coach section's Dashboard tab — deliberately slim (Stage 10a
+// stacked Workouts/Nutrition here too as sections on one long page; Carl
+// asked for a real dedicated nav instead once check-in and habits were
+// going to add actual content on top of that, not just placeholder
+// cards, matching how content-heavy areas in apps like Strava/Whoop/
+// MyFitnessPal get their own tab bar rather than one long scrolling
+// page). Workouts and Nutrition now live at /coach/workout and
+// /coach/nutrition, reached via CoachBottomNav, not duplicated here.
 export default async function CoachPage() {
   const session = await createSessionClient();
   const {
@@ -48,11 +41,10 @@ export default async function CoachPage() {
   ]);
 
   const state = getCoachHomeState(member, membership);
-  const recentSessions = coachProfile ? await getRecentCompletedSessions(member.id) : [];
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Coach" subtitle="Your AI Coach hub" icon={SparkleIcon} iconHref="/profile" />
+      <PageHero title="Coach" subtitle="Your AI Coach dashboard" icon={SparkleIcon} iconHref="/profile" />
       <div className="card-light flex-1 space-y-8 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-8">
           {state.kind === "no_trial" && <TrialBanner />}
@@ -140,40 +132,10 @@ export default async function CoachPage() {
 
               {coachProfile && (
                 <section>
-                  <SectionHeading>Workouts</SectionHeading>
-                  {recentSessions.length === 0 ? (
-                    <p className="text-sm text-card-light-muted">Complete your first session to see it here.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {recentSessions.map((s) => (
-                        <li
-                          key={s.sessionId}
-                          className="flex items-center justify-between rounded-lg border border-card-light-border p-4"
-                        >
-                          <div>
-                            <p className="text-sm font-semibold">{formatDate(s.createdAt)}</p>
-                            <p className="text-xs text-card-light-muted">{s.muscleGroups.join(", ")}</p>
-                          </div>
-                          <p className="text-sm text-card-light-muted">{Math.round(s.totalVolumeKg)}kg</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <SectionHeading>Habits</SectionHeading>
+                  <ComingSoonCard title="Habit tracker" body="Track the habits you know you're bad at — coming soon." />
                 </section>
               )}
-
-              <section>
-                <SectionHeading>Nutrition</SectionHeading>
-                <Link href="/coach/nutrition" className="block rounded-xl border border-card-light-border p-5">
-                  <p className="text-sm font-semibold">Nutrition</p>
-                  <p className="mt-1 text-sm text-card-light-muted">See your daily calorie and macro targets.</p>
-                </Link>
-              </section>
-
-              <section>
-                <SectionHeading>Habits</SectionHeading>
-                <ComingSoonCard title="Habit tracker" body="Track the habits you know you're bad at — coming soon." />
-              </section>
 
               <section>
                 <SectionHeading>Coming soon</SectionHeading>
@@ -189,20 +151,7 @@ export default async function CoachPage() {
           )}
         </div>
       </div>
-      <BottomNav />
+      <CoachBottomNav />
     </main>
-  );
-}
-
-function SectionHeading({ children }: { children: ReactNode }) {
-  return <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">{children}</p>;
-}
-
-function ComingSoonCard({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-card-light-border p-5 opacity-70">
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-1 text-sm text-card-light-muted">{body}</p>
-    </div>
   );
 }
