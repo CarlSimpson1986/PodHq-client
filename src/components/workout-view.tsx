@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RPE_SCALE } from "@/lib/coach/types";
-import { getExerciseImages, getSafetyTip } from "@/lib/coach/exercise-catalog";
+import { getExerciseImages, getSafetyTip, getYoutubeVideoId } from "@/lib/coach/exercise-catalog";
 
 // How long each frame shows before auto-switching — reads as motion
 // without needing a real animated asset (the source images are two
@@ -104,9 +104,11 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   // Restarts cleanly whenever the exercise changes.
   useEffect(() => {
     if (phase !== "active") return;
+    const key = detail?.exercises[exerciseIndex]?.key;
+    if (!key || getYoutubeVideoId(key)) return;
     const interval = setInterval(() => setImageFrame((f) => (f === 0 ? 1 : 0)), IMAGE_FRAME_MS);
     return () => clearInterval(interval);
-  }, [phase, exerciseIndex]);
+  }, [phase, exerciseIndex, detail]);
 
   if (phase === "loading") {
     return <p className="text-center text-sm text-card-light-muted">Building your workout...</p>;
@@ -274,6 +276,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   // phase === "active"
   const images = getExerciseImages(exercise.key);
   const safetyTip = getSafetyTip(exercise.key);
+  const youtubeVideoId = getYoutubeVideoId(exercise.key);
   return (
     <div className="space-y-6">
       <div>
@@ -286,15 +289,27 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setImageFrame((f) => (f === 0 ? 1 : 0))}
-        className="block w-full overflow-hidden rounded-lg border border-card-light-border"
-        aria-label="Tap to switch position now"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- small local static asset, no next/image usage elsewhere in this codebase */}
-        <img src={images[imageFrame]} alt={`${exercise.name} — position ${imageFrame + 1} of 2`} className="w-full" />
-      </button>
+      {youtubeVideoId ? (
+        <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?rel=0`}
+            title={`${exercise.name} technique demonstration`}
+            className="h-full w-full"
+            allow="encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setImageFrame((f) => (f === 0 ? 1 : 0))}
+          className="block w-full overflow-hidden rounded-lg border border-card-light-border"
+          aria-label="Tap to switch position now"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- small local static asset, no next/image usage elsewhere in this codebase */}
+          <img src={images[imageFrame]} alt={`${exercise.name} — position ${imageFrame + 1} of 2`} className="w-full" />
+        </button>
+      )}
 
       {safetyTip && <p className="text-sm text-card-light-muted">⚠ {safetyTip}</p>}
 

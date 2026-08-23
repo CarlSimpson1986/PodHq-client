@@ -18,6 +18,12 @@ export interface CatalogExercise {
   // weight adjustment (generate-workout.ts): nothing with real injury
   // risk gets left to an LLM to improvise.
   safetyTip: string;
+  // YouTube video ID (the 11-char id, not the full URL) for a real
+  // technique demonstration — Carl-selected per exercise, not auto-picked
+  // (form-check quality varies too much across YouTube to pick blind).
+  // Undefined until chosen; workout-view.tsx falls back to the auto-loop
+  // start/end photo pair when unset.
+  youtubeVideoId?: string;
 }
 
 // Matches Hove's actual pod equipment (confirmed by Carl, 2026-08-23):
@@ -132,4 +138,8 @@ export function getExerciseImages(key: string): [string, string] {
 
 export function getSafetyTip(key: string): string | undefined {
   return EXERCISE_CATALOG.find((e) => e.key === key)?.safetyTip;
+}
+
+export function getYoutubeVideoId(key: string): string | undefined {
+  return EXERCISE_CATALOG.find((e) => e.key === key)?.youtubeVideoId;
 }

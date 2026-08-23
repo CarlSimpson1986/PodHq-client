@@ -143,7 +143,10 @@ export default async function CoachPage() {
                 </div>
               )}
 
-              <ComingSoonCard title="Nutrition" body="Your meal preferences are saved from onboarding — meal plans and macro tracking are coming soon." />
+              <Link href="/coach/nutrition" className="block rounded-xl border border-card-light-border p-5">
+                <p className="text-sm font-semibold">Nutrition</p>
+                <p className="mt-1 text-sm text-card-light-muted">See your daily calorie and macro targets.</p>
+              </Link>
               <ComingSoonCard
                 title="Tech integrations"
                 body="HRV, resting pulse, sleep, and steps need the native app (Apple Health / Google Health Connect aren't accessible from this web app) — coming with a future update."

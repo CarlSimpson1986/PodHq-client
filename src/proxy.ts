@@ -61,7 +61,11 @@ function buildCsp(nonce: string) {
     // that a plain 'self' connect-src silently blocks with no obvious error
     // pointing at the real cause).
     "connect-src 'self' https://fcm.googleapis.com",
-    "frame-src 'none'",
+    // youtube-nocookie.com (not youtube.com) — YouTube's privacy-enhanced
+    // embed domain, no tracking cookies set until the member actually
+    // presses play. Added for per-exercise technique videos on the
+    // workout screen (Carl-curated links, not auto-selected).
+    "frame-src https://www.youtube-nocookie.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
