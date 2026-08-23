@@ -136,10 +136,18 @@ parameter — this is a short narration task, not a reasoning task) plus a
 `max_tokens: 300` backstop; confirmed clean across 3 repeated runs after.
 **`help-bot.ts` uses the same model with `max_tokens: 300` and no
 `reasoning_effort` set** — same latent risk, just less likely to bite
-given the bigger budget. Not touched this session (out of Stage 3's
-scope, and it's a separately-shipped, already-verified route) — worth
-applying the same `reasoning_effort: "low"` fix there too in a future
-session.
+given the bigger budget.
+
+**Follow-up, same session: applied the identical fix to `help-bot.ts`.**
+`reasoning_effort: "low"` + `max_tokens: 300 → 350`. Verified against the
+real Groq API with three genuine member questions (the same 3-hour-
+cancellation and under-16-waiver questions from POD phase 2's own live
+verification, plus a new one) — first call hit Groq's free-tier TPM rate
+limit on the second/third question back-to-back (this route's system
+prompt is the full FAQ + Terms & Conditions, ~5,000 tokens per call, not
+a reasoning_effort issue), not a fix problem; all three confirmed complete
+or with a natural ending once spaced out. Throwaway test file deleted
+after.
 
 **Verified live**: a permanent unit-test file
 (`src/lib/coach/generate-workout.test.ts`, 9 tests — RPE-based weight

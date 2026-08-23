@@ -58,7 +58,15 @@ async function askGroq(message: string, history: ChatMessage[]): Promise<string>
         ...history.map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: message },
       ],
-      max_tokens: 300,
+      // gpt-oss-120b is a reasoning model — it spends completion tokens on
+      // a hidden `reasoning` field before the actual reply, which was
+      // found silently truncating coach-bot.ts's replies mid-sentence
+      // (2026-08-23, same model, tighter budget). reasoning_effort: "low"
+      // keeps that overhead small for a task this simple (a short FAQ
+      // answer, not a task that benefits from deep reasoning); max_tokens
+      // bumped slightly as a backstop.
+      reasoning_effort: "low",
+      max_tokens: 350,
       temperature: 0.3,
     }),
   });
