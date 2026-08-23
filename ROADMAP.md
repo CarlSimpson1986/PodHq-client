@@ -209,3 +209,31 @@ cleanly since one of the two racing inserts always succeeds; worth a
 proper fix (an idempotency lock or a client-side guard against a
 duplicate in-flight request) if it turns out to affect production, which
 doesn't double-invoke effects the way dev does.
+
+## Wearable integration research — Google Health API note — 2026-08-24
+
+Not built, just documented for whenever this gets prioritised (Fitbit
+was previously flagged as real wanted scope, a research spike not yet
+started). Confirmed via live web search: Fitbit's legacy Web API is
+being shut down **September 2026** — any future integration should
+target the **Google Health API** directly (reached general availability
+May 2026), not the old Fitbit endpoints, since OAuth tokens don't
+transfer between them regardless of which is targeted first. **Health
+Connect** (Android's on-device data layer) stays a separate thing and is
+still native-only — same constraint the Coach hub's "Tech integrations"
+placeholder already states for Apple Health.
+
+Real nuance on "is there truly no way around it": **Apple Health/HealthKit
+has zero cloud API by design** (Apple's own privacy stance, not a gap
+that'll close) — that data only ever comes from a native (or
+Capacitor-wrapped) app with real HealthKit entitlements, no workaround.
+**Health Connect is less absolute**: if the underlying wearable brand
+(Fitbit, Garmin, Whoop, Oura) has its own cloud API, that data is
+reachable straight from the device maker's API without ever touching
+Health Connect at all — Health Connect only matters for a source with no
+cloud counterpart of its own. The realistic middle path if this gets
+prioritised before a full native rebuild: wrap the existing PWA in a thin
+native shell (Capacitor or similar) purely to get real HealthKit/Health
+Connect entitlements, reusing nearly all of today's code rather than a
+ground-up rewrite — matches the "high probability of an eventual native
+app" Carl already flagged as likely once this is battle-tested.
