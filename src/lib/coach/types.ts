@@ -96,3 +96,48 @@ export const CHECK_IN_DAY_OF_WEEK = 0;
 // late as urgent, only a genuinely-gone-quiet member should. See
 // checkin-state.ts.
 export const CHECK_IN_GRACE_DAYS = 3;
+
+// Training-block periodization (Stage 12) — standard block periodization
+// (hypertrophy/strength alternation with a deload between phases) is
+// textbook S&C, not invented; the specific rep-target numbers reuse
+// REP_TARGET_BY_GOAL's existing values (10 for muscle_gain, 5 for
+// strength) rather than introducing new ones. See generate-workout.ts
+// and training-block-state.ts.
+export const BLOCK_TYPES = ["hypertrophy", "strength", "deload"] as const;
+export type BlockType = (typeof BLOCK_TYPES)[number];
+
+export const REP_TARGET_BY_BLOCK: Record<BlockType, number> = {
+  hypertrophy: 10,
+  strength: 5,
+  deload: 10,
+};
+
+export const BLOCK_DURATION_WEEKS: Record<BlockType, number> = {
+  hypertrophy: 12,
+  strength: 12,
+  deload: 1,
+};
+
+// A deload isn't just a lighter rep target — real deload programming
+// reduces both intensity and volume. Directionally-correct, not a
+// literature-cited number (same category as CHECK_IN_GRACE_DAYS above),
+// flagged for Carl same as every other invented-but-defensible constant
+// in this file.
+export const DELOAD_WEIGHT_MULTIPLIER = 0.85;
+export const DELOAD_SETS_PER_EXERCISE = 2;
+
+// Suggestion-gating thresholds for "is it time to shift blocks" —
+// deliberately invented heuristics, not literature-cited (same category
+// as CHECK_IN_GRACE_DAYS), acceptable specifically because they only
+// ever produce a suggestion a member must explicitly confirm, never an
+// autonomous change. See block-change-gate.ts.
+// A real coach wouldn't advance someone who missed roughly half their
+// planned sessions — they haven't earned the next phase's stimulus.
+export const BLOCK_ATTENDANCE_KEEP_THRESHOLD = 0.6;
+// More sets hard-or-killer than not, the natural majority line — only
+// checked at the one real escalation point in the cycle (deload→strength).
+export const BLOCK_HIGH_RPE_THRESHOLD = 0.5;
+// Below this many logged RPE values, the sample is too thin to trust —
+// gate on attendance alone rather than let a sparse sample swing the
+// recommendation either way.
+export const BLOCK_MIN_RPE_SAMPLE = 3;
