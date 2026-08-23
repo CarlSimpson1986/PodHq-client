@@ -81,7 +81,7 @@ export function CoachOnboardingForm() {
     (step === 2 && form.experienceLevel !== null) ||
     step === 3 ||
     (step === 4 && form.sessionsPerWeek !== null) ||
-    step === 5 ||
+    (step === 5 && form.weightKg !== "" && form.heightCm !== "" && form.age !== "") ||
     step === 6;
 
   async function handleSubmit(e: FormEvent) {
@@ -97,9 +97,9 @@ export function CoachOnboardingForm() {
           experienceLevel: form.experienceLevel,
           injuries: form.injuries,
           sessionsPerWeek: form.sessionsPerWeek,
-          weightKg: form.weightKg ? Number(form.weightKg) : undefined,
-          heightCm: form.heightCm ? Number(form.heightCm) : undefined,
-          age: form.age ? Number(form.age) : undefined,
+          weightKg: Number(form.weightKg),
+          heightCm: Number(form.heightCm),
+          age: Number(form.age),
           mealCountPreference: form.mealCountPreference ? Number(form.mealCountPreference) : undefined,
           foodAllergies: form.foodAllergies,
           foodPreferences: form.foodPreferences ?? undefined,
@@ -192,7 +192,9 @@ export function CoachOnboardingForm() {
       {step === 5 && (
         <div className="space-y-5">
           <p className="text-base font-semibold">Your body stats</p>
-          <p className="-mt-3 text-xs text-card-light-muted">Optional — helps personalise your plan further.</p>
+          <p className="-mt-3 text-xs text-card-light-muted">
+            Needed to work out your daily energy needs once nutrition guidance is available.
+          </p>
           <div>
             <label htmlFor="weightKg" className="mb-1.5 block text-sm text-card-light-muted">
               Weight (kg)
@@ -218,21 +220,24 @@ export function CoachOnboardingForm() {
         <div className="space-y-5">
           <p className="text-base font-semibold">A bit about your diet</p>
           <p className="-mt-3 text-xs text-card-light-muted">Optional — for when nutrition guidance is available.</p>
-          <div>
-            <label htmlFor="mealCountPreference" className="mb-1.5 block text-sm text-card-light-muted">
-              Meals per day
-            </label>
-            <input
-              id="mealCountPreference"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={8}
-              className={inputClass}
-              value={form.mealCountPreference}
-              onChange={(e) => update("mealCountPreference", e.target.value)}
-            />
-          </div>
+          <fieldset>
+            <legend className="mb-1.5 block text-sm text-card-light-muted">Meals per day</legend>
+            <div className="grid grid-cols-3 gap-2">
+              {["2", "3", "4", "5", "6+"].map((label) => {
+                const value = label === "6+" ? "6" : label;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => update("mealCountPreference", value)}
+                    className={optionClass(form.mealCountPreference === value)}
+                  >
+                    <span className="block text-center">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
           <div>
             <label htmlFor="foodAllergies" className="mb-1.5 block text-sm text-card-light-muted">
               Food allergies

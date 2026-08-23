@@ -13,27 +13,45 @@ export interface CatalogExercise {
   // Conservative first-time weight, before any real RPE feedback exists
   // for this exercise. 0 = bodyweight/no added load.
   startingWeightKg: Record<ExperienceLevel, number>;
+  // Reviewed, standard technique/safety cue — hardcoded and written by a
+  // person, deliberately never LLM-generated. Same principle as the RPE
+  // weight adjustment (generate-workout.ts): nothing with real injury
+  // risk gets left to an LLM to improvise.
+  safetyTip: string;
 }
 
-// Placeholder catalog — a small, generic set matching common private-pod
-// gym equipment (machines, dumbbells, kettlebells, bodyweight), NOT
-// pulled from Hove's actual equipment inventory (pod_resources has no
-// equipment field to draw from yet). Adjust this list to what Hove's pod
-// actually has before this goes live to real members.
+// Matches Hove's actual pod equipment (confirmed by Carl, 2026-08-23):
+// dumbbells, a cable machine, a power rack with barbell and weights, and
+// a leg extension/lying leg curl machine — plus bodyweight (plank, no
+// equipment needed). Replaces the earlier generic placeholder list
+// (which included a chest-press machine, kettlebell, and leg-press
+// machine Hove doesn't actually have).
 export const EXERCISE_CATALOG: CatalogExercise[] = [
   {
-    key: "goblet_squat",
-    name: "Goblet Squat",
+    key: "barbell_squat",
+    name: "Barbell Squat",
     muscleGroup: "legs",
-    avoidIfInjury: ["knee"],
-    startingWeightKg: { beginner: 8, intermediate: 16, advanced: 24 },
+    avoidIfInjury: ["knee", "back"],
+    // An empty Olympic bar is 20kg — the real floor for this exercise,
+    // not 0.
+    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
+    safetyTip: "Keep your chest up and core braced. Push through your heels and don't let your knees cave inward.",
   },
   {
-    key: "seated_chest_press",
-    name: "Seated Chest Press",
+    key: "romanian_deadlift",
+    name: "Romanian Deadlift",
+    muscleGroup: "legs",
+    avoidIfInjury: ["back", "knee"],
+    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
+    safetyTip: "Keep the bar close to your legs and your back flat. Hinge at the hips — don't round your lower back.",
+  },
+  {
+    key: "barbell_bench_press",
+    name: "Barbell Bench Press",
     muscleGroup: "chest",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
+    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
+    safetyTip: "Feet flat on the floor, shoulder blades pulled back. Control the bar down — don't bounce it off your chest.",
   },
   {
     key: "lat_pulldown",
@@ -41,20 +59,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleGroup: "back",
     avoidIfInjury: ["shoulders"],
     startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
-  },
-  {
-    key: "dumbbell_shoulder_press",
-    name: "Dumbbell Shoulder Press",
-    muscleGroup: "shoulders",
-    avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 6, intermediate: 10, advanced: 16 },
-  },
-  {
-    key: "romanian_deadlift",
-    name: "Romanian Deadlift",
-    muscleGroup: "legs",
-    avoidIfInjury: ["back", "knee"],
-    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 40 },
+    safetyTip: "Pull with your back, not your arms. Avoid leaning back excessively or using momentum.",
   },
   {
     key: "seated_row",
@@ -62,6 +67,15 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleGroup: "back",
     avoidIfInjury: ["back"],
     startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
+    safetyTip: "Keep your back straight and squeeze your shoulder blades together. Don't round forward at the start.",
+  },
+  {
+    key: "dumbbell_shoulder_press",
+    name: "Dumbbell Shoulder Press",
+    muscleGroup: "shoulders",
+    avoidIfInjury: ["shoulders"],
+    startingWeightKg: { beginner: 6, intermediate: 10, advanced: 16 },
+    safetyTip: "Brace your core and avoid arching your lower back. Press straight up, not forward.",
   },
   {
     key: "dumbbell_bicep_curl",
@@ -69,6 +83,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleGroup: "arms",
     avoidIfInjury: [],
     startingWeightKg: { beginner: 4, intermediate: 8, advanced: 12 },
+    safetyTip: "Keep your elbows close to your body and avoid swinging the weight. Control the lowering phase.",
   },
   {
     key: "tricep_pushdown",
@@ -76,6 +91,23 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleGroup: "arms",
     avoidIfInjury: ["shoulders"],
     startingWeightKg: { beginner: 10, intermediate: 20, advanced: 30 },
+    safetyTip: "Keep your elbows pinned to your sides. Avoid leaning your whole body into the movement.",
+  },
+  {
+    key: "leg_extension",
+    name: "Leg Extension",
+    muscleGroup: "legs",
+    avoidIfInjury: ["knee"],
+    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
+    safetyTip: "Move through a controlled range — avoid snapping your knees straight at the top.",
+  },
+  {
+    key: "lying_leg_curl",
+    name: "Lying Leg Curl",
+    muscleGroup: "legs",
+    avoidIfInjury: ["knee"],
+    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
+    safetyTip: "Keep your hips pressed into the pad. Avoid using momentum to swing the weight up.",
   },
   {
     key: "plank",
@@ -83,26 +115,21 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     muscleGroup: "core",
     avoidIfInjury: ["back"],
     startingWeightKg: { beginner: 0, intermediate: 0, advanced: 0 },
-  },
-  {
-    key: "kettlebell_swing",
-    name: "Kettlebell Swing",
-    muscleGroup: "full_body",
-    avoidIfInjury: ["back", "knee"],
-    startingWeightKg: { beginner: 8, intermediate: 16, advanced: 24 },
-  },
-  {
-    key: "bodyweight_squat",
-    name: "Bodyweight Squat",
-    muscleGroup: "legs",
-    avoidIfInjury: ["knee"],
-    startingWeightKg: { beginner: 0, intermediate: 0, advanced: 0 },
-  },
-  {
-    key: "leg_press",
-    name: "Leg Press",
-    muscleGroup: "legs",
-    avoidIfInjury: ["knee"],
-    startingWeightKg: { beginner: 20, intermediate: 50, advanced: 90 },
+    safetyTip: "Keep your body in a straight line from head to heels — don't let your hips sag or pike up.",
   },
 ];
+
+// Start/end position photos, sourced from yuhonas/free-exercise-db
+// (Unlicense, public domain) and self-hosted under public/exercises/ —
+// see ROADMAP.md's Stage 5 entry for the id mapping used to download
+// them. That dataset provides two static JPGs per exercise, not an
+// animated GIF (the brief's "ExerciseDB GIFs" description doesn't match
+// the real repo) — auto-looping between the two in the UI reads as
+// motion without needing new assets.
+export function getExerciseImages(key: string): [string, string] {
+  return [`/exercises/${key}/0.jpg`, `/exercises/${key}/1.jpg`];
+}
+
+export function getSafetyTip(key: string): string | undefined {
+  return EXERCISE_CATALOG.find((e) => e.key === key)?.safetyTip;
+}

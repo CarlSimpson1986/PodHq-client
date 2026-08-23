@@ -3,22 +3,27 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HomeIcon, DumbbellIcon, ShopIcon, UserIcon, DownloadIcon } from "@/components/icons";
+import { HomeIcon, DumbbellIcon, ShopIcon, UserIcon, DownloadIcon, SparkleIcon } from "@/components/icons";
 import { useInstallPrompt } from "@/lib/use-install-prompt";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: HomeIcon, tourId: undefined },
   { href: "/book", label: "Book", icon: DumbbellIcon, tourId: "tour-nav-book" },
+  { href: "/coach", label: "Coach", icon: SparkleIcon, tourId: "tour-nav-coach" },
   { href: "/shop", label: "Shop", icon: ShopIcon, tourId: "tour-nav-shop" },
   { href: "/profile", label: "Profile", icon: UserIcon, tourId: "tour-nav-profile" },
 ];
 
-// Fixed at the bottom of every member-facing page (Home/Book/Shop/Profile),
-// matching GymFlow's own tab bar. Not shown on the auth pages (login/signup/
-// forgot-password) or the buy-credits/buy-membership/gift-voucher sub-pages
-// reached *through* Shop — those keep the "Back to booking"-style link
-// pattern instead, same as GymFlow's own sub-screens don't repeat the tab
-// bar's exact highlighted state for a screen that isn't one of the 4 tabs.
+// Fixed at the bottom of every member-facing page (Home/Book/Coach/Shop/
+// Profile), matching GymFlow's own tab bar (Coach added Stage 5 — the
+// brief's original nav spec always had 5 tabs; Stages 1-4 used a card on
+// Home since there was nothing to link a whole tab to yet). Not shown on
+// the auth pages (login/signup/forgot-password) or the buy-credits/
+// buy-membership/gift-voucher sub-pages reached *through* Shop, or the
+// coach-onboarding/workout sub-pages reached *through* Coach — those keep
+// the "Back to booking"-style link pattern instead, same as GymFlow's own
+// sub-screens don't repeat the tab bar's exact highlighted state for a
+// screen that isn't one of the 5 tabs.
 export function BottomNav() {
   const pathname = usePathname();
   const { installable, ios, promptInstall } = useInstallPrompt();
