@@ -53,7 +53,9 @@ function SignupForm() {
       });
       const body = await res.json();
       if (body.status === "ok") {
-        setMessage(body.message ?? "Check your email to confirm your account.");
+        setMessage(
+          body.message ?? "Check your email — we've sent a confirmation link, or a sign-in link if you already have an account."
+        );
       } else {
         setError(body.message ?? "Something went wrong.");
       }

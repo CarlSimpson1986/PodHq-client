@@ -11,8 +11,14 @@ import { staffNewSignupEmail } from "@/lib/notifications/templates";
 import { recordSignupLead } from "@/lib/leads/record-signup-lead";
 
 // Never reveals whether the email was already registered — same
-// no-enumeration principle as podHq's magic-link GENERIC_MESSAGE.
-const GENERIC_MESSAGE = "Check your email to confirm your account.";
+// no-enumeration principle as podHq's magic-link GENERIC_MESSAGE. Wording
+// covers both outcomes up front (new-account confirmation link vs.
+// sign-in link for an existing account) so a genuine user isn't left
+// confused by a generic message that doesn't match what actually landed
+// in their inbox — without the two cases ever being distinguishable from
+// the response itself.
+const GENERIC_MESSAGE =
+  "Check your email — we've sent a confirmation link, or a sign-in link if you already have an account.";
 
 export async function POST(request: NextRequest) {
   const ip = getRequestIp(request);
