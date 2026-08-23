@@ -158,3 +158,14 @@ export function IdCardIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+// 4-point sparkle — the "Coach" bottom-nav tab's icon. Distinct from
+// DumbbellIcon (already used by "Book" and by the AI Coach visuals on
+// Home/onboarding) so the new tab doesn't visually collide with them.
+export function SparkleIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" strokeLinejoin="round" />
+    </svg>
+  );
+}

@@ -37,9 +37,12 @@ export interface CoachProfileInput {
   experienceLevel: ExperienceLevel;
   injuries: string | null;
   sessionsPerWeek: number;
-  weightKg: number | null;
-  heightCm: number | null;
-  age: number | null;
+  // Required on write (validated by coachProfileSchema) — Harris-Benedict
+  // BMR needs all three. CoachProfile's read-side type keeps these
+  // nullable since the DB columns themselves stay nullable.
+  weightKg: number;
+  heightCm: number;
+  age: number;
   mealCountPreference: number | null;
   foodAllergies: string | null;
   foodPreferences: FoodPreference | null;

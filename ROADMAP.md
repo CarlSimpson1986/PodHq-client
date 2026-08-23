@@ -19,208 +19,120 @@ dropdown — see the archive below for the pilot-era stage detail.
 fix) have been moved to `ROADMAP-ARCHIVE-2.md`**, **the Stripe Connect
 Hove pilot (2026-08-19) has been moved to `ROADMAP-ARCHIVE-3.md`**, **the
 guided first-login tour and static FAQ, POD phase 1 (2026-08-21) have been
-moved to `ROADMAP-ARCHIVE-4.md`**, and **POD phase 2, the real LLM chat
-bot (2026-08-22), has been moved to `ROADMAP-ARCHIVE-5.md`** — all split
-out to keep this file within Claude Code's ~15,000-character `@`-import
-limit. All archives are reference-only (not auto-loaded by CLAUDE.md);
-check them for full stage-by-stage build history. This file picks up from
-the Hove AI Coach trial beta (2026-08-23) and is the active, auto-loaded
-log going forward. If this file grows too large again, split it the same
-way into a numbered `ROADMAP-ARCHIVE-6.md`, leave a pointer note at the
-top of this file, and update this paragraph plus `CLAUDE.md`'s
+moved to `ROADMAP-ARCHIVE-4.md`**, **POD phase 2, the real LLM chat bot
+(2026-08-22), has been moved to `ROADMAP-ARCHIVE-5.md`**, and **the Hove
+AI Coach trial beta's Stages 1-4 — trial data model through the
+onboarding/generate/log/RPE loop (2026-08-23) — have been moved to
+`ROADMAP-ARCHIVE-6.md`** — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. All archives are
+reference-only (not auto-loaded by CLAUDE.md); check them for full
+stage-by-stage build history. This file picks up from the Hove AI Coach
+trial beta's Stage 5 (2026-08-23) and is the active, auto-loaded log
+going forward. If this file grows too large again, split it the same way
+into a numbered `ROADMAP-ARCHIVE-7.md`, leave a pointer note at the top
+of this file, and update this paragraph plus `CLAUDE.md`'s
 session-handoff guidance to match.
 
-## Hove AI Coach trial beta, Stage 1 — 2026-08-23
+## Hove AI Coach trial beta, Stage 5 — 2026-08-23
 
-New initiative, separate from POD: a 7-day free AI Coach trial + tier
-funnel, scoped down from the full `MyFitPod-App-Brief.docx` platform
-rebuild to a beta specifically for Hove. Silver/Gold/Platinum differ only
-by session-count allocation — every paid tier and every active trial gets
-the identical AI Coach feature set (priority booking, Recovery Suite
-gating, and challenge-tier pricing were explicitly stripped out as tier
-differentiators after discussion). Nutrition, community challenges, the
-full 1,300+-exercise GIF library, and push/email Heartbeat beyond one
-trial-ending nudge are all deferred — this beta is only testing whether
-the trial→subscription funnel converts. Full 5-stage plan agreed with the
-user before building (`C:\Users\carls\.claude\plans\fluffy-sparking-fox.md`);
-building and verifying one stage at a time, same discipline as every other
-feature in this project.
+Closes out the plan's remaining polish stage after Stage 4 shipped the
+core trial→onboarding→generate→log→RPE→adjust loop (see
+`ROADMAP-ARCHIVE-6.md`). Carl reviewed the shipped loop live and asked
+for three more things: (1) a workout overview screen plus a demonstration
+image per exercise, (2) a meal-frequency selector instead of free-text
+entry, (3) a dedicated "Coach" hub tab consolidating stats/workouts/
+nutrition/integrations/challenges — "almost like a separate app in the
+main app" — matching the original brief's 5-tab nav spec exactly. Full
+plan agreed via Plan Mode before building
+(`C:\Users\carls\.claude\plans\fluffy-sparking-fox.md`).
 
-Session also triggered by the user reviewing competitor screenshots (Zing
-Coach) and asking specifically for its post-set RPE (rate-of-perceived-
-exertion) mechanic — added to `MyFitPod-App-Brief.docx` itself first (two
-new bullets in §9), then designed into this build's Stage 3 deterministic
-weight-progression logic so it's real from day one, not bolted on later.
+**Real discrepancy found before building, not assumed away**: the brief
+claims exercise "GIFs from ExerciseDB open source GitHub repo
+(yuhonas/free-exercise-db)." Checked the actual repo directly (Unlicense,
+public domain) — it provides exactly two static JPGs per exercise (start/
+end position), not an animated GIF. Self-hosted the matched pair per
+catalog exercise under `public/exercises/<key>/{0,1}.jpg` and built a
+tap-to-toggle image rather than fabricating a fake GIF from two frames.
 
-**Stage 1 — trial data model + activation mechanics, done and verified
-live.** `podHq/supabase/migrations/0047_member_trial.sql`: three nullable
-timestamps on `members` (`trial_activated_at`/`trial_started_at`/
-`trial_expires_at`), same "nullable timestamp, not boolean" reasoning as
-`tour_completed_at` (0045). `hasPremium(member)` (`src/lib/data/member.ts`)
-combines trial-expiry with the existing `getActiveMembership()` check — no
-changes to billing/webhook code at all. New `POST /api/member/start-trial`
-stamps `trial_activated_at` (idempotent). Trial-clock hook added to
-`src/app/api/bookings/route.ts`: deliberately gated on `trial_started_at
-IS NULL` rather than reusing the route's existing "first booking ever"
-count, since that would never fire for an existing Hove member with
-booking history who activates the trial later — the null-gate means
-"first booking since activating" instead, correctly and with no extra
-query.
+**Real equipment correction, mid-build**: Carl supplied Hove's actual pod
+equipment — dumbbells, a cable machine, a power rack with barbell and
+weights, and a leg extension/lying leg curl machine (no chest-press
+machine, kettlebell, or leg-press machine, all of which the placeholder
+catalog had wrongly assumed). `src/lib/coach/exercise-catalog.ts` rebuilt
+to an 11-exercise catalog matching exactly what's really there.
 
-**Verified live** via a throwaway member/auth-user (cleaned up after):
-confirmed the migration's columns exist, activated the trial, booked a
-session (stamped both timestamps correctly, ~7 days out), booked a second
-session (confirmed no re-stamp). First verification pass gave a false
-"FAIL" from a test-script bug (strict string comparison of two
-differently-formatted-but-identical timestamps — Postgres returns
-`+00:00`, JS produces `Z`); fixed by comparing parsed epoch values instead,
-which is what actually matters. `npx tsc --noEmit`, `eslint`,
-`npx vitest run`, and `next build` all pass clean.
+**Stage 5a built**: `workout-view.tsx` gained an `"overview"` phase
+(lists every exercise with muscle group and sets×reps before starting)
+between `"intro"` and the first active exercise; `coach-onboarding-form.tsx`'s
+free-text "meals per day" input became a button-grid selector (2/3/4/5/
+6+), matching the existing sessions-per-week pattern exactly.
 
-**Stage 2 — trial UI + four-state home screen, done and verified live.**
-`src/lib/coach/trial-state.ts`'s `getCoachHomeState()` derives a
-presentation-only state (`no_trial` / `trial_pending` / `trial_active` /
-`trial_expired` / `subscriber`) from the member + membership rows the home
-page already fetches — no new queries. Five states, not the brief's four:
-`trial_pending` (tapped Start but hasn't booked yet, so the clock hasn't
-started) needed its own copy so a member who already said yes isn't shown
-the initial pitch again. `AICoachSection` (`src/components/ai-coach-section.tsx`)
-renders each state; `no_trial` renders the new `TrialBanner`
-(`src/components/trial-banner.tsx`) — banner → preview (three outcome
-bullets, deliberately scoped to only what this beta actually builds, not
-the brief's six including nutrition/community/HealthKit) → "Start my free
-trial" → `POST /api/member/start-trial` → confirmation → `router.refresh()`.
-`trial_active`/`subscriber` states don't fabricate workout stats (streaks,
-PBs) since Stage 3/4 haven't built that data yet — just accurate status and
-the next real action.
+**Stage 5b built**: new `SparkleIcon` (`icons.tsx`) and a 5th `bottom-nav.tsx`
+entry (`/coach`, distinct from the `DumbbellIcon` already used for Book/
+AI-Coach visuals). New `src/app/coach/page.tsx` hub page: full-detail
+status card for all 5 trial states (reusing `getCoachHomeState()`),
+today's-workout action, a "Recent workouts" list
+(`getWorkoutHistory`/`getRecentCompletedSessions` in `coach-profile.ts` /
+`workout-session.ts`), and three honest "coming soon" placeholders
+(Nutrition, Tech integrations — explicitly explains HealthKit/Health
+Connect are native-only per the brief's own §3, Challenges) rather than
+faking output for features not yet built. Home's `ai-coach-section.tsx`
+trimmed to a slim status pointer for `trial_active`/`subscriber` states
+(props reduced to just `{ state }`) now that the Coach tab is the
+dedicated space — avoids duplicating the full action set in two places.
 
-**Verified live end-to-end via a throwaway member** in the real browser
-(Chrome, real login, real click-through — not just component review):
-banner → preview → start trial → confirmation → home screen correctly
-switched to `trial_pending`; booked a real session, home screen correctly
-switched to `trial_active` with "7 days remaining" in the right accent
-colour; `trial_expired` and `subscriber` states confirmed by directly
-setting the same test member's DB fields and reloading (ghost-styled loss
--aversion copy, and "Gold member" in green with the redundant "Get Your
-Membership" card correctly disappearing). Test member, booking, and
-membership row all deleted after. `npx tsc --noEmit`, `eslint`,
-`npx vitest run`, and `next build` all pass clean.
+**Verified live** via a throwaway member click-through: overview screen
+listed the correct 4 exercises with accurate sets×reps; meal-frequency
+grid submitted correctly; Coach tab rendered and highlighted correctly in
+the bottom nav; hub showed accurate trial state and correct recent-
+workout volume; Home's trimmed card linked correctly into the tab.
+`npx tsc --noEmit`, `eslint`, `npx vitest run`, and `next build` all
+passed clean.
 
-**Stage 3 — coach profile + workout data model + deterministic RPE engine,
-done and verified live.** `podHq/supabase/migrations/0048_coach_profiles.sql`
-(one row per member — goal/experience/injuries/sessions-per-week/body
-stats, separate table matching the members/memberships split, not more
-`members` columns) and `0049_workout_sessions.sql` (`workout_sessions` →
-`workout_exercises` → `workout_sets`, the last carrying `rpe smallint` —
-the actual column the whole Zing-inspired feature request was for).
-`src/lib/coach/generate-workout.ts` is pure deterministic code, no LLM —
-per this session's confirmed decision, an LLM never computes training
-loads directly: RPE 1-2 (Effortless/Easy) trends weight up ~5%, 3 (Just
-Right) holds it, 4-5 (Hard/Killer) trends it down ~5%, rounded to the
-nearest 1.25kg plate; muscle-group rotation avoids whatever the immediately
-preceding session trained; injury keywords (free text, matched against a
-small placeholder exercise catalog in `exercise-catalog.ts` — generic
-private-pod-gym equipment, NOT Hove's real inventory, needs adjusting
-before real members see it) exclude unsafe exercises even if that leaves
-fewer than a full session. `src/lib/coach-bot.ts` narrates the plan
-Groq→Claude, matching `help-bot.ts`'s provider-swap shape — deliberately
-never the source of the numbers, only the voice.
+**Same-day follow-up, three real corrections from live review, not
+assumed-good after Stage 5a/5b's own verification passed:**
 
-**Real bug found and fixed during verification**: `openai/gpt-oss-120b`
-(the same model `help-bot.ts` already uses live) is a reasoning model —
-it spends completion tokens on a hidden `reasoning` field before the
-actual reply, so `coach-bot.ts`'s original `max_tokens: 150` was silently
-truncating narration mid-sentence, non-deterministically, roughly as often
-as not. Fixed with `reasoning_effort: "low"` (a real documented Groq
-parameter — this is a short narration task, not a reasoning task) plus a
-`max_tokens: 300` backstop; confirmed clean across 3 repeated runs after.
-**`help-bot.ts` uses the same model with `max_tokens: 300` and no
-`reasoning_effort` set** — same latent risk, just less likely to bite
-given the bigger budget.
+1. **Body stats wrongly marked optional.** Carl asked directly why
+   weight/height/age were optional in onboarding given TDEE needs them,
+   and whether body fat % or activity level were missing instead.
+   Checked the actual formula before answering either way: Harris-
+   Benedict BMR (what this app will use) needs weight/height/age/gender,
+   not body fat % (that's Katch-McArdle, a different formula, not needed
+   here) — so body fat %/activity level were correctly excluded, but
+   marking the three real inputs "Optional" was a genuine bug, not a
+   deliberate simplification. Fixed: `coachProfileSchema`
+   (`src/lib/validation/coach-profile.ts`) — `weightKg`/`heightCm`/`age`
+   changed from optional to required numbers; `CoachProfileInput`
+   (`coach-profile.ts`) same; the API route
+   (`api/member/coach-profile/route.ts`) drops its `?? null` fallbacks;
+   `coach-onboarding-form.tsx` step 5's `canAdvance` now requires all
+   three fields non-empty before Continue enables, and its copy changed
+   from "Optional — helps personalise your plan further" to "Needed to
+   work out your daily energy needs once nutrition guidance is
+   available."
+2. **Exercise images required a tap; Carl asked for automatic motion.**
+   `workout-view.tsx` gained an auto-loop `useEffect` (900ms interval,
+   swaps between the two frames, restarts cleanly on exercise change,
+   only runs during the `"active"` phase) so the demonstration reads as
+   continuous motion without requiring interaction — the manual tap
+   still works as a fallback, the caption prompting it was removed.
+3. **No technique/safety guidance per exercise.** Added a `safetyTip`
+   field to every `CatalogExercise` entry — hardcoded, human-reviewed
+   text, deliberately never LLM-generated, same non-negotiable principle
+   already applied to RPE-driven weight progression (`generate-workout.ts`):
+   nothing carrying real physical injury risk gets left to an LLM to
+   improvise. Rendered under the image on the active-exercise screen via
+   a new `getSafetyTip(key)` helper.
 
-**Follow-up, same session: applied the identical fix to `help-bot.ts`.**
-`reasoning_effort: "low"` + `max_tokens: 300 → 350`. Verified against the
-real Groq API with three genuine member questions (the same 3-hour-
-cancellation and under-16-waiver questions from POD phase 2's own live
-verification, plus a new one) — first call hit Groq's free-tier TPM rate
-limit on the second/third question back-to-back (this route's system
-prompt is the full FAQ + Terms & Conditions, ~5,000 tokens per call, not
-a reasoning_effort issue), not a fix problem; all three confirmed complete
-or with a natural ending once spaced out. Throwaway test file deleted
-after.
+**Verified live end-to-end**, a fourth throwaway member walked through
+onboarding → booking → workout: Continue on onboarding step 5 correctly
+stayed disabled until weight/height/age were all filled, then enabled;
+the exercise image visibly auto-switched between start/end position
+across two screenshots one second apart with no click; the correct
+safety tip ("Keep your chest up and core braced. Push through your heels
+and don't let your knees cave inward.") rendered under the Barbell Squat
+image. Test member/booking/session data deleted after.
+`npx tsc --noEmit`, `eslint`, `npx vitest run` (24/24 passing), and
+`next build` all passed clean on this final pass too.
 
-**Verified live**: a permanent unit-test file
-(`src/lib/coach/generate-workout.test.ts`, 9 tests — RPE-based weight
-trending in all directions, rep targets by goal, rotation, injury
-exclusion including the "filtering leaves almost nothing" edge case) plus
-a throwaway DB-integration test exercising the real `getWorkoutHistory()`
-against real Supabase data (confirmed the migrations landed correctly,
-and that rotation/RPE-adjustment work correctly when fed genuine DB
-history, not just synthetic fixtures) — deleted after, per this project's
-established pattern. `npx tsc --noEmit`, `eslint`, `npx vitest run`
-(24/24 passing), and `next build` all pass clean.
-
-## Hove AI Coach trial beta, Stage 4 — 2026-08-23
-
-**Real gap found before building, not during**: nothing in Stages 1-3 let
-a member actually answer the coach-onboarding questions — the plan's
-Stage 3/4 split assumed a `coach_profiles` row existed by the time
-workout generation ran. Folded a minimal onboarding flow into Stage 4 as
-a hard prerequisite, not scope creep.
-
-**Onboarding scope changed mid-session, deliberately.** Originally scoped
-to ask nutrition questions separately, later, when the nutrition feature
-itself ships (avoiding friction on this beta's actual metric — trial
-activation). User overrode this: "all onboarding should be done at once."
-Added meal count/food allergies/dietary preference to the same pass
-(`0050_coach_profiles_nutrition.sql`), and simplified nutrition scope at
-the same time — dropped the brief's post-workout protein-timing window
-and training-day carb cycling entirely (well-supported by current
-literature, not just simpler: total daily protein matters far more than
-timing precision once you're past competitive-athlete territory). Daily
-protein target set to a flat **1.8g/kg bodyweight** — checked against
-current sports-nutrition consensus first (ISSN/ACSM, Morton et al. 2018:
-1.4-2.2g/kg range, ~1.6g/kg plateau for muscle-building benefit) rather
-than accepting "1g/lb" (2.2g/kg, the gym-culture default) at face value —
-1.8g/kg sits just above the evidence-based plateau without the more
-aggressive ceiling number, Carl's explicit call given "not pro
-bodybuilders." Nutrition itself (meal plans, macro output) is still not
-built — this onboarding only collects the data ahead of that feature.
-
-**Built**: `/coach-onboarding` (6-step flow — goal, experience, injuries,
-sessions/week, body stats, diet — single-submit, no partial-save unlike
-`/access`'s per-step pages since a coach profile isn't useful until
-complete) → `POST /api/member/coach-profile`. `POST /api/member/workout/generate`
-(IDOR-guarded on the booking, idempotent per booking via the Stage 3
-unique index, gated on `hasPremium`) creates the plan via Stage 3's
-engine and narrates an intro via `coach-bot.ts`.
-`POST /api/member/workout/[sessionId]/log-set` and `.../complete` handle
-active-session logging and the post-session summary. RPE is asked once
-per exercise (its last set), not per set — matches Zing's own placement,
-confirmed from the earlier screenshot walkthrough — which required a real
-fix to `getWorkoutHistory()`'s tiebreaker (multiple sets share a session
-rank; without preferring the highest `set_number`, an earlier
-RPE-less set could silently win over the one that actually recorded it).
-Home screen (`ai-coach-section.tsx`) now links to whichever step is
-actually next — set up the coach, book a session, or view today's
-workout — never a dead end.
-
-**Verified live end-to-end** via a throwaway member clicking through the
-real UI: full 6-step onboarding submitted correctly; booked a session;
-generated workout correctly excluded every knee-tagged exercise (stated
-injury: "Bad knee") across all 4 selected exercises; logged all 12 sets
-with varying RPE (Easy/Hard/Just Right/Killer) through the real active-
-session flow including the RPE-only-on-last-set behavior; completed
-session showed **exactly correct** numbers — chest press (RPE 2) 30kg →
-31.25kg, lat pulldown/seated row (RPE 4-5) 30kg → 28.75kg, shoulder press
-(RPE 3, unchanged) correctly omitted from the narration, total volume
-3000kg matching the real per-exercise math by hand. Real Groq narration
-throughout, no truncation. Test member/booking/session data deleted
-after. `npx tsc --noEmit`, `eslint`, `npx vitest run`, and `next build`
-all pass clean.
-
-This closes out the plan's core loop — trial → onboarding → generate →
-log → RPE → adjust next time — the actual thing this multi-stage
-detour was for. Nutrition, community challenges, and the full
-GIF-exercise-library polish remain deliberately out of scope for this
-beta.
+This closes out the full 5-stage Hove AI Coach trial beta plan.

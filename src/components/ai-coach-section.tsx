@@ -4,20 +4,15 @@ import { TrialBanner } from "@/components/trial-banner";
 import { DumbbellIcon } from "@/components/icons";
 
 // Renders the home screen's AI Coach area per the state derived by
-// getCoachHomeState(). trial_active/subscriber show a real "View my
-// workout" link once both a coach profile exists and there's a booking to
-// generate one against (Stage 4) — otherwise they point at whichever step
-// is actually missing, never a dead end. See ROADMAP.md's "Hove AI Coach
-// trial beta" entry.
-export function AICoachSection({
-  state,
-  hasCoachProfile,
-  upcomingBookingId,
-}: {
-  state: CoachHomeState;
-  hasCoachProfile: boolean;
-  upcomingBookingId: number | null;
-}) {
+// getCoachHomeState(). Stage 5: trial_active/subscriber are now a slim
+// status pointer into the dedicated Coach tab (src/app/coach/page.tsx)
+// rather than repeating the full set of actions here — Home stays
+// booking/credits-focused for every member, the Coach tab is the
+// dedicated premium space. no_trial/trial_expired stay full-detail here
+// since they're conversion moments that belong where PAYG members
+// already are, not behind a tab they may not know to check. See
+// ROADMAP.md's "Hove AI Coach trial beta" entry.
+export function AICoachSection({ state }: { state: CoachHomeState }) {
   switch (state.kind) {
     case "no_trial":
       return <TrialBanner />;
@@ -37,18 +32,12 @@ export function AICoachSection({
 
     case "trial_active":
       return (
-        <div className="rounded-xl border border-card-light-border p-5">
+        <Link href="/coach" className="block rounded-xl border border-card-light-border p-5 hover:bg-card-light-border/10">
           <p className="text-xs font-semibold uppercase tracking-wide text-warning">
             AI Coach · Trial · {state.daysRemaining} {state.daysRemaining === 1 ? "day" : "days"} remaining
           </p>
-          <CoachAction hasCoachProfile={hasCoachProfile} upcomingBookingId={upcomingBookingId} />
-          <Link
-            href="/buy-membership"
-            className="mt-3 inline-block text-sm font-semibold text-card-light-foreground underline"
-          >
-            Keep your coach after the trial
-          </Link>
-        </div>
+          <p className="mt-1 text-sm text-card-light-muted">View your coach and today&apos;s workout →</p>
+        </Link>
       );
 
     case "trial_expired":
@@ -69,42 +58,10 @@ export function AICoachSection({
 
     case "subscriber":
       return (
-        <div className="rounded-xl border border-card-light-border p-5">
+        <Link href="/coach" className="block rounded-xl border border-card-light-border p-5 hover:bg-card-light-border/10">
           <p className="text-xs font-semibold uppercase tracking-wide text-success">{state.tierName} member</p>
-          <CoachAction hasCoachProfile={hasCoachProfile} upcomingBookingId={upcomingBookingId} />
-        </div>
+          <p className="mt-1 text-sm text-card-light-muted">View your coach and today&apos;s workout →</p>
+        </Link>
       );
   }
-}
-
-// Shared by trial_active/subscriber — three real states, not fabricated
-// ones: set up the profile, book a session, or go do today's workout.
-function CoachAction({ hasCoachProfile, upcomingBookingId }: { hasCoachProfile: boolean; upcomingBookingId: number | null }) {
-  if (!hasCoachProfile) {
-    return (
-      <>
-        <p className="mt-2 text-sm text-card-light-muted">Answer a few quick questions to set up your AI Coach.</p>
-        <Link
-          href="/coach-onboarding"
-          className="mt-3 inline-block rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-        >
-          Set up my AI Coach
-        </Link>
-      </>
-    );
-  }
-  if (upcomingBookingId) {
-    return (
-      <>
-        <p className="mt-2 text-sm text-card-light-muted">Your personalised workout is ready.</p>
-        <Link
-          href={`/workout/${upcomingBookingId}`}
-          className="mt-3 inline-block rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-        >
-          View my workout
-        </Link>
-      </>
-    );
-  }
-  return <p className="mt-2 text-sm text-card-light-muted">Book a session to get your next personalised workout.</p>;
 }

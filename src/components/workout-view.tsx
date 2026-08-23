@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RPE_SCALE } from "@/lib/coach/types";
+import { getExerciseImages, getSafetyTip } from "@/lib/coach/exercise-catalog";
+
+// How long each frame shows before auto-switching — reads as motion
+// without needing a real animated asset (the source images are two
+// static JPGs, see exercise-catalog.ts).
+const IMAGE_FRAME_MS = 900;
 
 interface WorkoutSet {
   id: number;
@@ -36,7 +42,7 @@ interface WeightChange {
   lastRpe: number | null;
 }
 
-type Phase = "loading" | "error" | "intro" | "active" | "rpe" | "summary";
+type Phase = "loading" | "error" | "intro" | "overview" | "active" | "rpe" | "summary";
 
 const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
@@ -52,6 +58,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [setIndex, setSetIndex] = useState(0);
   const [reps, setReps] = useState(0);
   const [weight, setWeight] = useState(0);
+  const [imageFrame, setImageFrame] = useState<0 | 1>(0);
   const [logging, setLogging] = useState(false);
   const [summary, setSummary] = useState<{ totalVolumeKg: number; changes: WeightChange[]; narration: string | null } | null>(null);
 
@@ -78,7 +85,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         const firstSet = body.session.exercises[0]?.sets[0];
         setReps(firstSet?.repsTarget ?? 0);
         setWeight(firstSet?.weightTargetKg ?? 0);
-        setPhase(body.introNarration ? "intro" : "active");
+        setPhase(body.introNarration ? "intro" : "overview");
       } catch {
         if (!cancelled) {
           setErrorMessage("Something went wrong. Try again.");
@@ -91,6 +98,15 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       cancelled = true;
     };
   }, [bookingId]);
+
+  // Auto-loops the two demonstration frames while an exercise is active —
+  // "should move automatically" (2026-08-23), rather than requiring a tap.
+  // Restarts cleanly whenever the exercise changes.
+  useEffect(() => {
+    if (phase !== "active") return;
+    const interval = setInterval(() => setImageFrame((f) => (f === 0 ? 1 : 0)), IMAGE_FRAME_MS);
+    return () => clearInterval(interval);
+  }, [phase, exerciseIndex]);
 
   if (phase === "loading") {
     return <p className="text-center text-sm text-card-light-muted">Building your workout...</p>;
@@ -115,8 +131,44 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return (
       <div className="space-y-5 text-center">
         <p className="text-base font-medium">{introNarration}</p>
-        <button type="button" className={buttonClass} onClick={() => setPhase("active")}>
+        <button type="button" className={buttonClass} onClick={() => setPhase("overview")}>
           Let&apos;s go →
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === "overview") {
+    return (
+      <div className="space-y-5">
+        <p className="text-lg font-semibold">Today&apos;s session</p>
+        <ul className="space-y-3">
+          {detail.exercises.map((ex, i) => (
+            <li key={ex.id} className="flex items-center justify-between rounded-lg border border-card-light-border p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
+                  {i + 1}. {ex.muscleGroup}
+                </p>
+                <p className="text-base font-semibold">{ex.name}</p>
+              </div>
+              <p className="text-sm text-card-light-muted">
+                {ex.sets.length}×{ex.sets[0]?.repsTarget}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={() => {
+            const first = detail.exercises[0]?.sets[0];
+            setReps(first?.repsTarget ?? 0);
+            setWeight(first?.weightTargetKg ?? 0);
+            setImageFrame(0);
+            setPhase("active");
+          }}
+        >
+          Start workout →
         </button>
       </div>
     );
@@ -155,6 +207,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       setSetIndex(0);
       setReps(nextExercise.sets[0].repsTarget);
       setWeight(nextExercise.sets[0].weightTargetKg);
+      setImageFrame(0);
       setPhase("active");
     } else {
       const nextSet = exercise.sets[setIndex + 1];
@@ -219,6 +272,8 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   }
 
   // phase === "active"
+  const images = getExerciseImages(exercise.key);
+  const safetyTip = getSafetyTip(exercise.key);
   return (
     <div className="space-y-6">
       <div>
@@ -230,6 +285,18 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           Set {setIndex + 1} of {exercise.sets.length}
         </p>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setImageFrame((f) => (f === 0 ? 1 : 0))}
+        className="block w-full overflow-hidden rounded-lg border border-card-light-border"
+        aria-label="Tap to switch position now"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- small local static asset, no next/image usage elsewhere in this codebase */}
+        <img src={images[imageFrame]} alt={`${exercise.name} — position ${imageFrame + 1} of 2`} className="w-full" />
+      </button>
+
+      {safetyTip && <p className="text-sm text-card-light-muted">⚠ {safetyTip}</p>}
 
       <div className="grid grid-cols-2 gap-4">
         <div>

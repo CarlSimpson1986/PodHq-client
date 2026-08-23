@@ -228,3 +228,53 @@ export async function completeSession(
 
   return { totalVolumeKg, changes, narration };
 }
+
+export interface RecentSessionSummary {
+  sessionId: number;
+  createdAt: string;
+  muscleGroups: string[];
+  totalVolumeKg: number;
+}
+
+// For the Coach hub's "Recent workouts" list — same on-the-fly volume
+// calculation completeSession() uses, no persisted stats column needed.
+// Batches exercises/sets across all returned sessions in two queries
+// rather than one round-trip per session.
+export async function getRecentCompletedSessions(memberId: number, limit = 5): Promise<RecentSessionSummary[]> {
+  const admin = createAdminClient();
+
+  const { data: sessions, error: sessionsError } = await admin
+    .from("workout_sessions")
+    .select("id, created_at")
+    .eq("member_id", memberId)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (sessionsError) throw new Error(sessionsError.message);
+  if (!sessions || sessions.length === 0) return [];
+
+  const sessionIds = sessions.map((s) => s.id);
+  const { data: exercises, error: exercisesError } = await admin
+    .from("workout_exercises")
+    .select("id, session_id, muscle_group")
+    .in("session_id", sessionIds);
+  if (exercisesError) throw new Error(exercisesError.message);
+
+  const exerciseIds = (exercises ?? []).map((e) => e.id);
+  const { data: sets, error: setsError } =
+    exerciseIds.length > 0
+      ? await admin.from("workout_sets").select("exercise_id, reps_actual, weight_actual_kg").in("exercise_id", exerciseIds)
+      : { data: [], error: null };
+  if (setsError) throw new Error(setsError.message);
+
+  return sessions.map((session) => {
+    const sessionExerciseIds = new Set((exercises ?? []).filter((e) => e.session_id === session.id).map((e) => e.id));
+    const muscleGroups = [
+      ...new Set((exercises ?? []).filter((e) => e.session_id === session.id).map((e) => e.muscle_group)),
+    ];
+    const totalVolumeKg = (sets ?? [])
+      .filter((s) => sessionExerciseIds.has(s.exercise_id))
+      .reduce((sum, s) => sum + (s.reps_actual ?? 0) * (s.weight_actual_kg ?? 0), 0);
+    return { sessionId: session.id, createdAt: session.created_at, muscleGroups, totalVolumeKg };
+  });
+}

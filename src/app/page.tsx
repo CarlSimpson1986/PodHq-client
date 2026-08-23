@@ -15,7 +15,6 @@ import { UpcomingSessionCard } from "@/components/upcoming-session-card";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { AICoachSection } from "@/components/ai-coach-section";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
-import { getCoachProfile } from "@/lib/coach/coach-profile";
 
 export default async function HomePage() {
   const session = await createSessionClient();
@@ -32,12 +31,11 @@ export default async function HomePage() {
     return <NoMemberProfile />;
   }
 
-  const [credits, membership, upcomingBooking, resources, coachProfile] = await Promise.all([
+  const [credits, membership, upcomingBooking, resources] = await Promise.all([
     getCreditBalance(member.id),
     getActiveMembership(member.id),
     getNextUpcomingBooking(member.id),
     getPodResourcesForGym(member.gym),
-    getCoachProfile(member.id),
   ]);
 
   return (
@@ -51,11 +49,7 @@ export default async function HomePage() {
 
       <div className="card-light flex-1 space-y-4 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-4">
-          <AICoachSection
-            state={getCoachHomeState(member, membership)}
-            hasCoachProfile={coachProfile !== null}
-            upcomingBookingId={upcomingBooking?.id ?? null}
-          />
+          <AICoachSection state={getCoachHomeState(member, membership)} />
 
           {!membership && (
             <div className="rounded-xl border-2 border-card-light-foreground p-5">
