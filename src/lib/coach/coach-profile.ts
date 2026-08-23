@@ -5,6 +5,9 @@ import type { Goal, ExperienceLevel, FoodPreference } from "@/lib/coach/types";
 export interface CoachProfile {
   id: number;
   member_id: number;
+  // Used as the check-in cadence anchor for a member who hasn't
+  // completed one yet — see checkin-state.ts.
+  created_at: string;
   goal: Goal;
   experience_level: ExperienceLevel;
   injuries: string | null;

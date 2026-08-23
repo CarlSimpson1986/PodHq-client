@@ -4,6 +4,8 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership, getNextUpcomingBooking } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
+import { getLastCheckIn } from "@/lib/coach/check-ins";
+import { getCheckInDueState } from "@/lib/coach/checkin-state";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { CoachBottomNav } from "@/components/coach-bottom-nav";
@@ -41,6 +43,8 @@ export default async function CoachPage() {
   ]);
 
   const state = getCoachHomeState(member, membership);
+  const lastCheckIn = coachProfile ? await getLastCheckIn(member.id) : null;
+  const checkInState = getCheckInDueState(coachProfile, lastCheckIn, new Date());
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
@@ -123,10 +127,30 @@ export default async function CoachPage() {
               {coachProfile && (
                 <section>
                   <SectionHeading>Check-in</SectionHeading>
-                  <ComingSoonCard
-                    title="Weekly check-in"
-                    body="A weekly review of your week — workouts, nutrition, and how it's going — is coming soon."
-                  />
+                  <Link href="/coach/checkin" className="block rounded-xl border border-card-light-border p-5">
+                    {checkInState.kind === "not_due" && (
+                      <>
+                        <p className="text-sm font-semibold">
+                          {checkInState.daysRemaining} {checkInState.daysRemaining === 1 ? "day" : "days"} to your next check-in
+                        </p>
+                        <p className="mt-1 text-sm text-card-light-muted">Due {checkInState.nextDueDate}.</p>
+                      </>
+                    )}
+                    {checkInState.kind === "due" && (
+                      <>
+                        <p className="text-sm font-semibold text-warning">Check-in ready</p>
+                        <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
+                      </>
+                    )}
+                    {checkInState.kind === "overdue" && (
+                      <>
+                        <p className="text-sm font-semibold text-danger">
+                          Check-in overdue by {checkInState.daysOverdue} {checkInState.daysOverdue === 1 ? "day" : "days"}
+                        </p>
+                        <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
+                      </>
+                    )}
+                  </Link>
                 </section>
               )}
 

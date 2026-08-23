@@ -80,3 +80,19 @@ export const MEAL_LABELS: Record<Meal, string> = {
 // 2026-08-23) — not a general alternative to database search.
 export const FOOD_LOG_SOURCES = ["uk_food_composition", "open_food_facts_barcode", "open_food_facts_search", "manual"] as const;
 export type FoodLogSource = (typeof FOOD_LOG_SOURCES)[number];
+
+// Weekly check-in cadence — fixed to a calendar day, not rolling from the
+// last completed check-in. Carl's call (2026-08-23): "Sunday, so they can
+// get motivated for Monday" — review the week just gone right before the
+// work week starts, a real coaching pattern. 0 = Sunday (JS Date.getDay()
+// convention). The "thundering herd" concern that would argue for a
+// rolling cadence instead doesn't apply here: nothing fires in a batch
+// for this feature (no push notifications, no cron job), the due state
+// is just computed per-member when they open the dashboard.
+export const CHECK_IN_DAY_OF_WEEK = 0;
+
+// Grace window after the due day before the state flips from "due" to
+// the more urgent "overdue" styling — a real coach doesn't treat one day
+// late as urgent, only a genuinely-gone-quiet member should. See
+// checkin-state.ts.
+export const CHECK_IN_GRACE_DAYS = 3;

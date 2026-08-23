@@ -149,3 +149,53 @@ navigates to `/` and the main app's own `BottomNav` renders normally
 there, completing the round trip. Nav highlighting confirmed correct on
 the Workout tab (active state genuinely distinct from the others, not
 just present).
+
+## Hove AI Coach — Weekly Check-in, Stage 10b — 2026-08-23
+
+Fixed weekly cadence — every Sunday, revised from an original rolling-
+weekly draft after Carl's call: "Sunday, so they can get motivated for
+Monday", a real coaching pattern (review the week just gone right before
+the work week starts). `CHECK_IN_DAY_OF_WEEK`/`CHECK_IN_GRACE_DAYS` in
+`types.ts`. New `podHq/supabase/migrations/0054_check_ins.sql`
+(`check_ins`: member_id, period_start/end, completed_at, `answers jsonb`
+— deliberately schemaless since the real question set isn't decided yet,
+same "row exists = happened" convention as `food_log_entries`, no
+"pending" row ever inserted).
+
+**Built**: `src/lib/coach/checkin-state.ts` — pure discriminated-union
+state (`no_profile`/`not_due`/`due`/`overdue`) mirroring `trial-state.ts`'s
+shape exactly, with a real edge case handled deliberately: a member's
+first due-Sunday can fall before their `coach_profiles.created_at` (e.g.
+profile set up on a Wednesday) — correctly treated as "not due yet"
+rather than "overdue for a week that predates them," the accepted
+partial-first-week quirk of any calendar-anchored cadence.
+`src/lib/coach/weekly-review.ts` — the auto-generated "let's view your
+week" summary, following `getRecentCompletedSessions`'s exact batching
+shape but date-windowed; two real date-handling seams got the same
+`london-time.ts` treatment as everywhere else in this app (`timestamptz`
+`workout_sessions.created_at` needs `londonWallTimeToUtc` bounds, the
+already-London-pinned `food_log_entries.logged_date` needs none); the
+nutrition average divides by days actually logged (not days in the
+window) and returns `null` (not `0`) when nothing was logged, so an
+empty week renders as an honest "No meals logged this week" instead of a
+false "way under target" reading. `/coach/checkin` (`CheckInView`)
+shows the due-state, the computed weekly numbers, and an honest
+"Reflection questions coming soon" stub — never fabricated placeholder
+questions — plus a "Mark check-in complete" action once due/overdue.
+Dashboard's Check-in card now shows real countdown/due/overdue state
+instead of a static "coming soon" placeholder.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (40/40 —
+8 new tests for `checkin-state.ts` covering all four states, the exact
+grace-window boundary day, the first-week-before-profile-creation edge
+case, and a check-in from a *previous* period correctly not covering the
+current one), and `next build` all passed clean, including the two new
+`/api/member/checkin*` routes and `/coach/checkin` page. **Live
+verification still pending** — needs Carl to run
+`0054_check_ins.sql` first, same as every other migration in this
+project's history.
+
+Same-day, mid-build: Carl asked for two more Coach-section changes —
+renaming the Workout tab to "Training" and replacing its flat
+chronological history list with a week-by-week performance graph per
+exercise. Picked up immediately after this stage; see the next entry.
