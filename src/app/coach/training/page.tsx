@@ -9,9 +9,10 @@ import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { CoachBottomNav } from "@/components/coach-bottom-nav";
 import { DumbbellIcon } from "@/components/icons";
-import { SectionHeading, ComingSoonCard } from "@/components/coach-section";
+import { SectionHeading } from "@/components/coach-section";
 import { ExerciseProgressAccordion } from "@/components/exercise-progress-accordion";
 import { ConsistencyChart } from "@/components/consistency-chart";
+import { TrainingBlockView } from "@/components/training-block-view";
 
 // The Training tab — renamed from "Workout" and reworked (Carl's call,
 // 2026-08-23, mid-session, in two passes): first replaced the flat
@@ -85,10 +86,7 @@ export default async function CoachTrainingPage() {
 
           <section>
             <SectionHeading>Current training block</SectionHeading>
-            <ComingSoonCard
-              title="Training blocks"
-              body="Rotating exercise selection and rep ranges every few weeks to keep progress moving — coming soon."
-            />
+            <TrainingBlockView />
           </section>
 
           <section>
