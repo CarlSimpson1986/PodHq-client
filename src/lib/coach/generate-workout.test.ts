@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateWorkout } from "./generate-workout";
+import { generateWorkout, getInjuryExcludedKeys } from "./generate-workout";
 import type { CoachProfile } from "./coach-profile";
 
 function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
@@ -112,6 +112,20 @@ describe("generateWorkout — injury avoidance", () => {
     });
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((e) => e.key === "dumbbell_bicep_curl")).toBe(true);
+  });
+});
+
+describe("getInjuryExcludedKeys", () => {
+  it("returns no excluded keys when there are no stated injuries", () => {
+    expect(getInjuryExcludedKeys(null)).toEqual([]);
+    expect(getInjuryExcludedKeys("")).toEqual([]);
+  });
+
+  it("matches case-insensitively", () => {
+    const excluded = getInjuryExcludedKeys("Bad Knee");
+    expect(excluded).toContain("barbell_squat");
+    expect(excluded).toContain("leg_extension");
+    expect(excluded).not.toContain("barbell_bench_press");
   });
 });
 

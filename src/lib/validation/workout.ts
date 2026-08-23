@@ -13,3 +13,8 @@ export const logSetSchema = z.object({
   weightActualKg: z.number().min(0).max(500),
   rpe: z.number().int().min(1).max(5).optional(),
 });
+
+export const swapExerciseSchema = z.object({
+  exerciseId: z.number().int().positive(),
+  newExerciseKey: z.string().min(1).max(100),
+});
