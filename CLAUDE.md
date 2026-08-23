@@ -18,7 +18,9 @@ working across both apps in the same session.
   live in podHQ's `supabase/migrations/` (`0009_pod_booking.sql`,
   `0010_create_booking_function.sql`), not duplicated here
 - Kisi API for physical door unlock
-- Deployed on Vercel (not yet deployed — see ROADMAP)
+- Deployed on Vercel, Git-connected auto-deploy on push to `main`
+  (confirmed live 2026-08-23 at `podhq-client.vercel.app` — this line
+  previously said "not yet deployed", which had gone stale)
 
 ## Session handoff
 - Before any `git commit`/`git push` that wraps up a working session, add a
