@@ -90,7 +90,33 @@ const DATA_TYPES = {
   restingHeartRate: "daily-resting-heart-rate",
 } as const;
 
-async function fetchDailyRollup(client: OAuth2Client, dataType: string, startTime: string, endTime: string): Promise<unknown> {
+interface CivilDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+function civilDateFromIso(dateIso: string): CivilDate {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  return { year, month, day };
+}
+
+// dailyRollUp's "range" is a closed-open CivilTimeInterval (calendar
+// dates, not RFC3339 instants) — confirmed 2026-08-24 against Google's
+// REST reference after the originally-assumed {startTime, endTime}
+// RFC3339-string shape came back with a live 400: 'Unknown name
+// "startTime" at range: Cannot find field.' The exclusive end is the
+// requested date plus one day.
+function dailyCivilRange(dateIso: string): { start: CivilDate; end: CivilDate } {
+  const start = civilDateFromIso(dateIso);
+  const endDate = new Date(Date.UTC(start.year, start.month - 1, start.day + 1));
+  return {
+    start,
+    end: { year: endDate.getUTCFullYear(), month: endDate.getUTCMonth() + 1, day: endDate.getUTCDate() },
+  };
+}
+
+async function fetchDailyRollup(client: OAuth2Client, dataType: string, dateIso: string): Promise<unknown> {
   const accessToken = await client.getAccessToken();
   const res = await fetch(`${API_BASE}/users/me/dataTypes/${dataType}/dataPoints:dailyRollUp`, {
     method: "POST",
@@ -98,7 +124,7 @@ async function fetchDailyRollup(client: OAuth2Client, dataType: string, startTim
       Authorization: `Bearer ${accessToken.token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ range: { startTime, endTime } }),
+    body: JSON.stringify({ range: dailyCivilRange(dateIso) }),
   });
   if (!res.ok) {
     throw new Error(`Google Health API ${dataType} rollup failed: ${res.status} ${await res.text()}`);
@@ -106,15 +132,18 @@ async function fetchDailyRollup(client: OAuth2Client, dataType: string, startTim
   return res.json();
 }
 
-// NEEDS VERIFICATION against a real response — see the file-level
-// comment. Written defensively (never throws on an unexpected shape,
-// just returns null for that field) so a schema surprise degrades to
-// "no data for that field today" instead of failing the whole sync —
-// but logs the raw body whenever the assumed shape doesn't match, so a
-// real defensive miss shows up in Vercel logs instead of just silently
-// rendering as "—" with zero diagnostic trail (found the hard way,
-// 2026-08-24: refresh was returning 200 with every field blank and
-// nothing in the logs explaining why).
+// NEEDS FURTHER VERIFICATION for sleep/resting-heart-rate specifically —
+// see the file-level comment. Steps' shape is confirmed from a real
+// example response ({"dataPoints":[{"date":"...","countSum":"9037"}]} —
+// countSum as a string, Google's standard int64-as-string JSON
+// convention); sleep and resting-heart-rate likely use a differently-
+// named field for their own aggregation (duration/average rather than
+// sum) that hasn't been confirmed yet. Tries the confirmed `countSum`
+// key first, falls back to the originally-assumed generic `value`
+// wrapper in case a data type uses that shape instead, and — either way
+// — logs the raw first data point whenever no numeric value is found, so
+// the exact real field name for sleep/resting-heart-rate shows up in
+// Vercel logs on the next real call instead of silently staying blank.
 function extractRollupValue(dataType: string, body: unknown): number | null {
   if (!body || typeof body !== "object") {
     console.error("[google-health] rollup response was not an object", { dataType, body });
@@ -125,9 +154,10 @@ function extractRollupValue(dataType: string, body: unknown): number | null {
     console.error("[google-health] rollup response had no dataPoints — logging shape for verification", { dataType, body });
     return null;
   }
-  const first = points[0] as { value?: { intValue?: number; fpValue?: number } };
-  const value = first.value?.intValue ?? first.value?.fpValue;
-  if (typeof value !== "number") {
+  const first = points[0] as { countSum?: string | number; value?: { intValue?: number; fpValue?: number } };
+  const raw = first.countSum ?? first.value?.intValue ?? first.value?.fpValue;
+  const value = typeof raw === "string" ? Number(raw) : raw;
+  if (typeof value !== "number" || Number.isNaN(value)) {
     console.error("[google-health] rollup dataPoint had no numeric value — logging shape for verification", { dataType, first });
     return null;
   }
@@ -141,14 +171,12 @@ function extractRollupValue(dataType: string, body: unknown): number | null {
 // other two — each is fetched and parsed independently.
 export async function fetchDailyData(refreshToken: string, dateIso: string): Promise<DailyWearableData> {
   const client = clientWithRefreshToken(refreshToken);
-  const startTime = `${dateIso}T00:00:00Z`;
-  const endTime = `${dateIso}T23:59:59Z`;
 
   const dataTypeByIndex = [DATA_TYPES.steps, DATA_TYPES.sleep, DATA_TYPES.restingHeartRate];
   const results = await Promise.allSettled([
-    fetchDailyRollup(client, DATA_TYPES.steps, startTime, endTime),
-    fetchDailyRollup(client, DATA_TYPES.sleep, startTime, endTime),
-    fetchDailyRollup(client, DATA_TYPES.restingHeartRate, startTime, endTime),
+    fetchDailyRollup(client, DATA_TYPES.steps, dateIso),
+    fetchDailyRollup(client, DATA_TYPES.sleep, dateIso),
+    fetchDailyRollup(client, DATA_TYPES.restingHeartRate, dateIso),
   ]);
 
   const [steps, sleep, restingHeartRate] = results.map((r, i) => {
