@@ -8,6 +8,10 @@
     {
       "path": "/api/notifications/win-back",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/wearables/sync",
+      "schedule": "0 5 * * *"
     }
   ]
 }

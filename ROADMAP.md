@@ -14,206 +14,107 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-14.md`, covering the pilot
-mechanism proof (2026-08-05) through the equipment-aware AI Coach feature
-(2026-08-24) — all split out to keep this file within Claude Code's
-~15,000-character `@`-import limit. Archives aren't always the strictly
-oldest material: `ROADMAP-ARCHIVE-14.md` was split out the same day it
-was written, because the still-active wearable-integration research
-below needed the room more than that already-finished, already-shipped
-feature did — the split point is "what's still live" as much as "what's
-oldest." All archives are reference-only (not auto-loaded by CLAUDE.md);
-check them for full stage-by-stage build history, or `git log` on this
-file for the exact split points. This file's active content is the
-wearable-integration research thread (2026-08-24, still ongoing) plus
-whatever's added after it. If this file grows too large again, split it
-the same way: move whichever section is most clearly finished (not
-necessarily the chronologically oldest) into a numbered
-`ROADMAP-ARCHIVE-15.md`, leave a pointer note at the top of this file,
-and update this paragraph.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-15.md`, covering the pilot
+mechanism proof (2026-08-05) through the full wearable-integration
+research thread (2026-08-24) — all split out to keep this file within
+Claude Code's ~15,000-character `@`-import limit. Archives aren't always
+the strictly oldest material — the split point is "what's finished and
+stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s and
+`-15.md`'s own header notes for two same-day examples of this). All
+archives are reference-only (not auto-loaded by CLAUDE.md); check them
+for full stage-by-stage build history, or `git log` on this file for the
+exact split points. This file's active content is the Fitbit-via-Google-
+Health-API scaffolding (2026-08-24, blocked on Carl's Google Cloud setup
+— see that section for the outstanding checklist) plus whatever's added
+after it. If this file grows too large again, split it the same way:
+move whichever section is most clearly finished (not necessarily the
+chronologically oldest) into a numbered `ROADMAP-ARCHIVE-16.md`, leave a
+pointer note at the top of this file, and update this paragraph.
 
 ## Wearable integration research — Google Health API note — 2026-08-24
 
-Not built, just documented for whenever this gets prioritised (Fitbit
-was previously flagged as real wanted scope, a research spike not yet
-started). Confirmed via live web search: Fitbit's legacy Web API is
-being shut down **September 2026** — any future integration should
-target the **Google Health API** directly (reached general availability
-May 2026), not the old Fitbit endpoints, since OAuth tokens don't
-transfer between them regardless of which is targeted first. **Health
-Connect** (Android's on-device data layer) stays a separate thing and is
-still native-only — same constraint the Coach hub's "Tech integrations"
-placeholder already states for Apple Health.
+Full detail moved to `ROADMAP-ARCHIVE-15.md` the same day, once its
+conclusions were stable and acted upon. Summary: Fitbit's legacy API
+dies September 2026 — target the **Google Health API** instead (GA'd
+May 2026, self-serve). Apple HealthKit has zero cloud API by design
+(native app + App Store required, no workaround); Android's Health
+Connect is on-device only and only matters for a wearable with no cloud
+API of its own. Checked live, by brand: **Garmin** — developer program
+closed to new sign-ups, not currently buildable. **Whoop**/**Oura** —
+both self-serve like Fitbit (Oura has a real caveat: needs the member's
+own paid Oura Membership, not just a ring). **Samsung** — feeds Android's
+Health Connect, not the cloud Google Health API; same native-only bucket
+as Apple, despite both being "Google." Full App-Store-pre-emption
+research (timelines, common HealthKit rejection reasons, the Guideline
+3.1.3 payment exemption) also lives in the archive.
 
-Real nuance on "is there truly no way around it": **Apple Health/HealthKit
-has zero cloud API by design** (Apple's own privacy stance, not a gap
-that'll close) — that data only ever comes from a native (or
-Capacitor-wrapped) app with real HealthKit entitlements, no workaround.
-**Health Connect is less absolute**: if the underlying wearable brand
-(Fitbit, Garmin, Whoop, Oura) has its own cloud API, that data is
-reachable straight from the device maker's API without ever touching
-Health Connect at all — Health Connect only matters for a source with no
-cloud counterpart of its own. The realistic middle path if this gets
-prioritised before a full native rebuild: wrap the existing PWA in a thin
-native shell (Capacitor or similar) purely to get real HealthKit/Health
-Connect entitlements, reusing nearly all of today's code rather than a
-ground-up rewrite — matches the "high probability of an eventual native
-app" Carl already flagged as likely once this is battle-tested.
+## Fitbit-via-Google-Health-API integration scaffolded — 2026-08-24 (same day)
 
-**Follow-up: can a native shell avoid App Store submission entirely?**
-No, not sustainably for iOS. TestFlight caps at 10,000 external testers
-and builds expire every 90 days — not viable as a permanent way to serve
-gym members. Ad Hoc distribution caps at 100 devices per device type per
-year and needs each member's device UDID manually registered —
-impractical at gym scale. Apple's Enterprise Program is explicitly
-prohibited for distributing to customers/the general public, only a
-company's own employees. The quietest real option ("Unlisted Apps," a
-private link hidden from App Store search) still goes through Apple's
-real submission/review pipeline. Android is genuinely more flexible —
-APK sideloading from your own website works without ever touching Play
-Store — but since iOS still needs the App Store regardless, there's
-limited practical benefit to dodging Play Store separately.
+Built the connect/disconnect flow plus real synced data, replacing the
+Profile page's "Health markers" placeholder — scope confirmed with Carl
+via Plan Mode: connect + display, not yet wired into AI Coach generation
+logic (deliberately deferred). Disconnect deletes all previously-synced
+data immediately, not just future syncs.
 
-**Timeline if/when this gets submitted**: not just the headline review
-number. One-time setup first — Apple Developer Program enrollment is
-~24-48h for an individual account, longer for a UK limited company
-(needs a D-U-N-S number lookup); Google Play Console is same-day to
-next-day, $25 one-time fee. Review itself: Apple resolves 90% of
-submissions within 24h and 98% within 48h, **but health-category apps
-requesting HealthKit access are explicitly flagged as one of the slower
-categories** — up to a week or more, since each HealthKit data type
-needs its own justified purpose string. Google Play runs 1-7 days for an
-established developer account but **7-14 days for a first app** from a
-brand-new account, which this would be. A first-time HealthKit
-submission commonly gets rejected once over an incomplete privacy
-purpose string and needs a quick resubmission — routine, not a red flag,
-but realistic first-time budget is **1-2 weeks end-to-end for iOS**, not
-the 24-48h headline figure, with Android's first-app review running
-similar or slightly longer.
+**Data model** (podHq migration `0057_member_wearable_connections.sql`):
+`member_wearable_connections` (one row per member, encrypted refresh
+token) and `member_wearable_data` (one row per member per synced day —
+steps/sleep/resting heart rate), both modeled on `gym_resend_config`'s
+shape (dedicated table, RLS enabled with zero policies, service-role-only
+access) rather than a bare column-add.
 
-**How to actually pre-empt that first rejection**, confirmed via live
-search rather than assumed:
-1. **Specific, honest `NSHealthShareUsageDescription`/`NSHealthUpdateUsageDescription`
-   purpose strings** in Info.plist, tied to the real feature ("We read
-   your sleep and step data to personalise your weekly AI Coach
-   check-in"), not generic boilerplate — vague copy is the single most
-   common HealthKit rejection reason.
-2. **Only request the specific data types an actual visible feature
-   uses** — requesting broad HealthKit access "for later" gets flagged.
-3. **A real, specific privacy policy** covering health data — what's
-   collected, how it's stored, whether it's shared, deletion/retention —
-   not a generic template.
-4. **An in-app "priming" screen explaining why before the system
-   permission prompt fires** — reduces both reviewer confusion and the
-   real-world rate of members declining the prompt.
-5. **Accurate App Privacy "nutrition label" declarations in App Store
-   Connect** matching what the app actually does — mismatches trigger
-   rejection or later removal.
-6. **A working reviewer demo account** — this app already has exactly
-   what's needed for this: the persistent playground member
-   (`playground@myfitpod.test`) with ~2 months of real seeded workout/
-   nutrition history, built for internal dev testing. The same account
-   doubles as Apple's/Google's reviewer login, which directly avoids the
-   single most common *generic* (non-HealthKit) rejection reason —
-   reviewers unable to access core functionality behind a real
-   membership/trial gate.
-7. **Payments — confirmed via live search, this is the single biggest
-   real risk if handled wrong, not HealthKit wording**: pod credits/
-   bookings are a *physical service consumed outside the app* (a real
-   pod session), which explicitly qualifies for Apple's Guideline 3.1.3
-   exemption from In-App Purchase — the existing Stripe checkout can
-   very likely stay as-is in a native wrapper, without Apple's 15-30%
-   cut. Reviewers do sometimes misapply 3.1.1 to this kind of app
-   regardless, so the App Review Notes field on submission should
-   explicitly state the physical-service exemption up front, rather
-   than leaving the reviewer to work it out.
+**Encryption**: reused the existing AES-256-GCM `SECRET_ENCRYPTION_KEY`
+pattern rather than inventing a new one — podhq-client previously only
+had a decrypt-only copy of `secret-encryption.ts` (for reading podHq-
+written gym configs); this needed the full encrypt+decrypt pair since
+this app is both writer (OAuth callback) and reader (sync cron) for this
+particular secret. `src/lib/data/resend-config.ts`'s own duplicate
+`decryptSecret` was consolidated to import the new shared module instead
+of keeping two copies.
 
-**Follow-up: Garmin ruled out, Google Health API confirmed self-serve —
-2026-08-24.** Carl considered buying a Garmin device to test against
-before building anything — checked live whether that's actually
-buildable right now, for any of the three brands he asked about by name:
+**OAuth + data fetch**: `google-auth-library`'s `OAuth2Client` (not the
+full `googleapis` package), standard authorization-code flow with a
+random-value cookie for CSRF protection on the callback (no existing
+connect/disconnect-a-third-party pattern existed in this codebase to
+reuse — designed fresh). Google Health API's REST shape (base URL,
+scopes, `dailyRollUp` endpoint, `dataType` id strings) was verified live
+against Google's docs rather than assumed, since this is a brand-new API
+(GA'd May 2026) outside training data — the one piece that couldn't be
+fully verified without live credentials is the exact JSON response field
+names for a rollup call (undocumented publicly), so that one parsing
+function is written defensively (never throws on an unexpected shape,
+degrades to "no data for that field" instead) and flagged in its own
+comment for Carl to confirm against a real response.
 
-- **Garmin: not currently buildable, independent of the App Store
-  question.** The Garmin Connect Developer Program (Health/Activity APIs)
-  isn't a self-serve key like Stripe/Kisi — it's partner-approval-only,
-  and as of this check is **closed to new sign-ups entirely**, no
-  published re-open date. Even when open: a manual, weeks-long
-  business-level review, often with a one-time ~$5,000 setup fee for the
-  Health API. There's currently nothing to apply to.
-- **Fitbit: buildable today, but only via the Google Health API, not
-  Fitbit's own endpoints** — confirms and extends the 2026-08-24 note
-  above. Google's `google_health` integration went live May 2026 and
-  runs in parallel with legacy Fitbit endpoints until the September 30
-  2026 cutover; access is genuinely self-serve (register via Google
-  Cloud Console, standard Google OAuth 2.0, no partner approval, no fee)
-  — a materially easier access model than Garmin's. Any new integration
-  should target this directly, not legacy Fitbit Web API auth (existing
-  Fitbit users of a future integration would need to re-consent anyway,
-  since it's a different OAuth library).
-- **Apple: not a "register for an API" option at all** — HealthKit has
-  no cloud API by design (see the note above), so it isn't comparable to
-  Garmin/Fitbit as a choice. It only works inside a native (or
-  Capacitor-wrapped) app with real entitlements, via the App Store path
-  already researched. Its real advantage: once built, it can surface
-  *any* brand's data a member already syncs to Apple Health on their
-  phone (Garmin, Whoop, Oura, etc.) without needing a separate developer
-  deal with each vendor — at the cost of committing to the native-app
-  path.
+**Sync**: new daily Vercel Cron route (`/api/wearables/sync`, 05:00,
+after the existing 04:00/09:00 jobs), copying `waitlist/expire`'s exact
+`CRON_SECRET` fail-closed pattern verbatim. **Added to `proxy.ts`'s
+public-paths list up front** — this exact class of bug (a cron route
+silently redirected to `/login` before reaching its own auth check) was
+already hit and fixed once before, 2026-08-14, for the win-back route.
 
-**Net near-term recommendation**: Google Health API (→ Fitbit data) is
-the one path buildable today with no App Store submission and no
-gatekeeper. Garmin stays parked until/unless their program reopens —
-buying a Garmin device is fine for Carl's own hands-on familiarity, but
-won't unblock actual data access on its own.
+**Outstanding before this can be tested end-to-end — all on Carl**:
+1. Create a Google Cloud project + OAuth 2.0 client at
+   developers.google.com/health/setup. Redirect URI must be HTTPS, so
+   testing has to happen against a deployed preview/production URL, not
+   local dev.
+2. New OAuth clients start **unverified, capped at 100 manually-added
+   test users** (added one by one in Cloud Console) until Google
+   completes app verification (needs a privacy policy, scope
+   justification) — real rollout stays capped at ~100 members until
+   that's pursued, same category of gate as the App Store review
+   researched earlier today.
+3. Add three new env vars to Vercel: `GOOGLE_HEALTH_CLIENT_ID`,
+   `GOOGLE_HEALTH_CLIENT_SECRET`, `GOOGLE_HEALTH_REDIRECT_URI`
+   (`https://podhq-client.vercel.app/api/wearables/fitbit/callback`).
+   `SECRET_ENCRYPTION_KEY`/`CRON_SECRET` already exist (shared with the
+   gym-config and other-cron use cases).
 
-Sources: [Health API | Garmin Connect Developer Program](https://developer.garmin.com/gc-developer-program/health-api/),
-[Garmin Developer Portal — Connect API](https://developerportal.garmin.com/developer-programs/connect-api),
-[Data Access and Authorization | Google Health API](https://developers.google.com/health/migration/data-access),
-[Overview | Google Health API](https://developers.google.com/health/migration).
-
-**Follow-up: Whoop, Oura, and a Samsung correction — 2026-08-24 (same
-day).** Carl asked whether Whoop and Oura are "good to go" the same way
-Fitbit is, and separately noted Samsung "use[s] Google Connect as well"
-— checked both live rather than assume either.
-
-- **Whoop: yes, self-serve, free.** Sign up on whoop.com, create an app
-  in the WHOOP developer dashboard, get a Client ID/secret immediately —
-  no partner review to *start* building, unlike Garmin. The only gate is
-  at the end: submitting the finished app for approval before public
-  launch, which doesn't block development/testing.
-- **Oura: yes, self-serve** — register an OAuth app at
-  cloud.ouraring.com, no partner gate. Real caveat, not a build blocker
-  but a reach one: a Gen3 Oura Ring alone isn't enough for a member's
-  data to be accessible via the API — they also need an **active paid
-  Oura Membership** (Oura's own subscription, ~£5.99/mo, nothing to do
-  with MyFitPod). Fewer members would actually have usable data through
-  this integration than through Whoop or Fitbit/Google Health, purely
-  because of that extra subscription gate.
-- **Samsung: correction, not confirmed as stated.** Carl's instinct that
-  Samsung "uses Google" is half right but the wrong half of Google's
-  stack — Samsung Health syncs to **Health Connect** (Android's on-device
-  data layer, confirmed live), not the cloud **Google Health API** that
-  Fitbit now runs through. Health Connect and Google Health API are the
-  two distinct things the original 2026-08-24 note above already told
-  apart — Samsung sits in the same native-only bucket as Apple HealthKit,
-  not the same self-serve-PWA bucket as Fitbit/Whoop/Oura. A Samsung
-  integration would need the native-app path already researched, not a
-  plain server-side OAuth integration.
-
-**Updated net picture**: Fitbit (via Google Health API), Whoop, and
-Oura are all buildable today as plain server-side integrations into
-podhq-client's existing API routes — no native app, no App Store/Play
-Store submission, same shape as the Stripe/Kisi integrations already in
-this codebase. Garmin and Samsung are both parked — Garmin because its
-program is closed, Samsung because it's a Health-Connect (native-only)
-source like Apple, not a cloud-API one.
-
-Sources: [OAuth 2.0 | WHOOP for Developers](https://developer.whoop.com/docs/developing/oauth/),
-[Getting Started | WHOOP for Developers](https://developer.whoop.com/docs/developing/getting-started/),
-[The Oura API – Oura for Organizations Help Center](https://partnersupport.ouraring.com/hc/en-us/articles/20949682312211-The-Oura-API),
-[Oura API](https://cloud.ouraring.com/docs/),
-[Accessing Samsung Health Data through Health Connect | Samsung Developer](https://developer.samsung.com/health/blog/en/accessing-samsung-health-data-through-health-connect),
-[Health Connect FAQ to Access Samsung Health Data | Samsung Developer](https://developer.samsung.com/health/health-connect-faq.html).
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (71/71,
+including 4 new encryption round-trip tests), `next build` all clean.
+The OAuth exchange and REST data-fetch calls themselves aren't
+realistically unit-testable without live Google credentials — real
+end-to-end verification is blocked on the three items above.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
