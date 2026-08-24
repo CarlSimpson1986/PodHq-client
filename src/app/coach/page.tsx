@@ -166,7 +166,7 @@ export default async function CoachPage() {
                 <div className="space-y-4">
                   <ComingSoonCard
                     title="Tech integrations"
-                    body="HRV, resting pulse, sleep, and steps need the native app (Apple Health / Google Health Connect aren't accessible from this web app) — coming with a future update."
+                    body="Fitbit sync is live — connect it from your Profile tab. Apple Health and Samsung/Health Connect still need a native app, coming with a future update."
                   />
                   <ComingSoonCard title="Challenges" body="Community challenges are coming soon." />
                 </div>

@@ -28,7 +28,12 @@ const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback",
 const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/webhooks/"];
 // /api/health has no session to check either — an external uptime monitor
 // hits it directly, same reasoning as the cron routes above.
-const PUBLIC_API_EXACT_PATHS = ["/api/waitlist/expire", "/api/notifications/win-back", "/api/health"];
+//
+// /api/wearables/sync is the same story — Vercel Cron calls it with no
+// session cookie, authenticated via CRON_SECRET inside the route itself.
+// Learned from the 2026-08-14 incident above: added here up front rather
+// than discovered later via a cron that silently never actually ran.
+const PUBLIC_API_EXACT_PATHS = ["/api/waitlist/expire", "/api/notifications/win-back", "/api/health", "/api/wearables/sync"];
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;

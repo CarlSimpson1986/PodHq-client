@@ -1,18 +1,18 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
+import { getWearableConnection, getLatestWearableSnapshot } from "@/lib/data/wearables";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { CoachBottomNav } from "@/components/coach-bottom-nav";
 import { UserIcon } from "@/components/icons";
 import { CoachProfileEditForm } from "@/components/coach-profile-edit-form";
-import { ComingSoonCard } from "@/components/coach-section";
+import { WearableConnectionCard } from "@/components/wearable-connection-card";
 
 // The Profile tab — metrics/goals/plan, editable (the earlier onboarding
-// flow had no way to come back and change any of this afterwards). Health
-// markers from wearables (Fitbit etc.) stay a placeholder — that's a
-// separate research spike, not built yet.
+// flow had no way to come back and change any of this afterwards).
 export default async function CoachProfilePage() {
   const session = await createSessionClient();
   const {
@@ -37,6 +37,9 @@ export default async function CoachProfilePage() {
     redirect("/coach-onboarding");
   }
 
+  const wearableConnection = await getWearableConnection(member.id);
+  const wearableSnapshot = wearableConnection ? await getLatestWearableSnapshot(member.id) : null;
+
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
       <PageHero title="Profile" subtitle="Your metrics, goals and plan" icon={UserIcon} iconHref="/profile" />
@@ -57,10 +60,9 @@ export default async function CoachProfilePage() {
             }}
           />
 
-          <ComingSoonCard
-            title="Health markers"
-            body="Fitbit sync (HRV, resting pulse, sleep, steps) is being scoped separately — coming soon."
-          />
+          <Suspense fallback={null}>
+            <WearableConnectionCard connected={!!wearableConnection} snapshot={wearableSnapshot} />
+          </Suspense>
         </div>
       </div>
       <CoachBottomNav />

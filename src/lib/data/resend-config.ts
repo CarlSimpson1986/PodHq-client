@@ -1,28 +1,15 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createDecipheriv } from "crypto";
+import { decryptSecret } from "@/lib/crypto/secret-encryption";
 
 /**
  * Reads gym_resend_config, written by podHQ's admin-only Setup UI
  * (podHq's src/lib/data/resend-config.ts / 0037_gym_resend_config.sql) —
- * this app only ever reads it, never writes it. Decrypt logic must stay
+ * this app only ever reads it, never writes it. decryptSecret must stay
  * byte-for-byte identical to podHq's src/lib/crypto/secret-encryption.ts
- * (same SECRET_ENCRYPTION_KEY convention, but podhq-client needs its own
- * copy since the two apps are separate deploys/repos, not a shared
- * package) — AES-256-GCM, ciphertext stored as
- * base64(iv):base64(authTag):base64(encrypted).
+ * (same SECRET_ENCRYPTION_KEY convention — see that file's own comment
+ * for why this app needs its own copy rather than a shared package).
  */
-function decryptSecret(ciphertext: string): string {
-  const raw = process.env.SECRET_ENCRYPTION_KEY;
-  if (!raw) throw new Error("SECRET_ENCRYPTION_KEY is not configured");
-  const key = Buffer.from(raw, "base64");
-  const [ivB64, authTagB64, encryptedB64] = ciphertext.split(":");
-  if (!ivB64 || !authTagB64 || !encryptedB64) throw new Error("Malformed ciphertext");
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(ivB64, "base64"));
-  decipher.setAuthTag(Buffer.from(authTagB64, "base64"));
-  const decrypted = Buffer.concat([decipher.update(Buffer.from(encryptedB64, "base64")), decipher.final()]);
-  return decrypted.toString("utf8");
-}
 
 export interface ResendConfig {
   apiKey: string;
