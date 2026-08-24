@@ -109,14 +109,29 @@ async function fetchDailyRollup(client: OAuth2Client, dataType: string, startTim
 // NEEDS VERIFICATION against a real response — see the file-level
 // comment. Written defensively (never throws on an unexpected shape,
 // just returns null for that field) so a schema surprise degrades to
-// "no data for that field today" instead of failing the whole sync.
-function extractRollupValue(body: unknown): number | null {
-  if (!body || typeof body !== "object") return null;
+// "no data for that field today" instead of failing the whole sync —
+// but logs the raw body whenever the assumed shape doesn't match, so a
+// real defensive miss shows up in Vercel logs instead of just silently
+// rendering as "—" with zero diagnostic trail (found the hard way,
+// 2026-08-24: refresh was returning 200 with every field blank and
+// nothing in the logs explaining why).
+function extractRollupValue(dataType: string, body: unknown): number | null {
+  if (!body || typeof body !== "object") {
+    console.error("[google-health] rollup response was not an object", { dataType, body });
+    return null;
+  }
   const points = (body as { dataPoints?: unknown[] }).dataPoints;
-  if (!Array.isArray(points) || points.length === 0) return null;
+  if (!Array.isArray(points) || points.length === 0) {
+    console.error("[google-health] rollup response had no dataPoints — logging shape for verification", { dataType, body });
+    return null;
+  }
   const first = points[0] as { value?: { intValue?: number; fpValue?: number } };
   const value = first.value?.intValue ?? first.value?.fpValue;
-  return typeof value === "number" ? Math.round(value) : null;
+  if (typeof value !== "number") {
+    console.error("[google-health] rollup dataPoint had no numeric value — logging shape for verification", { dataType, first });
+    return null;
+  }
+  return Math.round(value);
 }
 
 // Fetches one calendar day's steps/sleep/resting-heart-rate for a member
@@ -129,13 +144,23 @@ export async function fetchDailyData(refreshToken: string, dateIso: string): Pro
   const startTime = `${dateIso}T00:00:00Z`;
   const endTime = `${dateIso}T23:59:59Z`;
 
+  const dataTypeByIndex = [DATA_TYPES.steps, DATA_TYPES.sleep, DATA_TYPES.restingHeartRate];
   const results = await Promise.allSettled([
     fetchDailyRollup(client, DATA_TYPES.steps, startTime, endTime),
     fetchDailyRollup(client, DATA_TYPES.sleep, startTime, endTime),
     fetchDailyRollup(client, DATA_TYPES.restingHeartRate, startTime, endTime),
   ]);
 
-  const [steps, sleep, restingHeartRate] = results.map((r) => (r.status === "fulfilled" ? extractRollupValue(r.value) : null));
+  const [steps, sleep, restingHeartRate] = results.map((r, i) => {
+    if (r.status === "rejected") {
+      // Previously discarded entirely — a request failure (bad scope,
+      // wrong dataType id, expired token) looked identical to "no data
+      // today" with nothing in the logs to tell them apart.
+      console.error("[google-health] rollup request failed", { dataType: dataTypeByIndex[i], reason: String(r.reason) });
+      return null;
+    }
+    return extractRollupValue(dataTypeByIndex[i], r.value);
+  });
 
   return { steps, sleepMinutes: sleep, restingHeartRate };
 }
