@@ -96,15 +96,26 @@ ever send those. Ran a full session start-to-finish with both toggles
 on: warm-up checklist appeared and checkmarks toggled correctly,
 cool-down checklist appeared after the last logged set (not before),
 "Finish" completed the session normally with real post-session
-narration. One pre-existing, unrelated bug surfaced during testing and
-left as-is (out of scope for this change): React Strict Mode's dev-only
-double-effect-fire can race two concurrent `POST /api/member/workout/
-generate` calls on first load, occasionally hitting `workout_sessions`'
-`booking_id` unique constraint and returning a 500 — reloading recovers
-cleanly since one of the two racing inserts always succeeds; worth a
-proper fix (an idempotency lock or a client-side guard against a
-duplicate in-flight request) if it turns out to affect production, which
-doesn't double-invoke effects the way dev does.
+narration. One pre-existing, unrelated bug surfaced during testing: React Strict
+Mode's dev-only double-effect-fire can race two concurrent `POST /api/
+member/workout/generate` calls on first load, occasionally hitting
+`workout_sessions`' `booking_id` unique constraint and returning a 500.
+**Fixed same day** (see below) rather than left outstanding.
+
+### Fix: workout-generate race condition — 2026-08-23 (later same day)
+
+`getOrCreateWorkoutSession` now catches the `23505` unique-constraint
+violation on `booking_id` and loads whatever the winning concurrent
+request already created, instead of surfacing a 500 — the insert's
+existence-check-then-insert window was never actually safe against a
+second in-flight request for the same booking, dev-only Strict Mode
+double-firing was just the reliable way to trigger it. Also updated the
+warm-up/cool-down content per Carl's direct review (Peloton treadmill/
+bike for the pulse raiser, fire hydrants for hip mobility) and corrected
+`exercise-catalog.ts`'s equipment comment, which only listed the
+resistance-training kit. **Verified**: live-reproduced the race (two
+concurrent generate requests via the dev server log) and confirmed both
+now return 200 with exactly one `workout_sessions` row written.
 
 ## Wearable integration research — Google Health API note — 2026-08-24
 
