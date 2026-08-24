@@ -2,15 +2,14 @@ import "server-only";
 import { OAuth2Client } from "google-auth-library";
 
 // Base URL and REST shape confirmed live 2026-08-24 against Google's own
-// docs (developers.google.com/health) — this is a new API (GA May 2026),
-// not something in general training knowledge, so every constant below
-// was checked rather than assumed. What's NOT independently confirmed:
-// the exact JSON response field names for a dailyRollUp call — Google's
-// docs describe the endpoints and constraints but don't publish a worked
-// response example. parseDailyRollupResponse below is the one place that
-// needs checking against a real response once Carl has live OAuth
-// credentials (see ROADMAP.md's wearable-integration note) — everything
-// else here (scopes, paths, dataType ids) is grounded in the live docs.
+// discovery document (https://health.googleapis.com/$discovery/rest?version=v4)
+// — the authoritative machine-readable schema, not a docs page. Two
+// earlier same-day attempts at the request/response shape (an assumed
+// {startTime, endTime} RFC3339 pair, then an assumed {year, month, day}
+// directly under range.start) both came back with live 400s from
+// Google's own API; the discovery document's DailyRollUpDataPointsRequest/
+// CivilTimeInterval/CivilDateTime/DailyRollUpDataPointsResponse/
+// DailyRollupDataPoint schemas below are what actually ships.
 const API_BASE = "https://health.googleapis.com/v4";
 
 // Scope naming confirmed live: googlehealth.{category}.readonly, moved
@@ -83,12 +82,23 @@ export interface DailyWearableData {
 }
 
 // dataType id strings confirmed live against Google's docs: "steps",
-// "sleep", "daily-resting-heart-rate" — hyphenated, not underscored.
+// "daily-resting-heart-rate" — hyphenated, not underscored. "sleep" is
+// deliberately absent — see the SLEEP_NOT_YET_SUPPORTED comment below.
 const DATA_TYPES = {
   steps: "steps",
-  sleep: "sleep",
   restingHeartRate: "daily-resting-heart-rate",
 } as const;
+
+// Sleep is modeled as session records (Sleep/SleepSummary/SleepStage —
+// start/end times, not a single daily number) — confirmed by reading
+// the discovery document's DailyRollupDataPoint schema, whose value
+// union has no "sleep" property at all alongside "steps"/"heartRate"/
+// etc, so dailyRollUp simply doesn't summarize it the way it does the
+// other two fields. Getting a daily sleep-duration number needs reading
+// Sleep session records directly and summing durations client-side —
+// real, separate work, not a parsing fix. Tracked as its own follow-up;
+// this file no longer even attempts the doomed dailyRollUp call for it.
+const SLEEP_NOT_YET_SUPPORTED = true;
 
 interface CivilDate {
   year: number;
@@ -101,18 +111,23 @@ function civilDateFromIso(dateIso: string): CivilDate {
   return { year, month, day };
 }
 
-// dailyRollUp's "range" is a closed-open CivilTimeInterval (calendar
-// dates, not RFC3339 instants) — confirmed 2026-08-24 against Google's
-// REST reference after the originally-assumed {startTime, endTime}
-// RFC3339-string shape came back with a live 400: 'Unknown name
-// "startTime" at range: Cannot find field.' The exclusive end is the
-// requested date plus one day.
-function dailyCivilRange(dateIso: string): { start: CivilDate; end: CivilDate } {
+// dailyRollUp's "range" is a CivilTimeInterval, whose start/end are each
+// a CivilDateTime — {date: Date, time?: TimeOfDay} — NOT a Date object
+// directly. Two earlier same-day attempts got this wrong and both came
+// back with live 400s from Google's own API: first an assumed
+// {startTime, endTime} RFC3339-string pair ('Unknown name "startTime" at
+// range'), then an assumed {year, month, day} directly under range.start
+// ('Unknown name "year" at range.start' — because range.start is a
+// CivilDateTime, whose only valid properties are "date" and "time", not
+// year/month/day themselves). Confirmed against the discovery document's
+// CivilTimeInterval/CivilDateTime/Date schemas, not assumed a third time.
+// The exclusive end is the requested date plus one day.
+function dailyCivilRange(dateIso: string): { start: { date: CivilDate }; end: { date: CivilDate } } {
   const start = civilDateFromIso(dateIso);
   const endDate = new Date(Date.UTC(start.year, start.month - 1, start.day + 1));
   return {
-    start,
-    end: { year: endDate.getUTCFullYear(), month: endDate.getUTCMonth() + 1, day: endDate.getUTCDate() },
+    start: { date: start },
+    end: { date: { year: endDate.getUTCFullYear(), month: endDate.getUTCMonth() + 1, day: endDate.getUTCDate() } },
   };
 }
 
@@ -132,54 +147,72 @@ async function fetchDailyRollup(client: OAuth2Client, dataType: string, dateIso:
   return res.json();
 }
 
-// NEEDS FURTHER VERIFICATION for sleep/resting-heart-rate specifically —
-// see the file-level comment. Steps' shape is confirmed from a real
-// example response ({"dataPoints":[{"date":"...","countSum":"9037"}]} —
-// countSum as a string, Google's standard int64-as-string JSON
-// convention); sleep and resting-heart-rate likely use a differently-
-// named field for their own aggregation (duration/average rather than
-// sum) that hasn't been confirmed yet. Tries the confirmed `countSum`
-// key first, falls back to the originally-assumed generic `value`
-// wrapper in case a data type uses that shape instead, and — either way
-// — logs the raw first data point whenever no numeric value is found, so
-// the exact real field name for sleep/resting-heart-rate shows up in
-// Vercel logs on the next real call instead of silently staying blank.
+// Response shape confirmed against the discovery document's
+// DailyRollUpDataPointsResponse/DailyRollupDataPoint/StepsRollupValue/
+// RestingHeartRatePersonalRangeRollupValue schemas: the top-level array
+// is "rollupDataPoints" (not "dataPoints" — that name belongs to the
+// separate, non-civil-time `rollUp` method's response, a different
+// endpoint entirely), and each data type nests its own differently-
+// shaped rollup value object rather than one generic {value: {...}}
+// wrapper. Steps uses "countSum" (an int64, so serialized as a numeric
+// *string* — Google's standard convention, hence the Number() coercion).
+// Resting heart rate's "personal range" value has no single daily
+// number at all, only beatsPerMinuteMin/Max — the midpoint is used as
+// the closest available approximation to "resting heart rate today";
+// flagged here as a genuine open product question (Carl), not treated
+// as settled. Still logs the raw rollup point whenever a value can't be
+// extracted, so a further schema surprise shows up in Vercel logs
+// instead of silently rendering as "—" again.
 function extractRollupValue(dataType: string, body: unknown): number | null {
   if (!body || typeof body !== "object") {
     console.error("[google-health] rollup response was not an object", { dataType, body });
     return null;
   }
-  const points = (body as { dataPoints?: unknown[] }).dataPoints;
+  const points = (body as { rollupDataPoints?: unknown[] }).rollupDataPoints;
   if (!Array.isArray(points) || points.length === 0) {
-    console.error("[google-health] rollup response had no dataPoints — logging shape for verification", { dataType, body });
+    console.error("[google-health] rollup response had no rollupDataPoints — logging shape for verification", { dataType, body });
     return null;
   }
-  const first = points[0] as { countSum?: string | number; value?: { intValue?: number; fpValue?: number } };
-  const raw = first.countSum ?? first.value?.intValue ?? first.value?.fpValue;
-  const value = typeof raw === "string" ? Number(raw) : raw;
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    console.error("[google-health] rollup dataPoint had no numeric value — logging shape for verification", { dataType, first });
-    return null;
+  const first = points[0] as {
+    steps?: { countSum?: string | number };
+    restingHeartRatePersonalRange?: { beatsPerMinuteMin?: number; beatsPerMinuteMax?: number };
+  };
+
+  if (dataType === DATA_TYPES.steps) {
+    const raw = first.steps?.countSum;
+    const value = typeof raw === "string" ? Number(raw) : raw;
+    if (typeof value === "number" && !Number.isNaN(value)) return Math.round(value);
+  } else if (dataType === DATA_TYPES.restingHeartRate) {
+    const { beatsPerMinuteMin, beatsPerMinuteMax } = first.restingHeartRatePersonalRange ?? {};
+    if (typeof beatsPerMinuteMin === "number" && typeof beatsPerMinuteMax === "number") {
+      return Math.round((beatsPerMinuteMin + beatsPerMinuteMax) / 2);
+    }
   }
-  return Math.round(value);
+
+  console.error("[google-health] rollup dataPoint had no extractable value — logging shape for verification", { dataType, first });
+  return null;
 }
 
 // Fetches one calendar day's steps/sleep/resting-heart-rate for a member
 // whose refresh token has already been decrypted by the caller — see
 // src/lib/data/wearables.ts. A single field's request failing (a data
 // type with no data that day, or a transient error) doesn't fail the
-// other two — each is fetched and parsed independently.
+// other two — each is fetched and parsed independently. Sleep always
+// resolves to null without an API call — see SLEEP_NOT_YET_SUPPORTED.
 export async function fetchDailyData(refreshToken: string, dateIso: string): Promise<DailyWearableData> {
   const client = clientWithRefreshToken(refreshToken);
 
-  const dataTypeByIndex = [DATA_TYPES.steps, DATA_TYPES.sleep, DATA_TYPES.restingHeartRate];
+  if (SLEEP_NOT_YET_SUPPORTED) {
+    console.error("[google-health] sleep skipped — dailyRollUp has no sleep field, needs the session-based endpoint instead");
+  }
+
+  const dataTypeByIndex = [DATA_TYPES.steps, DATA_TYPES.restingHeartRate];
   const results = await Promise.allSettled([
     fetchDailyRollup(client, DATA_TYPES.steps, dateIso),
-    fetchDailyRollup(client, DATA_TYPES.sleep, dateIso),
     fetchDailyRollup(client, DATA_TYPES.restingHeartRate, dateIso),
   ]);
 
-  const [steps, sleep, restingHeartRate] = results.map((r, i) => {
+  const [steps, restingHeartRate] = results.map((r, i) => {
     if (r.status === "rejected") {
       // Previously discarded entirely — a request failure (bad scope,
       // wrong dataType id, expired token) looked identical to "no data
@@ -190,5 +223,5 @@ export async function fetchDailyData(refreshToken: string, dateIso: string): Pro
     return extractRollupValue(dataTypeByIndex[i], r.value);
   });
 
-  return { steps, sleepMinutes: sleep, restingHeartRate };
+  return { steps, sleepMinutes: null, restingHeartRate };
 }
