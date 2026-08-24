@@ -148,49 +148,70 @@ async function fetchDailyRollup(client: OAuth2Client, dataType: string, dateIso:
 }
 
 // Response shape confirmed against the discovery document's
-// DailyRollUpDataPointsResponse/DailyRollupDataPoint/StepsRollupValue/
-// RestingHeartRatePersonalRangeRollupValue schemas: the top-level array
-// is "rollupDataPoints" (not "dataPoints" — that name belongs to the
-// separate, non-civil-time `rollUp` method's response, a different
-// endpoint entirely), and each data type nests its own differently-
-// shaped rollup value object rather than one generic {value: {...}}
-// wrapper. Steps uses "countSum" (an int64, so serialized as a numeric
-// *string* — Google's standard convention, hence the Number() coercion).
-// Resting heart rate's "personal range" value has no single daily
-// number at all, only beatsPerMinuteMin/Max — the midpoint is used as
-// the closest available approximation to "resting heart rate today";
-// flagged here as a genuine open product question (Carl), not treated
-// as settled. Still logs the raw rollup point whenever a value can't be
-// extracted, so a further schema surprise shows up in Vercel logs
-// instead of silently rendering as "—" again.
-function extractRollupValue(dataType: string, body: unknown): number | null {
+// DailyRollUpDataPointsResponse/DailyRollupDataPoint/StepsRollupValue
+// schemas: the top-level array is "rollupDataPoints" (not "dataPoints"
+// — that name belongs to the separate, non-civil-time `rollUp` method's
+// response, a different endpoint entirely). Steps uses "countSum" (an
+// int64, so serialized as a numeric *string* — Google's standard
+// convention, hence the Number() coercion). Still logs the raw rollup
+// point whenever a value can't be extracted, so a further schema
+// surprise shows up in Vercel logs instead of silently rendering as
+// "—" again. An empty/missing rollupDataPoints array (as opposed to a
+// thrown error) means Google accepted the request but has nothing to
+// roll up for that day — genuinely no synced data yet, not a parsing
+// bug; still logged the same way so it's visible either way.
+function extractStepsRollupValue(body: unknown): number | null {
   if (!body || typeof body !== "object") {
-    console.error("[google-health] rollup response was not an object", { dataType, body });
+    console.error("[google-health] steps rollup response was not an object", { body });
     return null;
   }
   const points = (body as { rollupDataPoints?: unknown[] }).rollupDataPoints;
   if (!Array.isArray(points) || points.length === 0) {
-    console.error("[google-health] rollup response had no rollupDataPoints — logging shape for verification", { dataType, body });
+    console.error("[google-health] steps rollup had no rollupDataPoints — no data synced for this day yet, or a shape mismatch", { body });
     return null;
   }
-  const first = points[0] as {
-    steps?: { countSum?: string | number };
-    restingHeartRatePersonalRange?: { beatsPerMinuteMin?: number; beatsPerMinuteMax?: number };
-  };
-
-  if (dataType === DATA_TYPES.steps) {
-    const raw = first.steps?.countSum;
-    const value = typeof raw === "string" ? Number(raw) : raw;
-    if (typeof value === "number" && !Number.isNaN(value)) return Math.round(value);
-  } else if (dataType === DATA_TYPES.restingHeartRate) {
-    const { beatsPerMinuteMin, beatsPerMinuteMax } = first.restingHeartRatePersonalRange ?? {};
-    if (typeof beatsPerMinuteMin === "number" && typeof beatsPerMinuteMax === "number") {
-      return Math.round((beatsPerMinuteMin + beatsPerMinuteMax) / 2);
-    }
+  const first = points[0] as { steps?: { countSum?: string | number } };
+  const raw = first.steps?.countSum;
+  const value = typeof raw === "string" ? Number(raw) : raw;
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    console.error("[google-health] steps rollup dataPoint had no extractable countSum — logging shape for verification", { first });
+    return null;
   }
+  return Math.round(value);
+}
 
-  console.error("[google-health] rollup dataPoint had no extractable value — logging shape for verification", { dataType, first });
-  return null;
+// daily-resting-heart-rate does NOT support the dailyRollUp action at
+// all — confirmed live 2026-08-24: 'DailyRollup is not supported for
+// data type daily-resting-heart-rate, but the following actions are
+// supported: list, reconcile'. Uses `list` instead, filtered to the one
+// requested civil date via the AIP-160 filter syntax the discovery
+// document documents for daily-summary data types
+// ({data_type_with_underscores}.date >= "YYYY-MM-DD" AND ... < "...").
+// Response is DataPoint[] with a dailyRestingHeartRate.beatsPerMinute
+// field (int64-as-string) — a genuine single daily value, unlike
+// dailyRollUp's personal-range min/max this replaced.
+async function fetchRestingHeartRate(client: OAuth2Client, dateIso: string): Promise<number | null> {
+  const accessToken = await client.getAccessToken();
+  const { end } = dailyCivilRange(dateIso);
+  const endIso = `${end.date.year}-${String(end.date.month).padStart(2, "0")}-${String(end.date.day).padStart(2, "0")}`;
+  const filter = `daily_resting_heart_rate.date >= "${dateIso}" AND daily_resting_heart_rate.date < "${endIso}"`;
+
+  const res = await fetch(
+    `${API_BASE}/users/me/dataTypes/${DATA_TYPES.restingHeartRate}/dataPoints?filter=${encodeURIComponent(filter)}`,
+    { headers: { Authorization: `Bearer ${accessToken.token}` } }
+  );
+  if (!res.ok) {
+    throw new Error(`Google Health API resting-heart-rate list failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as { dataPoints?: { dailyRestingHeartRate?: { beatsPerMinute?: string | number } }[] };
+  const first = body.dataPoints?.[0]?.dailyRestingHeartRate;
+  const raw = first?.beatsPerMinute;
+  const value = typeof raw === "string" ? Number(raw) : raw;
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    console.error("[google-health] resting-heart-rate list had no extractable beatsPerMinute — no data synced for this day yet, or a shape mismatch", { body });
+    return null;
+  }
+  return Math.round(value);
 }
 
 // Fetches one calendar day's steps/sleep/resting-heart-rate for a member
@@ -206,22 +227,24 @@ export async function fetchDailyData(refreshToken: string, dateIso: string): Pro
     console.error("[google-health] sleep skipped — dailyRollUp has no sleep field, needs the session-based endpoint instead");
   }
 
-  const dataTypeByIndex = [DATA_TYPES.steps, DATA_TYPES.restingHeartRate];
-  const results = await Promise.allSettled([
+  const [stepsResult, restingHeartRateResult] = await Promise.allSettled([
     fetchDailyRollup(client, DATA_TYPES.steps, dateIso),
-    fetchDailyRollup(client, DATA_TYPES.restingHeartRate, dateIso),
+    fetchRestingHeartRate(client, dateIso),
   ]);
 
-  const [steps, restingHeartRate] = results.map((r, i) => {
-    if (r.status === "rejected") {
-      // Previously discarded entirely — a request failure (bad scope,
-      // wrong dataType id, expired token) looked identical to "no data
-      // today" with nothing in the logs to tell them apart.
-      console.error("[google-health] rollup request failed", { dataType: dataTypeByIndex[i], reason: String(r.reason) });
-      return null;
-    }
-    return extractRollupValue(dataTypeByIndex[i], r.value);
-  });
+  let steps: number | null = null;
+  if (stepsResult.status === "fulfilled") {
+    steps = extractStepsRollupValue(stepsResult.value);
+  } else {
+    console.error("[google-health] steps rollup request failed", { reason: String(stepsResult.reason) });
+  }
+
+  let restingHeartRate: number | null = null;
+  if (restingHeartRateResult.status === "fulfilled") {
+    restingHeartRate = restingHeartRateResult.value;
+  } else {
+    console.error("[google-health] resting-heart-rate list request failed", { reason: String(restingHeartRateResult.reason) });
+  }
 
   return { steps, sleepMinutes: null, restingHeartRate };
 }
