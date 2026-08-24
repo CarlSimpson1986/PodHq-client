@@ -151,3 +151,18 @@ export const BLOCK_HIGH_RPE_THRESHOLD = 0.5;
 // gate on attendance alone rather than let a sparse sample swing the
 // recommendation either way.
 export const BLOCK_MIN_RPE_SAMPLE = 3;
+
+// Recovery signal (Health Centre) — same category as the block-change
+// thresholds above: deliberately invented, defensible heuristics for a
+// member-confirmed suggestion, not literature-cited numbers and never
+// gating an autonomous change (see recovery-signal.ts and
+// applyRecoveryAdjustment in workout-session.ts, which only ever fires
+// on explicit member confirmation).
+// Below this many trailing days of synced wearable data, there's no
+// reliable personal baseline to compare today against.
+export const RECOVERY_MIN_BASELINE_DAYS = 5;
+// +5bpm over the trailing baseline average — a real, not noise-level,
+// elevation for resting heart rate.
+export const RECOVERY_RESTING_HR_DELTA = 5;
+// -60min under the trailing baseline average sleep.
+export const RECOVERY_SLEEP_MINUTES_DELTA = 60;

@@ -193,3 +193,21 @@ export function AppleIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+// The /coach/health page (Health Centre) header + nav icon.
+export function HeartPulseIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path
+        d="M3 12h4l2-5 3 10 2-7 1.5 2H21"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 20s-7-4.5-9-8.6C1.5 8 3 5 6 5c2 0 3.3 1.3 4 2.3.7-1 2-2.3 4-2.3 3 0 4.5 3 3 6.4-2 4.1-5 5.9-5 8.6Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

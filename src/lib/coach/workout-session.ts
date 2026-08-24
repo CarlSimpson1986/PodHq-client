@@ -12,7 +12,9 @@ import { EXERCISE_CATALOG } from "@/lib/coach/exercise-catalog";
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { getActiveBlock } from "@/lib/coach/training-block-state";
-import type { BlockType, EquipmentType } from "@/lib/coach/types";
+import { DELOAD_WEIGHT_MULTIPLIER, type BlockType, type EquipmentType } from "@/lib/coach/types";
+import { getWearableConnection, getLatestWearableSnapshot, getRecentWearableSnapshots } from "@/lib/data/wearables";
+import { getRecoverySignal, type RecoverySignal } from "@/lib/coach/recovery-signal";
 
 export interface WorkoutSet {
   id: number;
@@ -50,6 +52,10 @@ export interface WorkoutSessionDetail extends SessionExerciseDetail {
   // round trip, while the actual swap is still independently
   // re-validated server-side.
   excludedExerciseKeys: string[];
+  // Whether today's wearable data suggests a lighter session — surfaced
+  // on the overview screen as a member-confirmed suggestion only
+  // (applyRecoveryAdjustment below), never applied automatically.
+  recoveryAdvice: RecoverySignal;
 }
 
 // Stage 12c real risk: the safe fallback on any error resolving the
@@ -84,6 +90,51 @@ function combineExcludedKeys(injuries: string | null, availableEquipment: Equipm
   return [...new Set([...getInjuryExcludedKeys(injuries), ...getEquipmentExcludedKeys(availableEquipment)])];
 }
 
+// A session the member already confirmed a recovery adjustment on must
+// never show the banner again or be re-discountable — without this,
+// reopening an unstarted session (exit and come back before starting)
+// recomputed the signal fresh from the same live wearable data every
+// time, re-showing "reduce today's session" after it had already been
+// applied, and a second tap would re-multiply the already-discounted
+// weight by DELOAD_WEIGHT_MULTIPLIER again. sessionId is null only for
+// the brand-new-session path in getOrCreateWorkoutSession, where there's
+// nothing to have been adjusted yet.
+async function getSessionRecoveryAdjustedAt(sessionId: number): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("workout_sessions").select("recovery_adjusted_at").eq("id", sessionId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.recovery_adjusted_at ?? null;
+}
+
+// No connection or no synced data at all both mean "nothing to assess
+// yet" — same insufficient_data outcome as too thin a baseline, never a
+// guess. Errors fail open to insufficient_data too, same posture as
+// resolveActiveBlock's try/catch above: a wearables hiccup must never
+// block a member from seeing their workout.
+async function getRecoveryAdvice(memberId: number, sessionId: number | null): Promise<RecoverySignal> {
+  try {
+    if (sessionId !== null) {
+      const adjustedAt = await getSessionRecoveryAdjustedAt(sessionId);
+      if (adjustedAt !== null) return { kind: "normal" };
+    }
+
+    const connection = await getWearableConnection(memberId);
+    if (!connection) return { kind: "insufficient_data" };
+
+    const today = await getLatestWearableSnapshot(memberId);
+    if (!today) return { kind: "insufficient_data" };
+
+    const baseline = await getRecentWearableSnapshots(memberId);
+    return getRecoverySignal(today, baseline);
+  } catch (error) {
+    console.error("[workout] failed to resolve recovery advice, defaulting to insufficient_data", {
+      memberId,
+      error: (error as Error).message,
+    });
+    return { kind: "insufficient_data" };
+  }
+}
+
 // Fetches an existing workout_session (with exercises/sets) for a booking,
 // or generates + persists a new one. Idempotent on booking_id's unique
 // index — a member re-opening the same booked session's workout screen
@@ -107,7 +158,11 @@ export async function getOrCreateWorkoutSession(
     const existingProfile = await getCoachProfile(memberId);
     const detail = await loadSessionDetail(existing.id);
     return {
-      detail: { ...detail, excludedExerciseKeys: combineExcludedKeys(existingProfile?.injuries ?? null, availableEquipment) },
+      detail: {
+        ...detail,
+        excludedExerciseKeys: combineExcludedKeys(existingProfile?.injuries ?? null, availableEquipment),
+        recoveryAdvice: await getRecoveryAdvice(memberId, existing.id),
+      },
       introNarration: null,
     };
   }
@@ -144,7 +199,14 @@ export async function getOrCreateWorkoutSession(
         .single();
       if (winnerError) throw new Error(winnerError.message);
       const detail = await loadSessionDetail(winner.id);
-      return { detail: { ...detail, excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment) }, introNarration: null };
+      return {
+        detail: {
+          ...detail,
+          excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment),
+          recoveryAdvice: await getRecoveryAdvice(memberId, winner.id),
+        },
+        introNarration: null,
+      };
     }
     throw new Error(sessionError.message);
   }
@@ -161,7 +223,14 @@ export async function getOrCreateWorkoutSession(
   }
 
   const detail = await loadSessionDetail(session.id);
-  return { detail: { ...detail, excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment) }, introNarration };
+  return {
+    detail: {
+      ...detail,
+      excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment),
+      recoveryAdvice: await getRecoveryAdvice(memberId, session.id),
+    },
+    introNarration,
+  };
 }
 
 async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise[]): Promise<void> {
@@ -334,7 +403,72 @@ export async function swapExercise(
   if (setsUpdateError) throw new Error(setsUpdateError.message);
 
   const updated = await loadSessionDetail(sessionId);
-  return { ...updated, excludedExerciseKeys: excludedKeys };
+  return { ...updated, excludedExerciseKeys: excludedKeys, recoveryAdvice: await getRecoveryAdvice(memberId, sessionId) };
+}
+
+// Member-confirmed-only counterpart to the deload block's automatic
+// discount — reuses DELOAD_WEIGHT_MULTIPLIER rather than inventing a
+// second constant, deliberately weight-only (not a set-count reduction
+// too, unlike a real deload block): keeps this a single UPDATE, minimal,
+// non-destructive. Same ownership + hasProgress guard as swapExercise —
+// never allowed once a set has actually been logged. Also rejects a
+// second application on the same session (recovery_adjusted_at already
+// set) — without this, exiting and reopening an unstarted session before
+// starting it let a member tap "Reduce" again and re-multiply the
+// already-discounted weight by DELOAD_WEIGHT_MULTIPLIER a second time,
+// compounding the reduction. Found via a user-perspective walkthrough,
+// 2026-08-24, the same day this shipped.
+export async function applyRecoveryAdjustment(memberId: number, sessionId: number): Promise<WorkoutSessionDetail> {
+  const admin = createAdminClient();
+
+  const detail = await loadSessionDetail(sessionId);
+  const hasProgress = detail.exercises.some((e) => e.sets.some((s) => s.completedAt));
+  if (hasProgress) {
+    throw new Error("session_already_started");
+  }
+
+  const alreadyAdjusted = await getSessionRecoveryAdjustedAt(sessionId);
+  if (alreadyAdjusted !== null) {
+    throw new Error("recovery_already_applied");
+  }
+
+  const exerciseIds = detail.exercises.map((e) => e.id);
+  if (exerciseIds.length > 0) {
+    const { data: sets, error: setsError } = await admin.from("workout_sets").select("id, weight_target_kg").in("exercise_id", exerciseIds);
+    if (setsError) throw new Error(setsError.message);
+
+    for (const set of sets ?? []) {
+      const { error: updateError } = await admin
+        .from("workout_sets")
+        .update({ weight_target_kg: roundToNearestPlateForAdjustment(set.weight_target_kg * DELOAD_WEIGHT_MULTIPLIER) })
+        .eq("id", set.id);
+      if (updateError) throw new Error(updateError.message);
+    }
+  }
+
+  const { error: markAdjustedError } = await admin
+    .from("workout_sessions")
+    .update({ recovery_adjusted_at: new Date().toISOString() })
+    .eq("id", sessionId);
+  if (markAdjustedError) throw new Error(markAdjustedError.message);
+
+  const updated = await loadSessionDetail(sessionId);
+  const profile = await getCoachProfile(memberId);
+  const resourceId = await getSessionResourceId(sessionId);
+  const availableEquipment = resourceId !== null ? await getResourceEquipment(resourceId) : [];
+  return {
+    ...updated,
+    excludedExerciseKeys: combineExcludedKeys(profile?.injuries ?? null, availableEquipment),
+    recoveryAdvice: await getRecoveryAdvice(memberId, sessionId),
+  };
+}
+
+// Same rounding convention as generate-workout.ts's roundToNearestPlate —
+// duplicated rather than imported since that one isn't exported (kept
+// private to the weight-picking module) and this is one small function.
+function roundToNearestPlateForAdjustment(kg: number, increment = 1.25): number {
+  if (kg === 0) return 0;
+  return Math.round(kg / increment) * increment;
 }
 
 export async function logSet(

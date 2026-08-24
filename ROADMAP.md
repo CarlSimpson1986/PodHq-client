@@ -14,107 +14,130 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-15.md`, covering the pilot
-mechanism proof (2026-08-05) through the full wearable-integration
-research thread (2026-08-24) — all split out to keep this file within
-Claude Code's ~15,000-character `@`-import limit. Archives aren't always
-the strictly oldest material — the split point is "what's finished and
-stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s and
-`-15.md`'s own header notes for two same-day examples of this). All
-archives are reference-only (not auto-loaded by CLAUDE.md); check them
-for full stage-by-stage build history, or `git log` on this file for the
-exact split points. This file's active content is the Fitbit-via-Google-
-Health-API scaffolding (2026-08-24, blocked on Carl's Google Cloud setup
-— see that section for the outstanding checklist) plus whatever's added
-after it. If this file grows too large again, split it the same way:
-move whichever section is most clearly finished (not necessarily the
-chronologically oldest) into a numbered `ROADMAP-ARCHIVE-16.md`, leave a
-pointer note at the top of this file, and update this paragraph.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-16.md`, covering the pilot
+mechanism proof (2026-08-05) through the full Fitbit-via-Google-Health-
+API thread (2026-08-24) — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. Archives aren't always the
+strictly oldest material — the split point is "what's finished and
+stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s,
+`-15.md`'s, and `-16.md`'s own header notes for three same-day examples
+of this). All archives are reference-only (not auto-loaded by
+CLAUDE.md); check them for full stage-by-stage build history, or
+`git log` on this file for the exact split points. This file's active
+content is the Health Centre (2026-08-24, unified recovery/nutrition/
+training) plus whatever's added after it. If this file grows too large
+again, split it the same way: move whichever section is most clearly
+finished (not necessarily the chronologically oldest) into a numbered
+`ROADMAP-ARCHIVE-17.md`, leave a pointer note at the top of this file,
+and update this paragraph.
 
-## Wearable integration research — Google Health API note — 2026-08-24
+## Fitbit via Google Health API — 2026-08-24
 
-Full detail moved to `ROADMAP-ARCHIVE-15.md` the same day, once its
-conclusions were stable and acted upon. Summary: Fitbit's legacy API
-dies September 2026 — target the **Google Health API** instead (GA'd
-May 2026, self-serve). Apple HealthKit has zero cloud API by design
-(native app + App Store required, no workaround); Android's Health
-Connect is on-device only and only matters for a wearable with no cloud
-API of its own. Checked live, by brand: **Garmin** — developer program
-closed to new sign-ups, not currently buildable. **Whoop**/**Oura** —
-both self-serve like Fitbit (Oura has a real caveat: needs the member's
-own paid Oura Membership, not just a ring). **Samsung** — feeds Android's
-Health Connect, not the cloud Google Health API; same native-only bucket
-as Apple, despite both being "Google." Full App-Store-pre-emption
-research (timelines, common HealthKit rejection reasons, the Guideline
-3.1.3 payment exemption) also lives in the archive.
+Full detail moved to `ROADMAP-ARCHIVE-16.md` the same day, once fully
+finished and acted upon. Summary: scaffolded the connect/disconnect flow
+and daily sync cron against the Google Health API (Fitbit's legacy API
+dies September 2026); Carl completed the Google Cloud OAuth setup and
+connected a real account; a `CRON_SECRET` fragment got pasted while
+testing the sync route manually, so it was rotated as a precaution; and
+a member-facing Refresh button was added so a first connection doesn't
+have to wait up to 24h for the nightly cron. This directly fed into the
+Health Centre work below.
 
-## Fitbit-via-Google-Health-API integration scaffolded — 2026-08-24 (same day)
+## Health Centre — 2026-08-24 (same day, stage two)
 
-Built the connect/disconnect flow plus real synced data, replacing the
-Profile page's "Health markers" placeholder — scope confirmed with Carl
-via Plan Mode: connect + display, not yet wired into AI Coach generation
-logic (deliberately deferred). Disconnect deletes all previously-synced
-data immediately, not just future syncs.
+Planned via Plan Mode, then built the same session. Three confirmed
+decisions up front: (1) low recovery only ever **suggests** a lighter
+session, member must confirm — same trust tier as
+`block-change-gate.ts`'s block-transition recommendations, never the
+always-automatic tier RPE/deload weight math uses; (2) a new **6th Coach
+tab** (`/coach/health`), not folded into the Dashboard; (3) nutrition
+stays **display-only** in the Health Centre — only recovery actually
+feeds workout generation.
 
-**Data model** (podHq migration `0057_member_wearable_connections.sql`):
-`member_wearable_connections` (one row per member, encrypted refresh
-token) and `member_wearable_data` (one row per member per synced day —
-steps/sleep/resting heart rate), both modeled on `gym_resend_config`'s
-shape (dedicated table, RLS enabled with zero policies, service-role-only
-access) rather than a bare column-add.
+**Recovery baseline + signal**: `member_wearable_data` already stores
+one row/day, so a trailing baseline needed no schema change — new
+`getRecentWearableSnapshots` (`src/lib/data/wearables.ts`) plus a pure
+`getRecoverySignal` (new `src/lib/coach/recovery-signal.ts`, mirrors
+`block-change-gate.ts`'s exact discriminated-union shape) comparing
+today's synced snapshot against a 14-day trailing average. Two new
+invented-but-documented thresholds in `types.ts`
+(`RECOVERY_RESTING_HR_DELTA` = +5bpm, `RECOVERY_SLEEP_MINUTES_DELTA` =
+-60min), gated by `RECOVERY_MIN_BASELINE_DAYS` = 5 below which it
+returns `insufficient_data` rather than guessing — same category as
+`CHECK_IN_GRACE_DAYS`/the block thresholds, Carl can retune the numbers.
+6 new unit tests in `recovery-signal.test.ts`.
 
-**Encryption**: reused the existing AES-256-GCM `SECRET_ENCRYPTION_KEY`
-pattern rather than inventing a new one — podhq-client previously only
-had a decrypt-only copy of `secret-encryption.ts` (for reading podHq-
-written gym configs); this needed the full encrypt+decrypt pair since
-this app is both writer (OAuth callback) and reader (sync cron) for this
-particular secret. `src/lib/data/resend-config.ts`'s own duplicate
-`decryptSecret` was consolidated to import the new shared module instead
-of keeping two copies.
+**Suggest-and-confirm adjustment**: `WorkoutSessionDetail` gained a
+`recoveryAdvice` field, computed alongside `excludedExerciseKeys` in
+`workout-session.ts` (fails open to `insufficient_data` on any error,
+same posture as `resolveActiveBlock`). New `applyRecoveryAdjustment`
+mirrors `swapExercise`'s exact ownership + `hasProgress` guard — never
+allowed once a set is logged — and applies `DELOAD_WEIGHT_MULTIPLIER` to
+every `workout_sets` row for that session (weight-only, deliberately not
+a set-count reduction too, to keep it a single non-destructive UPDATE;
+flagged for Carl to revisit if he wants more than a weight discount).
+New route `/api/member/workout/[sessionId]/apply-recovery-adjustment`,
+copied from `swap-exercise/route.ts`'s shape. `workout-view.tsx`'s
+overview phase shows a dismissible banner ("Recovery looks low today...")
+with Reduce/Keep-as-planned buttons when `recoveryAdvice.kind ===
+"low_recovery"` and the session hasn't started.
 
-**OAuth + data fetch**: `google-auth-library`'s `OAuth2Client` (not the
-full `googleapis` package), standard authorization-code flow with a
-random-value cookie for CSRF protection on the callback (no existing
-connect/disconnect-a-third-party pattern existed in this codebase to
-reuse — designed fresh). Google Health API's REST shape (base URL,
-scopes, `dailyRollUp` endpoint, `dataType` id strings) was verified live
-against Google's docs rather than assumed, since this is a brand-new API
-(GA'd May 2026) outside training data — the one piece that couldn't be
-fully verified without live credentials is the exact JSON response field
-names for a rollup call (undocumented publicly), so that one parsing
-function is written defensively (never throws on an unexpected shape,
-degrades to "no data for that field" instead) and flagged in its own
-comment for Carl to confirm against a real response.
+**Health Centre tab**: new `HeartPulseIcon` (`icons.tsx`), added to
+`CoachBottomNav` between Training and Nutrition. New
+`src/app/coach/health/page.tsx` — Recovery section (the
+`WearableConnectionCard` connect/refresh/disconnect flow **moved here
+from Profile**, which now only holds fitness/nutrition onboarding
+fields), Nutrition section (reuses `getWeeklyReview`'s existing fields,
+display-only, links through to `/coach/nutrition`), Training section
+(reuses the existing `TrainingBlockView` component as-is, links through
+to `/coach/training`). The wearable connect/callback/disconnect routes'
+redirect targets were updated from `/coach/profile` to `/coach/health`
+to match.
 
-**Sync**: new daily Vercel Cron route (`/api/wearables/sync`, 05:00,
-after the existing 04:00/09:00 jobs), copying `waitlist/expire`'s exact
-`CRON_SECRET` fail-closed pattern verbatim. **Added to `proxy.ts`'s
-public-paths list up front** — this exact class of bug (a cron route
-silently redirected to `/login` before reaching its own auth check) was
-already hit and fixed once before, 2026-08-14, for the win-back route.
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (77/77,
+including the 6 new recovery-signal tests), `next build` all clean —
+`/coach/health` and the new API route both present in the build output.
+**Not yet manually tested end-to-end** — same-day testing of the actual
+`low_recovery` banner needs either several more days of real synced
+data (only one day exists so far, `RECOVERY_MIN_BASELINE_DAYS` = 5) or a
+deliberately seeded/lowered-threshold test, neither done yet.
 
-**Outstanding before this can be tested end-to-end — all on Carl**:
-1. Create a Google Cloud project + OAuth 2.0 client at
-   developers.google.com/health/setup. Redirect URI must be HTTPS, so
-   testing has to happen against a deployed preview/production URL, not
-   local dev.
-2. New OAuth clients start **unverified, capped at 100 manually-added
-   test users** (added one by one in Cloud Console) until Google
-   completes app verification (needs a privacy policy, scope
-   justification) — real rollout stays capped at ~100 members until
-   that's pursued, same category of gate as the App Store review
-   researched earlier today.
-3. Add three new env vars to Vercel: `GOOGLE_HEALTH_CLIENT_ID`,
-   `GOOGLE_HEALTH_CLIENT_SECRET`, `GOOGLE_HEALTH_REDIRECT_URI`
-   (`https://podhq-client.vercel.app/api/wearables/fitbit/callback`).
-   `SECRET_ENCRYPTION_KEY`/`CRON_SECRET` already exist (shared with the
-   gym-config and other-cron use cases).
+**Browser walkthrough + a real bug found, same day**: Carl asked for an
+"objective outlook as if you were a user" — actually drove `/coach/health`
+and `/coach/profile` in Chrome rather than just reasoning from code.
+Confirmed the six-tab nav and all three sections render correctly (a
+hydration-mismatch console error along the way turned out to be a
+dev-mode Fast Refresh artifact, not a real bug — confirmed clean against
+an actual `next build && next start`, which is what Vercel runs).
 
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (71/71,
-including 4 new encryption round-trip tests), `next build` all clean.
-The OAuth exchange and REST data-fetch calls themselves aren't
-realistically unit-testable without live Google credentials — real
-end-to-end verification is blocked on the three items above.
+Tracing the flow as a member surfaced a genuine correctness bug:
+`recoveryAdvice` was recomputed fresh from live wearable data on every
+`getOrCreateWorkoutSession` call, with nothing recording that a member
+had already accepted the adjustment — exiting and reopening an unstarted
+session re-showed the "reduce today's session" banner, and confirming it
+again re-multiplied the already-discounted `weight_target_kg` by
+`DELOAD_WEIGHT_MULTIPLIER` a second time (0.85 × 0.85 = 72.5% of
+original, not 85%). Fixed by adding a `recovery_adjusted_at` column to
+`workout_sessions` (new migration
+`0058_workout_sessions_recovery_adjustment.sql` in podHq's migrations
+folder — **not yet applied to the live database, on Carl**) —
+`applyRecoveryAdjustment` now rejects a second application outright
+(`recovery_already_applied`), and `getRecoveryAdvice` short-circuits to
+`normal` for any session that already has the flag set, so the banner
+never reappears once acted on.
+
+Re-verified after the fix: `tsc --noEmit`, `eslint`, `vitest run`
+(77/77), `next build` all clean.
+
+**Still outstanding before this can be considered done**: apply
+migration 0058 to Supabase (nothing above works correctly without it —
+the column doesn't exist in the live DB yet, so `applyRecoveryAdjustment`
+will error until it's run); a "collecting baseline, day X of 5" indicator
+was flagged as a nice-to-have (currently `insufficient_data` just shows
+nothing, which could read as broken rather than warming up) but not
+built; the "Health markers" card heading duplicating the page's own
+"Recovery" section label was flagged but not renamed. None of this is
+committed or pushed to `main` yet either — still local only.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
