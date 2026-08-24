@@ -14,18 +14,23 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-13.md`, covering the pilot
-mechanism proof (2026-08-05) through the workout session exit/resume/
-warm-up/swap feature and its same-day race-condition fix (2026-08-23) —
-all split out to keep this file within Claude Code's ~15,000-character
-`@`-import limit. All archives are reference-only (not auto-loaded by
-CLAUDE.md); check them for full stage-by-stage build history, or `git
-log` on this file for the exact split points. This file picks up from
-the wearable-integration research note (2026-08-24) and is the active,
-auto-loaded log going forward. If this file grows too large again, split
-it the same way into a numbered `ROADMAP-ARCHIVE-14.md`, leave a pointer
-note at the top of this file, and update this paragraph plus
-`CLAUDE.md`'s session-handoff guidance to match.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-14.md`, covering the pilot
+mechanism proof (2026-08-05) through the equipment-aware AI Coach feature
+(2026-08-24) — all split out to keep this file within Claude Code's
+~15,000-character `@`-import limit. Archives aren't always the strictly
+oldest material: `ROADMAP-ARCHIVE-14.md` was split out the same day it
+was written, because the still-active wearable-integration research
+below needed the room more than that already-finished, already-shipped
+feature did — the split point is "what's still live" as much as "what's
+oldest." All archives are reference-only (not auto-loaded by CLAUDE.md);
+check them for full stage-by-stage build history, or `git log` on this
+file for the exact split points. This file's active content is the
+wearable-integration research thread (2026-08-24, still ongoing) plus
+whatever's added after it. If this file grows too large again, split it
+the same way: move whichever section is most clearly finished (not
+necessarily the chronologically oldest) into a numbered
+`ROADMAP-ARCHIVE-15.md`, leave a pointer note at the top of this file,
+and update this paragraph.
 
 ## Wearable integration research — Google Health API note — 2026-08-24
 
@@ -166,60 +171,58 @@ Sources: [Health API | Garmin Connect Developer Program](https://developer.garmi
 [Data Access and Authorization | Google Health API](https://developers.google.com/health/migration/data-access),
 [Overview | Google Health API](https://developers.google.com/health/migration).
 
+**Follow-up: Whoop, Oura, and a Samsung correction — 2026-08-24 (same
+day).** Carl asked whether Whoop and Oura are "good to go" the same way
+Fitbit is, and separately noted Samsung "use[s] Google Connect as well"
+— checked both live rather than assume either.
+
+- **Whoop: yes, self-serve, free.** Sign up on whoop.com, create an app
+  in the WHOOP developer dashboard, get a Client ID/secret immediately —
+  no partner review to *start* building, unlike Garmin. The only gate is
+  at the end: submitting the finished app for approval before public
+  launch, which doesn't block development/testing.
+- **Oura: yes, self-serve** — register an OAuth app at
+  cloud.ouraring.com, no partner gate. Real caveat, not a build blocker
+  but a reach one: a Gen3 Oura Ring alone isn't enough for a member's
+  data to be accessible via the API — they also need an **active paid
+  Oura Membership** (Oura's own subscription, ~£5.99/mo, nothing to do
+  with MyFitPod). Fewer members would actually have usable data through
+  this integration than through Whoop or Fitbit/Google Health, purely
+  because of that extra subscription gate.
+- **Samsung: correction, not confirmed as stated.** Carl's instinct that
+  Samsung "uses Google" is half right but the wrong half of Google's
+  stack — Samsung Health syncs to **Health Connect** (Android's on-device
+  data layer, confirmed live), not the cloud **Google Health API** that
+  Fitbit now runs through. Health Connect and Google Health API are the
+  two distinct things the original 2026-08-24 note above already told
+  apart — Samsung sits in the same native-only bucket as Apple HealthKit,
+  not the same self-serve-PWA bucket as Fitbit/Whoop/Oura. A Samsung
+  integration would need the native-app path already researched, not a
+  plain server-side OAuth integration.
+
+**Updated net picture**: Fitbit (via Google Health API), Whoop, and
+Oura are all buildable today as plain server-side integrations into
+podhq-client's existing API routes — no native app, no App Store/Play
+Store submission, same shape as the Stripe/Kisi integrations already in
+this codebase. Garmin and Samsung are both parked — Garmin because its
+program is closed, Samsung because it's a Health-Connect (native-only)
+source like Apple, not a cloud-API one.
+
+Sources: [OAuth 2.0 | WHOOP for Developers](https://developer.whoop.com/docs/developing/oauth/),
+[Getting Started | WHOOP for Developers](https://developer.whoop.com/docs/developing/getting-started/),
+[The Oura API – Oura for Organizations Help Center](https://partnersupport.ouraring.com/hc/en-us/articles/20949682312211-The-Oura-API),
+[Oura API](https://cloud.ouraring.com/docs/),
+[Accessing Samsung Health Data through Health Connect | Samsung Developer](https://developer.samsung.com/health/blog/en/accessing-samsung-health-data-through-health-connect),
+[Health Connect FAQ to Access Samsung Health Data | Samsung Developer](https://developer.samsung.com/health/health-connect-faq.html).
+
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
-Carl flagged that Lat Pulldown/Seated Row are prescribed as if every pod
-has a dedicated machine for them, when in reality they (and Tricep
-Pushdown) need to be done on a cable machine — and confirmed via
-`AskUserQuestion` that the real fix is bigger than copy: `EXERCISE_CATALOG`
-was one hardcoded list tuned to Hove's equipment, applied to every gym
-regardless of what that gym's pod actually has (`hasPremium()`, which
-gates AI Coach access, isn't gym-scoped at all). Designed via Plan Mode
-before building; confirmed with Carl: one `cable_machine` category (not
-split by pulley type — that nuance stays in exercise copy); an
-unconfigured gym stays unrestricted (today's exact behavior) until Carl
-explicitly sets its equipment; config lives in podHq's existing pod
-Settings panel, not a new page.
-
-**Data model**: `pod_resources.equipment text[] not null default '{}'`
-(podHq migration `0056_pod_resources_equipment.sql`, no CHECK constraint,
-same TS-union-at-the-boundary convention as `credit_type`) — empty means
-unconfigured/unrestricted, not "no equipment." New `EQUIPMENT_TYPES`
-union (`barbell_rack`/`cable_machine`/`dumbbells`/
-`leg_extension_curl_machine`) duplicated verbatim across both repos'
-`types.ts`, same convention as `GYM_NAMES`. Each `CatalogExercise` gained
-`requiredEquipment: EquipmentType | null` (`null` for Plank).
-
-**Generation**: `generateWorkout`'s `availableEquipment?: EquipmentType[]`
-is optional, same "absent = byte-identical to before" idiom Stage 12 used
-for `activeBlock` — `getOrCreateWorkoutSession` now looks up the
-booking's resource's `equipment` and passes it through; a new
-`getEquipmentExcludedKeys` mirrors `getInjuryExcludedKeys` and is unioned
-with it into the single `excludedExerciseKeys` field the client already
-reads for swap candidates, so the swap UI picked up equipment-awareness
-with no client-side change needed.
-
-**Real gap found and fixed along the way**: `swapExercise` had zero
-gym/resource awareness before this — a member could swap into an
-exercise their actual pod couldn't support even though the client's own
-candidate list would never offer it. `workout_sessions.resource_id` (on
-the row since resources existed, just never selected) is now read via a
-new `getSessionResourceId`, and the swap re-validates equipment
-server-side the same way it already re-validated injuries.
-
-**podHq**: `PodResource` gained `equipment`, threaded through
-`getPodResourcesForGym`/`getPodResourceById`/`updatePodResourceSettings`/
-`updatePodSettingsSchema`; the pod Settings panel
-(`calendar-view.tsx`) gained one checkbox per equipment category next to
-the existing capacity/hours fields.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (podhq-client
-67/67 including 5 new equipment tests; podHq 9/9), and `next build` all
-clean in both repos. Carl ran the migration live in Supabase before this
-was committed, specifically to avoid the AI Coach 500ing for every member
-between a code deploy and the column existing (`getResourceEquipment` is
-on every generate/resume/swap call path). **Still outstanding**: no gym's
-`pod_resources.equipment` has actually been set yet (including Hove's
-real, already-confirmed equipment) — every gym is still running
-unrestricted until Carl works through the new Settings panel checkboxes
-gym by gym.
+Shipped and verified — full detail moved to `ROADMAP-ARCHIVE-14.md` the
+same day, to make room for the still-active wearable-integration research
+above. Summary: `pod_resources` gained an `equipment` column (empty =
+unrestricted, today's exact behavior); `generateWorkout`/`swapExercise`
+now filter/re-validate against a resource's configured equipment; podHq's
+pod Settings panel gained equipment checkboxes. **Still outstanding**: no
+gym's equipment has actually been set yet (including Hove's already-
+confirmed real equipment) — every gym runs unrestricted until Carl works
+through the Settings panel gym by gym.
