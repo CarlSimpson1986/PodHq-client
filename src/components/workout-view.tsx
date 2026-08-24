@@ -30,12 +30,20 @@ interface WorkoutExercise {
   sets: WorkoutSet[];
 }
 
+type RecoveryAdvice = { kind: "low_recovery"; reason: "elevated_resting_hr" | "low_sleep" } | { kind: "normal" } | { kind: "insufficient_data" };
+
 interface WorkoutSessionDetail {
   sessionId: number;
   status: string;
   exercises: WorkoutExercise[];
   excludedExerciseKeys: string[];
+  recoveryAdvice: RecoveryAdvice;
 }
+
+const RECOVERY_REASON_COPY: Record<"elevated_resting_hr" | "low_sleep", string> = {
+  elevated_resting_hr: "your resting heart rate is up from your usual",
+  low_sleep: "you slept less than usual",
+};
 
 interface WeightChange {
   name: string;
@@ -108,6 +116,9 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [swappingExerciseId, setSwappingExerciseId] = useState<number | null>(null);
   const [swapping, setSwapping] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
+  const [recoveryDismissed, setRecoveryDismissed] = useState(false);
+  const [applyingRecovery, setApplyingRecovery] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,6 +206,50 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       <div className="space-y-5">
         <ExitLink />
         <p className="text-lg font-semibold">{hasProgress ? "Continue today's session" : "Today's session"}</p>
+
+        {!hasProgress && !recoveryDismissed && detail.recoveryAdvice.kind === "low_recovery" && (
+          <div className="rounded-lg border border-card-light-border bg-card-light-foreground/5 p-4">
+            <p className="text-sm font-semibold">Recovery looks low today</p>
+            <p className="mt-1 text-sm text-card-light-muted">
+              Looks like {RECOVERY_REASON_COPY[detail.recoveryAdvice.reason]} — want to reduce today&apos;s weights a little?
+            </p>
+            {recoveryError && <p className="mt-2 text-sm text-danger">{recoveryError}</p>}
+            <div className="mt-3 flex gap-3">
+              <button
+                type="button"
+                disabled={applyingRecovery}
+                onClick={async () => {
+                  setApplyingRecovery(true);
+                  setRecoveryError(null);
+                  try {
+                    const res = await fetch(`/api/member/workout/${detail.sessionId}/apply-recovery-adjustment`, { method: "POST" });
+                    const body = await res.json();
+                    if (body.status !== "ok") {
+                      setRecoveryError(body.message ?? "Couldn't apply that. Try again.");
+                      return;
+                    }
+                    setDetail(body.session);
+                  } catch {
+                    setRecoveryError("Couldn't apply that. Try again.");
+                  } finally {
+                    setApplyingRecovery(false);
+                  }
+                }}
+                className="rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {applyingRecovery ? "Reducing..." : "Reduce today's session"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecoveryDismissed(true)}
+                className="rounded-lg border border-card-light-border px-4 py-2 text-sm font-medium"
+              >
+                No, keep as planned
+              </button>
+            </div>
+          </div>
+        )}
+
         <ul className="space-y-3">
           {detail.exercises.map((ex, i) => (
             <li key={ex.id} className="rounded-lg border border-card-light-border p-4">

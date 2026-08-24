@@ -105,6 +105,34 @@ export async function saveWearableSnapshot(memberId: number, snapshot: WearableS
   if (error) throw new Error(error.message);
 }
 
+// Trailing baseline window for recovery-signal.ts — excludes today by
+// construction (recorded_date < today), so a caller comparing "today vs
+// baseline" never accidentally compares a day against itself.
+export async function getRecentWearableSnapshots(memberId: number, days = 14): Promise<WearableSnapshot[]> {
+  const admin = createAdminClient();
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - days);
+  const sinceIso = since.toISOString().slice(0, 10);
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const { data, error } = await admin
+    .from("member_wearable_data")
+    .select("recorded_date, steps, sleep_minutes, resting_heart_rate")
+    .eq("member_id", memberId)
+    .gte("recorded_date", sinceIso)
+    .lt("recorded_date", todayIso)
+    .order("recorded_date", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    recordedDate: row.recorded_date,
+    steps: row.steps,
+    sleepMinutes: row.sleep_minutes,
+    restingHeartRate: row.resting_heart_rate,
+  }));
+}
+
 export async function getLatestWearableSnapshot(memberId: number): Promise<WearableSnapshot | null> {
   const admin = createAdminClient();
   const { data, error } = await admin

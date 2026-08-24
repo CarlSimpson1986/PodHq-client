@@ -30,6 +30,7 @@ export function WearableConnectionCard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [disconnecting, setDisconnecting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wearableParam = searchParams.get("wearable");
@@ -49,6 +50,24 @@ export function WearableConnectionCard({
       setError("Something went wrong. Try again.");
     } finally {
       setDisconnecting(false);
+    }
+  }
+
+  async function handleRefresh() {
+    setError(null);
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/wearables/fitbit/refresh", { method: "POST" });
+      const body = await res.json();
+      if (body.status !== "ok") {
+        setError(body.message ?? "Something went wrong.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Try again.");
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -74,27 +93,31 @@ export function WearableConnectionCard({
         <>
           <p className="mt-1 text-sm text-card-light-muted">Connected via Fitbit (Google Health).</p>
           {snapshot ? (
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-lg font-semibold">{snapshot.steps ?? "—"}</p>
-                <p className="text-xs text-card-light-muted">Steps</p>
+            <>
+              <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-lg font-semibold">{snapshot.steps ?? "—"}</p>
+                  <p className="text-xs text-card-light-muted">Steps</p>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold">{formatSleep(snapshot.sleepMinutes)}</p>
+                  <p className="text-xs text-card-light-muted">Sleep</p>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold">{snapshot.restingHeartRate ?? "—"}</p>
+                  <p className="text-xs text-card-light-muted">Resting HR</p>
+                </div>
               </div>
-              <div>
-                <p className="text-lg font-semibold">{formatSleep(snapshot.sleepMinutes)}</p>
-                <p className="text-xs text-card-light-muted">Sleep</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold">{snapshot.restingHeartRate ?? "—"}</p>
-                <p className="text-xs text-card-light-muted">Resting HR</p>
-              </div>
-            </div>
+              <p className="mt-2 text-xs text-card-light-muted">As of {snapshot.recordedDate}.</p>
+            </>
           ) : (
-            <p className="mt-3 text-sm text-card-light-muted">
-              No data synced yet — this updates once a day, check back tomorrow.
-            </p>
+            <p className="mt-3 text-sm text-card-light-muted">No data synced yet — refresh below to pull it in now.</p>
           )}
           {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-          <button type="button" onClick={handleDisconnect} disabled={disconnecting} className={`${dangerButtonClass} mt-4`}>
+          <button type="button" onClick={handleRefresh} disabled={refreshing} className={`${buttonClass} mt-4`}>
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <button type="button" onClick={handleDisconnect} disabled={disconnecting} className={`${dangerButtonClass} mt-2`}>
             {disconnecting ? "Disconnecting..." : "Disconnect"}
           </button>
         </>

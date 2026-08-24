@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeftIcon, SparkleIcon, UserIcon, DumbbellIcon, AppleIcon } from "@/components/icons";
+import { ArrowLeftIcon, SparkleIcon, UserIcon, DumbbellIcon, AppleIcon, HeartPulseIcon } from "@/components/icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "Exit", icon: ArrowLeftIcon },
   { href: "/coach", label: "Dashboard", icon: SparkleIcon },
   { href: "/coach/profile", label: "Profile", icon: UserIcon },
   { href: "/coach/training", label: "Training", icon: DumbbellIcon },
+  { href: "/coach/health", label: "Health", icon: HeartPulseIcon },
   { href: "/coach/nutrition", label: "Nutrition", icon: AppleIcon },
 ];
 
