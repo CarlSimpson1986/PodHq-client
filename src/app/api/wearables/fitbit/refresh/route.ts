@@ -39,14 +39,18 @@ export async function POST() {
     return NextResponse.json({ status: "error", message: "No wearable connected." }, { status: 404 });
   }
 
-  // Same "yesterday, not today" logic as the nightly cron (see that
-  // route's comment) — today's figures are still incomplete, so this
-  // button re-fetches the same guaranteed-stable day rather than a
-  // partial one. Its value is not waiting up to 24h for the cron to run
-  // after first connecting, not intraday freshness.
-  const yesterday = new Date();
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  const dateIso = yesterday.toISOString().slice(0, 10);
+  // Deliberately TODAY, not yesterday like the nightly cron — this was
+  // wrong until 2026-08-24 (same day, found live): a member who connects
+  // and immediately taps Refresh has, by definition, no data for
+  // yesterday (the connection didn't exist yet), so copying the cron's
+  // "yesterday, guaranteed-stable" logic verbatim made this button
+  // structurally unable to ever show anything on day one. Today's figures
+  // are necessarily partial (steps keep climbing), but partial-and-
+  // visible-now is exactly what a manual "give me the data now" button is
+  // for — the nightly cron still lays down the complete, stable
+  // "yesterday" snapshot every night regardless.
+  const today = new Date();
+  const dateIso = today.toISOString().slice(0, 10);
 
   try {
     const data = await fetchDailyData(connection.refreshToken, dateIso);
