@@ -123,6 +123,49 @@ search rather than assumed:
    explicitly state the physical-service exemption up front, rather
    than leaving the reviewer to work it out.
 
+**Follow-up: Garmin ruled out, Google Health API confirmed self-serve —
+2026-08-24.** Carl considered buying a Garmin device to test against
+before building anything — checked live whether that's actually
+buildable right now, for any of the three brands he asked about by name:
+
+- **Garmin: not currently buildable, independent of the App Store
+  question.** The Garmin Connect Developer Program (Health/Activity APIs)
+  isn't a self-serve key like Stripe/Kisi — it's partner-approval-only,
+  and as of this check is **closed to new sign-ups entirely**, no
+  published re-open date. Even when open: a manual, weeks-long
+  business-level review, often with a one-time ~$5,000 setup fee for the
+  Health API. There's currently nothing to apply to.
+- **Fitbit: buildable today, but only via the Google Health API, not
+  Fitbit's own endpoints** — confirms and extends the 2026-08-24 note
+  above. Google's `google_health` integration went live May 2026 and
+  runs in parallel with legacy Fitbit endpoints until the September 30
+  2026 cutover; access is genuinely self-serve (register via Google
+  Cloud Console, standard Google OAuth 2.0, no partner approval, no fee)
+  — a materially easier access model than Garmin's. Any new integration
+  should target this directly, not legacy Fitbit Web API auth (existing
+  Fitbit users of a future integration would need to re-consent anyway,
+  since it's a different OAuth library).
+- **Apple: not a "register for an API" option at all** — HealthKit has
+  no cloud API by design (see the note above), so it isn't comparable to
+  Garmin/Fitbit as a choice. It only works inside a native (or
+  Capacitor-wrapped) app with real entitlements, via the App Store path
+  already researched. Its real advantage: once built, it can surface
+  *any* brand's data a member already syncs to Apple Health on their
+  phone (Garmin, Whoop, Oura, etc.) without needing a separate developer
+  deal with each vendor — at the cost of committing to the native-app
+  path.
+
+**Net near-term recommendation**: Google Health API (→ Fitbit data) is
+the one path buildable today with no App Store submission and no
+gatekeeper. Garmin stays parked until/unless their program reopens —
+buying a Garmin device is fine for Carl's own hands-on familiarity, but
+won't unblock actual data access on its own.
+
+Sources: [Health API | Garmin Connect Developer Program](https://developer.garmin.com/gc-developer-program/health-api/),
+[Garmin Developer Portal — Connect API](https://developerportal.garmin.com/developer-programs/connect-api),
+[Data Access and Authorization | Google Health API](https://developers.google.com/health/migration/data-access),
+[Overview | Google Health API](https://developers.google.com/health/migration).
+
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
 Carl flagged that Lat Pulldown/Seated Row are prescribed as if every pod
