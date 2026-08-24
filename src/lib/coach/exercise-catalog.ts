@@ -1,4 +1,4 @@
-import type { ExperienceLevel } from "@/lib/coach/types";
+import type { EquipmentType, ExperienceLevel } from "@/lib/coach/types";
 
 export type MuscleGroup = "chest" | "back" | "shoulders" | "legs" | "arms" | "core" | "full_body";
 
@@ -29,18 +29,29 @@ export interface CatalogExercise {
   // compound lifts during a Strength training block (see
   // generate-workout.ts's selectExercises).
   isCompound: boolean;
+  // Which pod_resources.equipment category this exercise needs — null
+  // for bodyweight-only movements (always available regardless of a
+  // resource's configured equipment). A hard exclusion in
+  // generate-workout.ts's selectExercises, same tier as avoidIfInjury.
+  requiredEquipment: EquipmentType | null;
 }
 
-// Matches Hove's actual pod equipment (confirmed by Carl, 2026-08-23):
-// dumbbells, a cable machine, a power rack with barbell and weights, and
-// a leg extension/lying leg curl machine — plus bodyweight (plank, no
-// equipment needed). Replaces the earlier generic placeholder list
-// (which included a chest-press machine, kettlebell, and leg-press
-// machine Hove doesn't actually have). There's also a Peloton
-// treadmill/bike (confirmed same day) — not represented here since it's
-// cardio, not a resistance exercise this catalog generates working sets
-// for, but it's what the warm-up's pulse raiser uses (see
-// warmup-cooldown.ts).
+// Every resistance exercise this app can generate, across every gym —
+// each one's requiredEquipment says what pod_resources.equipment a gym
+// needs for it to actually be offered there (see generate-workout.ts's
+// selectExercises and workout-session.ts's getOrCreateWorkoutSession).
+// The catalog itself isn't gym-specific; only which subset a given pod
+// draws from is. Originally written to match Hove's actual pod equipment
+// (confirmed by Carl, 2026-08-23) — dumbbells, a cable machine, a power
+// rack with barbell and weights, a leg extension/lying leg curl machine,
+// plus bodyweight (plank, no equipment needed) — which is why that's
+// still every category this catalog covers; a future gym with equipment
+// outside these four categories needs both a new exercise here and a new
+// EQUIPMENT_TYPES entry (coach/types.ts) before it can be offered. There's
+// also a Peloton treadmill/bike at Hove (confirmed same day) — not
+// represented here since it's cardio, not a resistance exercise this
+// catalog generates working sets for, but it's what the warm-up's pulse
+// raiser uses (see warmup-cooldown.ts).
 export const EXERCISE_CATALOG: CatalogExercise[] = [
   {
     key: "barbell_squat",
@@ -52,6 +63,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Keep your chest up and core braced. Push through your heels and don't let your knees cave inward.",
     isCompound: true,
+    requiredEquipment: "barbell_rack",
   },
   {
     key: "romanian_deadlift",
@@ -61,6 +73,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Keep the bar close to your legs and your back flat. Hinge at the hips — don't round your lower back.",
     isCompound: true,
+    requiredEquipment: "barbell_rack",
   },
   {
     key: "barbell_bench_press",
@@ -70,6 +83,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Feet flat on the floor, shoulder blades pulled back. Control the bar down — don't bounce it off your chest.",
     isCompound: true,
+    requiredEquipment: "barbell_rack",
   },
   {
     key: "lat_pulldown",
@@ -79,6 +93,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
     safetyTip: "Pull with your back, not your arms. Avoid leaning back excessively or using momentum.",
     isCompound: true,
+    requiredEquipment: "cable_machine",
   },
   {
     key: "seated_row",
@@ -88,6 +103,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
     safetyTip: "Keep your back straight and squeeze your shoulder blades together. Don't round forward at the start.",
     isCompound: true,
+    requiredEquipment: "cable_machine",
   },
   {
     key: "dumbbell_shoulder_press",
@@ -97,6 +113,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 6, intermediate: 10, advanced: 16 },
     safetyTip: "Brace your core and avoid arching your lower back. Press straight up, not forward.",
     isCompound: true,
+    requiredEquipment: "dumbbells",
   },
   {
     key: "dumbbell_bicep_curl",
@@ -106,6 +123,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 4, intermediate: 8, advanced: 12 },
     safetyTip: "Keep your elbows close to your body and avoid swinging the weight. Control the lowering phase.",
     isCompound: false,
+    requiredEquipment: "dumbbells",
   },
   {
     key: "tricep_pushdown",
@@ -115,6 +133,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 10, intermediate: 20, advanced: 30 },
     safetyTip: "Keep your elbows pinned to your sides. Avoid leaning your whole body into the movement.",
     isCompound: false,
+    requiredEquipment: "cable_machine",
   },
   {
     key: "leg_extension",
@@ -124,6 +143,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
     safetyTip: "Move through a controlled range — avoid snapping your knees straight at the top.",
     isCompound: false,
+    requiredEquipment: "leg_extension_curl_machine",
   },
   {
     key: "lying_leg_curl",
@@ -133,6 +153,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
     safetyTip: "Keep your hips pressed into the pad. Avoid using momentum to swing the weight up.",
     isCompound: false,
+    requiredEquipment: "leg_extension_curl_machine",
   },
   {
     key: "plank",
@@ -142,6 +163,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     startingWeightKg: { beginner: 0, intermediate: 0, advanced: 0 },
     safetyTip: "Keep your body in a straight line from head to heels — don't let your hips sag or pike up.",
     isCompound: false,
+    requiredEquipment: null,
   },
 ];
 

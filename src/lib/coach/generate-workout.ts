@@ -1,6 +1,13 @@
 import { EXERCISE_CATALOG, type CatalogExercise } from "@/lib/coach/exercise-catalog";
 import type { CoachProfile, ExerciseHistoryEntry, RecentSessionSummary } from "@/lib/coach/coach-profile";
-import { REP_TARGET_BY_BLOCK, DELOAD_WEIGHT_MULTIPLIER, DELOAD_SETS_PER_EXERCISE, type Goal, type BlockType } from "@/lib/coach/types";
+import {
+  REP_TARGET_BY_BLOCK,
+  DELOAD_WEIGHT_MULTIPLIER,
+  DELOAD_SETS_PER_EXERCISE,
+  type Goal,
+  type BlockType,
+  type EquipmentType,
+} from "@/lib/coach/types";
 
 const EXERCISE_COUNT = 4;
 const SETS_PER_EXERCISE = 3;
@@ -34,11 +41,17 @@ export interface GenerateWorkoutInput {
   // wires a real caller; deliberately not wired yet in this stage so
   // adding block support here changes nothing live.
   activeBlock?: { blockType: BlockType };
+  // Optional, same "absent = today's exact behavior" idiom as
+  // activeBlock — undefined or [] both mean unrestricted (the full
+  // catalog, no equipment filtering), which is what every gym gets until
+  // its pod_resources row is explicitly configured (see
+  // getOrCreateWorkoutSession in workout-session.ts).
+  availableEquipment?: EquipmentType[];
 }
 
 export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[] {
-  const { profile, history, lastSession, activeBlock } = input;
-  const eligible = selectExercises(profile, lastSession, activeBlock ?? null);
+  const { profile, history, lastSession, activeBlock, availableEquipment } = input;
+  const eligible = selectExercises(profile, lastSession, activeBlock ?? null, availableEquipment);
   const repsTarget = activeBlock ? REP_TARGET_BY_BLOCK[activeBlock.blockType] : REP_TARGET_BY_GOAL[profile.goal];
   const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
@@ -64,12 +77,29 @@ export function getInjuryExcludedKeys(injuries: string | null): string[] {
   );
 }
 
+// Mirrors getInjuryExcludedKeys above — extracted the same way so the
+// exercise-swap flow (workout-session.ts's swapExercise) can validate a
+// member-chosen replacement against the exact same equipment gate
+// generation itself uses. Undefined/empty availableEquipment means
+// unrestricted (an unconfigured pod_resources row) — nothing excluded.
+export function getEquipmentExcludedKeys(availableEquipment: EquipmentType[] | undefined): string[] {
+  if (!availableEquipment || availableEquipment.length === 0) return [];
+  const available = new Set(availableEquipment);
+  return EXERCISE_CATALOG.filter(
+    (exercise) => exercise.requiredEquipment !== null && !available.has(exercise.requiredEquipment)
+  ).map((exercise) => exercise.key);
+}
+
 function selectExercises(
   profile: CoachProfile,
   lastSession: RecentSessionSummary | null,
-  activeBlock: { blockType: BlockType } | null
+  activeBlock: { blockType: BlockType } | null,
+  availableEquipment: EquipmentType[] | undefined
 ): CatalogExercise[] {
-  const excludedKeys = new Set(getInjuryExcludedKeys(profile.injuries));
+  const excludedKeys = new Set([
+    ...getInjuryExcludedKeys(profile.injuries),
+    ...getEquipmentExcludedKeys(availableEquipment),
+  ]);
   const safe = EXERCISE_CATALOG.filter((exercise) => !excludedKeys.has(exercise.key));
 
   // A Strength block softly prefers compound lifts (heavier loads at

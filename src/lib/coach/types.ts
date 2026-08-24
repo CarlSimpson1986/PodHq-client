@@ -12,6 +12,16 @@ export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number];
 export const FOOD_PREFERENCES = ["none", "vegetarian", "vegan", "pescatarian", "halal", "other"] as const;
 export type FoodPreference = (typeof FOOD_PREFERENCES)[number];
 
+// Which pod_resources.equipment a gym's pod can have — gates exercise
+// selection in generate-workout.ts. Duplicated verbatim in podHq's
+// src/lib/data/types.ts, same cross-repo convention as GYM_NAMES (see
+// podhq-client's src/lib/gym.ts). One "cable_machine" category
+// deliberately covers both dual- and single-pulley setups — that nuance
+// belongs in exercise copy, not as a separate filterable dimension
+// (Carl's call, 2026-08-24).
+export const EQUIPMENT_TYPES = ["barbell_rack", "cable_machine", "dumbbells", "leg_extension_curl_machine"] as const;
+export type EquipmentType = (typeof EQUIPMENT_TYPES)[number];
+
 // Daily protein target — flat 1.8g/kg bodyweight, Carl's call (2026-08-23):
 // evidence-based consensus for exercising adults is 1.4-2.2g/kg, with the
 // commonly-cited plateau for muscle-building benefit around 1.6g/kg

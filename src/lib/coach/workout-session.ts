@@ -4,6 +4,7 @@ import { getCoachProfile, getWorkoutHistory, type CoachProfile } from "@/lib/coa
 import {
   generateWorkout,
   getInjuryExcludedKeys,
+  getEquipmentExcludedKeys,
   computeWeightKgForBlock,
   type GeneratedExercise,
 } from "@/lib/coach/generate-workout";
@@ -11,7 +12,7 @@ import { EXERCISE_CATALOG } from "@/lib/coach/exercise-catalog";
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { getActiveBlock } from "@/lib/coach/training-block-state";
-import type { BlockType } from "@/lib/coach/types";
+import type { BlockType, EquipmentType } from "@/lib/coach/types";
 
 export interface WorkoutSet {
   id: number;
@@ -68,6 +69,21 @@ async function resolveActiveBlock(memberId: number, coachProfile: CoachProfile):
   }
 }
 
+// Empty array (including an unconfigured pod_resources row, or a
+// resourceId that somehow doesn't resolve) means unrestricted — same
+// "empty = today's exact behavior" semantics getEquipmentExcludedKeys
+// already applies.
+async function getResourceEquipment(resourceId: number): Promise<EquipmentType[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("pod_resources").select("equipment").eq("id", resourceId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.equipment as EquipmentType[] | null) ?? [];
+}
+
+function combineExcludedKeys(injuries: string | null, availableEquipment: EquipmentType[]): string[] {
+  return [...new Set([...getInjuryExcludedKeys(injuries), ...getEquipmentExcludedKeys(availableEquipment)])];
+}
+
 // Fetches an existing workout_session (with exercises/sets) for a booking,
 // or generates + persists a new one. Idempotent on booking_id's unique
 // index — a member re-opening the same booked session's workout screen
@@ -79,6 +95,7 @@ export async function getOrCreateWorkoutSession(
   memberName: string
 ): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
   const admin = createAdminClient();
+  const availableEquipment = await getResourceEquipment(resourceId);
 
   const { data: existing } = await admin.from("workout_sessions").select("id, status").eq("booking_id", bookingId).maybeSingle();
 
@@ -90,7 +107,7 @@ export async function getOrCreateWorkoutSession(
     const existingProfile = await getCoachProfile(memberId);
     const detail = await loadSessionDetail(existing.id);
     return {
-      detail: { ...detail, excludedExerciseKeys: getInjuryExcludedKeys(existingProfile?.injuries ?? null) },
+      detail: { ...detail, excludedExerciseKeys: combineExcludedKeys(existingProfile?.injuries ?? null, availableEquipment) },
       introNarration: null,
     };
   }
@@ -102,7 +119,7 @@ export async function getOrCreateWorkoutSession(
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
-  const plan = generateWorkout({ profile, history, lastSession, activeBlock });
+  const plan = generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment });
 
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
@@ -127,7 +144,7 @@ export async function getOrCreateWorkoutSession(
         .single();
       if (winnerError) throw new Error(winnerError.message);
       const detail = await loadSessionDetail(winner.id);
-      return { detail: { ...detail, excludedExerciseKeys: getInjuryExcludedKeys(profile.injuries) }, introNarration: null };
+      return { detail: { ...detail, excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment) }, introNarration: null };
     }
     throw new Error(sessionError.message);
   }
@@ -144,7 +161,7 @@ export async function getOrCreateWorkoutSession(
   }
 
   const detail = await loadSessionDetail(session.id);
-  return { detail: { ...detail, excludedExerciseKeys: getInjuryExcludedKeys(profile.injuries) }, introNarration };
+  return { detail: { ...detail, excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment) }, introNarration };
 }
 
 async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise[]): Promise<void> {
@@ -228,6 +245,16 @@ export async function getSessionOwnerMemberId(sessionId: number): Promise<number
   return data?.member_id ?? null;
 }
 
+// resource_id has been on workout_sessions since resources existed (see
+// the insert in getOrCreateWorkoutSession) — nothing needed to read it
+// back until swapExercise's equipment re-validation below.
+async function getSessionResourceId(sessionId: number): Promise<number | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("workout_sessions").select("resource_id").eq("id", sessionId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.resource_id ?? null;
+}
+
 // Swaps one exercise in an as-yet-unstarted session for a same-muscle-
 // group alternative, chosen by the member on the overview screen before
 // tapping "Start workout". Never trusts the client's copy of what's
@@ -268,7 +295,14 @@ export async function swapExercise(
     throw new Error("coach_profile_missing");
   }
 
-  const excludedKeys = getInjuryExcludedKeys(profile.injuries);
+  // Equipment re-validation — the one path that had zero gym/resource
+  // awareness before this existed: without it a member could swap into
+  // an exercise their actual pod can't support, even though the client's
+  // own candidate list (built from excludedExerciseKeys) would never
+  // offer it.
+  const resourceId = await getSessionResourceId(sessionId);
+  const availableEquipment = resourceId !== null ? await getResourceEquipment(resourceId) : [];
+  const excludedKeys = combineExcludedKeys(profile.injuries, availableEquipment);
   if (excludedKeys.includes(newExerciseKey)) {
     throw new Error("invalid_exercise");
   }

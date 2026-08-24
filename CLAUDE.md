@@ -32,16 +32,15 @@ working across both apps in the same session.
   relevant stage; a new feature gets its own stage entry as usual.
 - `ROADMAP.md` is `@`-included here, so it loads into every session's
   context automatically — keep it under Claude Code's ~15,000-character
-  import limit. Older history lives in three reference-only archives, read
-  on demand and deliberately **not** `@`-included: `ROADMAP-ARCHIVE.md`
-  (Stages 1-9, 2026-08-05 → 2026-08-15, split out 2026-08-19),
-  `ROADMAP-ARCHIVE-2.md` (2026-08-16 OWASP audit → 2026-08-19 Wellness/
-  Recovery Room slot-duration fix, split out 2026-08-21 once the main file
-  hit 60KB), and `ROADMAP-ARCHIVE-3.md` (the Stripe Connect Hove pilot,
-  2026-08-19, split out 2026-08-22). If `ROADMAP.md` grows too large
-  again, split it the same way: move the oldest dated entries out to a new
-  numbered file (`ROADMAP-ARCHIVE-4.md`, etc.), leave a pointer note at
-  the top of `ROADMAP.md`, and update this paragraph.
+  import limit. Older history lives in numbered, reference-only archives
+  (`ROADMAP-ARCHIVE.md`, `ROADMAP-ARCHIVE-2.md`, ... ), read on demand and
+  deliberately **not** `@`-included — `ROADMAP.md`'s own opening pointer
+  note names the current range and split points, so it isn't duplicated
+  (and left to go stale) here too. If `ROADMAP.md` grows too large again,
+  split it the same way: move the oldest dated entries out to the next
+  numbered file, leave a pointer note at the top of `ROADMAP.md`, and
+  update that note's range — this paragraph itself shouldn't need to
+  change again.
 
 ## Conventions
 - All components: functional, TypeScript, named exports

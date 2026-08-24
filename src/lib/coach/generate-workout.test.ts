@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateWorkout, getInjuryExcludedKeys } from "./generate-workout";
+import { generateWorkout, getInjuryExcludedKeys, getEquipmentExcludedKeys } from "./generate-workout";
 import type { CoachProfile } from "./coach-profile";
 
 function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
@@ -126,6 +126,58 @@ describe("getInjuryExcludedKeys", () => {
     expect(excluded).toContain("barbell_squat");
     expect(excluded).toContain("leg_extension");
     expect(excluded).not.toContain("barbell_bench_press");
+  });
+});
+
+describe("generateWorkout — equipment awareness", () => {
+  it("is unrestricted (today's exact behavior) with no availableEquipment given", () => {
+    const result = generateWorkout({ profile: profile(), history: [], lastSession: null });
+    expect(result.some((e) => e.key === "barbell_squat")).toBe(true);
+  });
+
+  it("excludes exercises whose required equipment isn't in the resource's configured list", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      availableEquipment: ["dumbbells"],
+    });
+    // Only dumbbell exercises and bodyweight (Plank, no equipment) can
+    // appear — nothing needing a barbell rack, cable machine, or leg
+    // extension/curl machine.
+    const allowedKeys = ["dumbbell_shoulder_press", "dumbbell_bicep_curl", "plank"];
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((e) => allowedKeys.includes(e.key))).toBe(true);
+  });
+
+  it("never re-includes an equipment-excluded exercise even when injury filtering also applies", () => {
+    const result = generateWorkout({
+      profile: profile({ injuries: "shoulders" }),
+      history: [],
+      lastSession: null,
+      availableEquipment: ["dumbbells"],
+    });
+    // dumbbell_shoulder_press is excluded by the shoulder injury —
+    // dumbbell_bicep_curl and plank are the only exercises left safe
+    // under both filters combined.
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((e) => e.key === "dumbbell_bicep_curl" || e.key === "plank")).toBe(true);
+  });
+});
+
+describe("getEquipmentExcludedKeys", () => {
+  it("returns no excluded keys when unrestricted (undefined or empty)", () => {
+    expect(getEquipmentExcludedKeys(undefined)).toEqual([]);
+    expect(getEquipmentExcludedKeys([])).toEqual([]);
+  });
+
+  it("excludes cable/rack/machine exercises when only dumbbells are available, but never bodyweight", () => {
+    const excluded = getEquipmentExcludedKeys(["dumbbells"]);
+    expect(excluded).toContain("barbell_squat");
+    expect(excluded).toContain("lat_pulldown");
+    expect(excluded).toContain("leg_extension");
+    expect(excluded).not.toContain("dumbbell_bicep_curl");
+    expect(excluded).not.toContain("plank");
   });
 });
 
