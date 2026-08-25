@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { londonMidnight } from "@/lib/london-time";
+import { londonMidnight, londonDateString } from "@/lib/london-time";
 
 export interface LeaderboardEntry {
   memberId: number;
@@ -96,8 +96,14 @@ export async function getWeeklyStepsLeaderboard(callerMemberId: number): Promise
   if (optedIn.size === 0) return [];
 
   const admin = createAdminClient();
+  // londonMidnight returns a UTC instant (23:00 UTC the previous day
+  // during BST) — reading its calendar date back out via .toISOString()
+  // would silently give the wrong day (exactly the class of bug
+  // london-time.ts's own header comment warns about repeatedly).
+  // londonDateString goes through Intl properly instead, same as every
+  // other date-boundary calculation in this codebase.
   const weekStart = new Date(londonMidnight(new Date()).getTime() - 6 * MS_PER_DAY);
-  const weekStartIso = weekStart.toISOString().slice(0, 10);
+  const weekStartIso = londonDateString(weekStart);
 
   const { data, error } = await admin
     .from("member_wearable_data")
