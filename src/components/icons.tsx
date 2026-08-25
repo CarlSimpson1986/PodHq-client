@@ -194,6 +194,33 @@ export function AppleIcon({ className }: IconProps) {
   );
 }
 
+// The "More" overflow menu's trigger icon (2026-08-25 redesign) — Health/
+// integration settings, Profile, and Home all moved behind this rather
+// than staying primary tabs/header icons. Plain 3-line hamburger.
+export function MenuIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// The member bottom nav's "Coach" tab icon (2026-08-25 redesign, replaced
+// the Health tab) — distinct from SparkleIcon (already the Dashboard
+// tab's icon in the same nav) so the two don't visually collide. A
+// speech-bubble reads unambiguously as "talk to your coach".
+export function ChatBubbleIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path
+        d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8A2.5 2.5 0 0 1 17.5 16H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 // The /coach/health page (Health Centre) header + nav icon.
 export function HeartPulseIcon({ className }: IconProps) {
   return (

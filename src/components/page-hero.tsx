@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 
 // Full-width dark banner at the top of a page, flowing directly into a
@@ -14,15 +14,20 @@ export function PageHero({
   subtitle,
   icon: Icon,
   iconHref,
+  rightSlot,
 }: {
   title: string;
   subtitle: string;
-  icon: ComponentType<{ className?: string }>;
+  icon?: ComponentType<{ className?: string }>;
   // Only pass this on pages behind auth — the icon becomes a link to
   // /profile. Left unset on the auth pages (login/signup/forgot-password)
   // that also use this component, since there's no profile to link to
   // before signing in.
   iconHref?: string;
+  // Overrides the icon-link entirely with a custom element (e.g.
+  // <MoreMenu />, 2026-08-25 redesign) — pass this instead of icon/
+  // iconHref when the page needs more than a single link in the corner.
+  rightSlot?: ReactNode;
 }) {
   const iconCircleClass =
     "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground";
@@ -34,15 +39,17 @@ export function PageHero({
           <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        {iconHref ? (
+        {rightSlot ? (
+          rightSlot
+        ) : Icon && iconHref ? (
           <Link href={iconHref} className={`${iconCircleClass} hover:bg-card-border`}>
             <Icon className="h-7 w-7" />
           </Link>
-        ) : (
+        ) : Icon ? (
           <div className={iconCircleClass}>
             <Icon className="h-7 w-7" />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -11,15 +11,17 @@ import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { HeartPulseIcon } from "@/components/icons";
+import { MoreMenu } from "@/components/more-menu";
 import { WearableConnectionCard } from "@/components/wearable-connection-card";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { TrainingBlockView } from "@/components/training-block-view";
 
-// Moved from /coach/health (2026-08-25 redesign, see ROADMAP.md). The old
-// page's "Recovery" section showed only the raw connect/refresh card;
-// this adds RecoveryStatusCard (shared with Dashboard) above it so the
-// tab leads with an actual signal, not just numbers. Never shows a
+// Moved from /coach/health, then (same day, later) stopped being a
+// primary tab at all — Carl felt it "seemed a bit pointless" as a
+// standalone destination once Coach absorbed check-in/recommendations/
+// chat, so this is now reached via the MoreMenu overflow instead of the
+// bottom nav. RecoveryStatusCard (shared with Dashboard) leads the page
+// so it's an actual signal, not just raw numbers. Never shows a
 // fabricated composite "readiness score" — see recovery-status-card.tsx's
 // comment for why no such field exists in the Google Health API.
 export default async function HealthPage() {
@@ -57,7 +59,7 @@ export default async function HealthPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Health" subtitle="Recovery, nutrition and training in one place" icon={HeartPulseIcon} iconHref="/profile" />
+      <PageHero title="Health" subtitle="Recovery, nutrition and training in one place" rightSlot={<MoreMenu />} />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <section>

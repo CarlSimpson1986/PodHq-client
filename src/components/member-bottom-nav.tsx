@@ -2,21 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SparkleIcon, DumbbellIcon, AppleIcon, HeartPulseIcon } from "@/components/icons";
+import { SparkleIcon, DumbbellIcon, AppleIcon, ChatBubbleIcon } from "@/components/icons";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: SparkleIcon },
   { href: "/training", label: "Training", icon: DumbbellIcon },
   { href: "/nutrition", label: "Nutrition", icon: AppleIcon },
-  { href: "/health", label: "Health", icon: HeartPulseIcon },
+  { href: "/coach", label: "Coach", icon: ChatBubbleIcon },
 ] as const;
 
 // Replaces CoachBottomNav — flat 4-tab IA (2026-08-25 redesign), no
 // Exit/Profile items: these routes now sit at the top level (same tier as
-// /book, /shop), so there's nothing to "exit" back out of, and Profile
-// settings move to the Dashboard header's settings icon instead of a nav
-// tab. Coach chat (formerly the "Dashboard" item here) is reached from a
-// card on /dashboard, not a tab — matches the design brief's IA.
+// /book, /shop), so there's nothing to "exit" back out of. Health
+// stopped being a primary tab the same day, later on — Carl felt it was
+// "a bit pointless" as a standalone destination — and moved into the
+// MoreMenu overflow instead, replaced here by Coach (check-in + weekly
+// recommendation + chat, all merged onto /coach — see that page).
 export function MemberBottomNav() {
   const pathname = usePathname();
 

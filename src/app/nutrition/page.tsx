@@ -6,7 +6,7 @@ import { computeNutritionTargets } from "@/lib/coach/nutrition-targets";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { AppleIcon } from "@/components/icons";
+import { MoreMenu } from "@/components/more-menu";
 import { NutritionView } from "@/components/nutrition-view";
 
 // Moved from /coach/nutrition (2026-08-25 redesign, see ROADMAP.md).
@@ -43,7 +43,7 @@ export default async function NutritionPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Nutrition" subtitle="Your daily diary" icon={AppleIcon} iconHref="/profile" />
+      <PageHero title="Nutrition" subtitle="Your daily diary" rightSlot={<MoreMenu />} />
       <div className="card-light flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
           <NutritionView targets={targets} trackingMode={coachProfile.nutrition_tracking_mode} />
