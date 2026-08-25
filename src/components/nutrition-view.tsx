@@ -263,7 +263,9 @@ function PortionsSummary({ consumed, target }: { consumed: DayTotals; target: Nu
 }
 
 interface MealSuggestion {
-  foodName: string;
+  meal: Meal;
+  name: string;
+  description: string;
   quantityG: number;
   calories: number;
   proteinG: number;
@@ -275,9 +277,11 @@ interface MealSuggestion {
   fatPer100g: number;
 }
 
-// "What to eat next" — fetches a fresh pair of nearest-fit suggestions for
-// the day's remaining macro budget (see meal-suggestions.ts); "Regenerate"
-// just re-fetches, since the server already randomises among its
+// "What to eat next" — real composed meals from the hand-written
+// MEAL_CATALOG (see meal-suggestions.ts), prioritised toward whichever
+// meal slot(s) haven't been logged today yet, so this reads as an actual
+// next-meal suggestion rather than two random items. "Regenerate" just
+// re-fetches, since the server already randomises among its
 // top-scoring candidates each call.
 function MealSuggestionsCard({
   date,
@@ -309,20 +313,20 @@ function MealSuggestionsCard({
   }, [date]);
 
   async function addSuggestion(s: MealSuggestion) {
-    setAdding(s.foodName);
+    setAdding(s.name);
     try {
       await fetch("/api/member/nutrition/log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          meal: "snacks",
-          foodName: s.foodName,
+          meal: s.meal,
+          foodName: s.name,
           quantityG: s.quantityG,
           caloriesPer100g: s.caloriesPer100g,
           proteinPer100g: s.proteinPer100g,
           carbsPer100g: s.carbsPer100g,
           fatPer100g: s.fatPer100g,
-          source: "uk_food_composition",
+          source: "manual",
           loggedDate: date,
         }),
       });
@@ -343,17 +347,19 @@ function MealSuggestionsCard({
       ) : (
         <div className="mt-3 space-y-2">
           {suggestions.map((s) => (
-            <div key={s.foodName} className="flex items-center justify-between rounded-lg bg-white/80 p-3">
+            <div key={s.name} className="flex items-center justify-between gap-3 rounded-lg bg-white/80 p-3">
               <div>
-                <p className="text-sm font-medium">{s.foodName}</p>
-                <p className="text-xs text-card-light-muted">
+                <p className="text-xs font-semibold uppercase tracking-wide text-accent">{MEAL_LABELS[s.meal]}</p>
+                <p className="text-sm font-medium">{s.name}</p>
+                <p className="text-xs text-card-light-muted">{s.description}</p>
+                <p className="mt-0.5 text-xs text-card-light-muted">
                   {trackingMode === "hand_portions" ? (
                     (() => {
                       const p = gramsToPortions(s.proteinG, s.carbsG, s.fatG);
                       return `${p.palms} palm, ${p.cuppedHands} cupped hand, ${p.thumbs} thumb`;
                     })()
                   ) : (
-                    `${s.quantityG}g · ${s.calories} kcal`
+                    `${s.calories} kcal · P${s.proteinG}g C${s.carbsG}g F${s.fatG}g`
                   )}
                 </p>
               </div>
@@ -363,7 +369,7 @@ function MealSuggestionsCard({
                 disabled={adding !== null}
                 className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
               >
-                {adding === s.foodName ? "Adding..." : "+ Add"}
+                {adding === s.name ? "Adding..." : "+ Add"}
               </button>
             </div>
           ))}
