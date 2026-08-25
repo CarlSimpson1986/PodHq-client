@@ -14,108 +14,22 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-17.md`, covering the pilot
-mechanism proof (2026-08-05) through the Fitbit-via-Google-Health-API
-summary + full Health Centre build (2026-08-24) — all split out to keep
-this file within Claude Code's ~15,000-character `@`-import limit.
-Archives aren't always the strictly oldest material — the split point is
-"what's finished and stable" as much as "what's oldest" (see
-`ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s, `-16.md`'s, and `-17.md`'s own
-header notes for four same-day examples of this). All archives are
-reference-only (not auto-loaded by CLAUDE.md); check them for full
-stage-by-stage build history, or `git log` on this file for the exact
-split points. This file's active content is the flat-tab member app
-redesign (2026-08-25) plus whatever's added after it. If this file grows
-too large again, split it the same way: move whichever section is most
-clearly finished (not necessarily the chronologically oldest) into a
-numbered `ROADMAP-ARCHIVE-18.md`, leave a pointer note at the top of
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-18.md`, covering the pilot
+mechanism proof (2026-08-05) through the full initial build of the
+flat-tab member app redesign (2026-08-25) — all split out to keep this
+file within Claude Code's ~15,000-character `@`-import limit. Archives
+aren't always the strictly oldest material — the split point is "what's
+finished and stable" as much as "what's oldest" (see
+`ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s, `-16.md`'s, `-17.md`'s, and
+`-18.md`'s own header notes for five same-day examples of this). All
+archives are reference-only (not auto-loaded by CLAUDE.md); check them
+for full stage-by-stage build history, or `git log` on this file for the
+exact split points. This file's active content is the redesign
+follow-up (2026-08-25) plus whatever's added after it. If this file
+grows too large again, split it the same way: move whichever section is
+most clearly finished (not necessarily the chronologically oldest) into
+a numbered `ROADMAP-ARCHIVE-19.md`, leave a pointer note at the top of
 this file, and update this paragraph.
-
-## Member app redesign — flat 4-tab IA + real coach chat — 2026-08-25
-
-Carl pasted a Claude-generated design brief + HTML mockup (Dashboard/
-Training/Nutrition/Health tabs + an LLM coach chat) and asked for the
-whole thing built same-session, reusing the real schema rather than the
-brief's invented one. Planned via Plan Mode after a 3-agent parallel
-exploration inventoried exactly what was real vs. assumed; built in one
-continuous pass afterward. Full plan (data-integrity corrections,
-reuse/net-new inventory, build order) archived at
-`C:\Users\carls\.claude\plans\delightful-popping-glade.md` if needed —
-summary below.
-
-**Data-integrity corrections applied throughout** (the brief assumed
-things this session's own research had already disproven or never had):
-no vendor "readiness score" exists in the Google Health API (confirmed
-against the live discovery document) — Dashboard/Health both use the
-existing `getRecoverySignal` plus a new "Day X of 5, calibrating"
-indicator instead, never a fabricated 0-100 number; sleep still has no
-real data source (`dailyRollUp` has no sleep field), shown as "Not yet
-available", not a fake "7h 32m"; RPE copy uses the app's real 1-5 scale
-(`RPE_SCALE`) and real `adjustForRpe` ±5% math, not the brief's invented
-1-10/+2.5kg language; Coach chat's citations are explicitly softened
-("general sports-science practice, not a live citation lookup") since
-there's no PubMed API anywhere in this codebase and presenting
-LLM-generated citations as verified would be a real trust risk.
-
-**Navigation**: new `member-bottom-nav.tsx` (Dashboard/Training/
-Nutrition/Health, replacing the old 6-item `CoachBottomNav`).
-`/coach/training`, `/coach/nutrition`, `/coach/health` moved to
-top-level `/training`, `/nutrition`, `/health`; new `/dashboard` replaces
-`/coach`'s old hub content; `/coach` itself was repurposed in place into
-the new Coach Chat screen. `/coach/checkin` and `/coach/profile` stay
-where they are. All internal links/redirects (wearable OAuth
-connect/callback, main `BottomNav`'s "Coach" tab, `ai-coach-section.tsx`)
-repointed to match.
-
-**Training**: new `ExerciseProgressPicker` (dropdown + single chart,
-reusing the existing `ExerciseTrendChart`) replaces the all-exercises
-accordion; new `getLastCompletedSessionDetail`
-(`exercise-performance.ts`) + `LastSessionCard` show real per-set RPE
-badges — didn't exist before (`workout_sets.rpe` was a real column
-nothing surfaced).
-
-**Health**: new `fetchHeartRateVariability` in `google-health.ts` (goes
-straight to the `list` endpoint, same personal-range trap RHR hit) + new
-`hrv_ms` column (migration `0059`, **not yet applied to Supabase**). The
-exact response field name (`dailyHeartRateVariability.rmssdMillis`) is a
-best-effort guess from the schema name, not yet confirmed against a live
-call — logs the raw shape on mismatch, same "ship it, correct from real
-Vercel logs" path steps/RHR both went through 2026-08-24. `WearableConnectionCard`
-now shows a 2x2 grid (added HRV) and an honest "Not yet available" for
-sleep instead of "—"; its heading was renamed from the duplicate-reading
-"Health markers" to "Connection" (an old flagged nice-to-have, fixed
-here).
-
-**Nutrition**: calorie-counting mode is unchanged functionally (existing
-`NutritionView` diary reused as-is). Hand-portions mode is fully net-new:
-`nutrition_tracking_mode` column on `coach_profiles` (migration `0060`,
-**not yet applied**), a toggle in Coach settings
-(`coach-profile-edit-form.tsx`), `portions.ts`'s `gramsToPortions`
-(25g/palm, 50g/cupped-hand, 15g/thumb — Carl's numbers to retune, 3 unit
-tests), and a `PortionsSummary` component replacing the calorie
-ring/macro bars when that mode is selected. Meal suggestions are new for
-both modes: `meal-suggestions.ts`'s `getMealSuggestions` does a v1
-nearest-fit search over the existing `uk_food_composition` table
-(~2,900 rows, no specialised index needed per that table's own migration
-comment) against the day's remaining macro budget, new
-`/api/member/nutrition/suggestions` route, "What to eat next" card with
-Add/Regenerate.
-
-**Coach chat**: fully net-new. `coach_conversations` table (migration
-`0061`, **not yet applied**, one row per member, messages as a jsonb
-array). `coach-chat.ts` assembles real context (training block, recovery
-status, last session's RPEs, weekly nutrition averages) into a system
-prompt and calls the same Groq-first/Claude-Haiku-fallback pattern as
-`coach-bot.ts`/`help-bot.ts`. New `/api/member/coach-chat` route, new
-`CoachChatView` (quick questions, persisted history via
-`coach-conversations.ts`).
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run`, `next build`
-all clean throughout. **Update, same day, later**: committed/pushed;
-migrations 0059-0061 applied to the live DB (Carl); a real authenticated
-browser walkthrough happened after all — see the redesign-follow-up
-section below for the whole rest of the day's work, including a stale
-session cookie bug this walkthrough surfaced and fixed.
 
 ## Redesign follow-up: fixes, Coach restructure, leaderboard, nudges — 2026-08-25 (same day, rest of it)
 
@@ -224,3 +138,60 @@ pod Settings panel gained equipment checkboxes. **Still outstanding**: no
 gym's equipment has actually been set yet (including Hove's already-
 confirmed real equipment) — every gym runs unrestricted until Carl works
 through the Settings panel gym by gym.
+
+## Nav-context-switch fix + nav-lag investigation — 2026-08-25 (same day, evening)
+
+**Nav-context-switch bug**: Carl reported "the leaderboard needs to be on
+the homescreen — when you click on it...it goes to the coaching
+dashboard." The link itself was fine; the actual issue was that
+`/health` and `/leaderboard` (universal pages, reachable from `MoreMenu`
+off both the main app's Home and the Coach area) were rendering
+`MemberBottomNav` (Dashboard/Training/Nutrition/Coach) instead of the
+main app's `BottomNav` (Home/Book/Coach/Shop/Profile) — landing on the
+Coach-area's 4-tab bar read as being dropped into "the coaching
+environment" from what's meant to be a universal feature. Fixed by
+switching both pages to `BottomNav`. Committed `ce921b2`.
+
+**Nav-lag investigation** ("bottom nav lots of lags...switching through
+icons"): measured live via network capture rather than guessing, and
+found two separate real issues, not one.
+
+1. **Prefetch storm, fixed**: Next's default `Link` behaviour eagerly
+   prefetches every link visible in the viewport. `/dashboard` alone has
+   7 such links (`MemberBottomNav`'s 4 + `/coach`, `/coach/checkin`,
+   `/leaderboard`, `/book` cards) — every one a fully dynamic,
+   session-gated route doing several Supabase queries server-side even
+   for a prefetch. Landing on Dashboard was firing ~14 background RSC
+   requests (a duplicated double-batch) that don't correspond to
+   anything the member asked for, competing with real navigations for
+   serverless concurrency. Added `prefetch={false}` to `MemberBottomNav`,
+   `BottomNav`, `MoreMenu`, and every card `Link` on `/dashboard`.
+   Verified live, before/after: the same tab click that fired 14 phantom
+   prefetch requests before the fix fires zero after it. Committed
+   `a273e36`.
+
+2. **RSC-navigation 503s, found but not yet root-caused**: separately,
+   every real client-side navigation's own RSC request (not a prefetch —
+   the actual `/training`, `/nutrition`, `/coach` fetch Next's router
+   makes when you tap a tab) is consistently returning a 503 live on
+   production, still true after the prefetch fix. A manual `fetch()` to
+   the identical URL with the identical `RSC`/`_rsc` shape from the
+   browser console succeeds every time — the failure only happens when
+   Next's own router issues the request, and it happened on every single
+   navigation tested (training, nutrition, coach), not intermittently.
+   Next silently falls back to a full hard-reload of the page when this
+   happens (confirmed in the network log: the failed RSC fetch is
+   immediately followed by two full-document `GET` requests), which is
+   almost certainly the actual "lag" — a full asset reload on every tab
+   switch, not just a slow transition. Leading suspect, not yet
+   confirmed: `src/proxy.ts`'s `proxy()` middleware runs
+   `await supabase.auth.getUser()` — a live network call to Supabase
+   Auth — unconditionally on every single matched request with no
+   try/catch; if that call ever throws (a transient Supabase Auth
+   hiccup), an uncaught exception in Edge middleware is a plausible
+   mechanism for Vercel to return exactly this kind of 503. Not fixed
+   yet — no direct access to Vercel's function/edge logs in this session
+   to confirm the actual thrown error, which is the needed next step
+   before changing `proxy.ts` (wrapping that call defensively without
+   knowing the real failure mode risks masking a different bug instead
+   of fixing this one).
