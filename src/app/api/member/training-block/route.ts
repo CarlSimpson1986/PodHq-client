@@ -5,7 +5,18 @@ import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { getTrainingBlockState } from "@/lib/coach/training-block-state";
 import { getTrainingBlockRecommendation } from "@/lib/coach/training-block-recommendation";
+import { blockPhaseIndex } from "@/lib/coach/generate-workout";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+// Display copy for the "Phase 2 of 3" card (2026-08-25) — phase index
+// itself comes from generate-workout.ts's blockPhaseIndex, the same
+// function that actually drives the rep target, so this never drifts
+// out of sync with what a member is really training that week.
+const PHASE_LABELS = ["Weeks 1-4", "Weeks 5-8", "Weeks 9-12"] as const;
+const PHASE_REP_DESCRIPTION: Record<"hypertrophy" | "strength", [string, string, string]> = {
+  hypertrophy: ["~6-8 reps", "~10-12 reps", "~15-20 reps"],
+  strength: ["6 reps", "4 reps", "3 reps"],
+};
 
 export async function GET() {
   const session = await createSessionClient();
@@ -35,10 +46,21 @@ export async function GET() {
 
     if (state.kind === "transition_due" && coachProfile) {
       const { recommendation, allowedBlockTypes } = await getTrainingBlockRecommendation(member.id, coachProfile, state, now);
-      return NextResponse.json({ status: "ok", state, recommendation, allowedBlockTypes });
+      return NextResponse.json({ status: "ok", state, recommendation, allowedBlockTypes, phase: null });
     }
 
-    return NextResponse.json({ status: "ok", state, recommendation: null, allowedBlockTypes: [] });
+    let phase = null;
+    if (state.kind === "in_block" && (state.blockType === "hypertrophy" || state.blockType === "strength")) {
+      const index = blockPhaseIndex(state.startedAt, now);
+      phase = {
+        number: index + 1,
+        of: 3,
+        label: PHASE_LABELS[index],
+        repsDescription: PHASE_REP_DESCRIPTION[state.blockType][index],
+      };
+    }
+
+    return NextResponse.json({ status: "ok", state, recommendation: null, allowedBlockTypes: [], phase });
   } catch (error) {
     console.error("[training-block] failed", { error: (error as Error).message });
     return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });

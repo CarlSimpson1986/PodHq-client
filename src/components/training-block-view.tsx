@@ -14,6 +14,15 @@ type BlockChangeRecommendation =
   | { kind: "keep"; reason: "low_attendance" }
   | { kind: "extend_deload"; reason: "high_fatigue" };
 
+// The current 4-week rep-range phase within a hypertrophy/strength block
+// (2026-08-25) — null for deload (no phases) or a transition_due state.
+interface BlockPhase {
+  number: number;
+  of: number;
+  label: string;
+  repsDescription: string;
+}
+
 const BLOCK_LABELS: Record<BlockType, string> = {
   hypertrophy: "Hypertrophy",
   strength: "Strength",
@@ -33,6 +42,7 @@ const secondaryButtonClass =
 
 export function TrainingBlockView() {
   const [state, setState] = useState<TrainingBlockState | null>(null);
+  const [phase, setPhase] = useState<BlockPhase | null>(null);
   const [recommendation, setRecommendation] = useState<BlockChangeRecommendation | null>(null);
   const [allowedBlockTypes, setAllowedBlockTypes] = useState<BlockType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +56,7 @@ export function TrainingBlockView() {
       const body = await res.json();
       if (body.status === "ok") {
         setState(body.state);
+        setPhase(body.phase ?? null);
         setRecommendation(body.recommendation);
         setAllowedBlockTypes(body.allowedBlockTypes ?? []);
       }
@@ -92,6 +103,14 @@ export function TrainingBlockView() {
         <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Current block</p>
         <p className="mt-1 text-lg font-semibold">{BLOCK_LABELS[state.blockType]}</p>
         <p className="mt-1 text-sm text-card-light-muted">{BLOCK_DESCRIPTIONS[state.blockType]}</p>
+        {phase && (
+          <div className="mt-3 rounded-lg bg-card-light-border/40 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
+              Phase {phase.number} of {phase.of} · {phase.label}
+            </p>
+            <p className="mt-0.5 text-sm font-medium">{phase.repsDescription}</p>
+          </div>
+        )}
         <p className="mt-3 text-sm font-semibold">
           {state.daysRemaining} {state.daysRemaining === 1 ? "day" : "days"} until program change
         </p>

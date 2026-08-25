@@ -125,24 +125,40 @@ export const CHECK_IN_GRACE_DAYS = 3;
 
 // Training-block periodization (Stage 12) — standard block periodization
 // (hypertrophy/strength alternation with a deload between phases) is
-// textbook S&C, not invented; the specific rep-target numbers reuse
-// REP_TARGET_BY_GOAL's existing values (10 for muscle_gain, 5 for
-// strength) rather than introducing new ones. See generate-workout.ts
-// and training-block-state.ts.
+// textbook S&C, not invented. See generate-workout.ts and
+// training-block-state.ts.
 export const BLOCK_TYPES = ["hypertrophy", "strength", "deload"] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
-
-export const REP_TARGET_BY_BLOCK: Record<BlockType, number> = {
-  hypertrophy: 10,
-  strength: 5,
-  deload: 10,
-};
 
 export const BLOCK_DURATION_WEEKS: Record<BlockType, number> = {
   hypertrophy: 12,
   strength: 12,
   deload: 1,
 };
+
+// Rep-range phases within a hypertrophy/strength block (Carl's call,
+// 2026-08-25) — three 4-week phases with a different rep target each,
+// rather than one flat number for all 12 weeks. Deliberately NOT copying
+// Schoenfeld/Oreb's 3-week-push-then-deload cadence: that model is built
+// for 5-6x/week, near-max-intensity athletes whose weekly training
+// stress compounds fast enough to need a deload that often. This app's
+// members train 2-3x/week — far less weekly stress — so the real value
+// of phasing here is stimulus variety for adherence (a fresh rep range
+// every 4 weeks keeps a 12-week block from feeling stale), not fatigue
+// management; the existing 1-week DELOAD block type still exists for
+// that, driven off attendance/RPE trend (training-block-recommendation.ts),
+// not a fixed calendar cadence. Strength's phases deliberately never go
+// below 3 reps — these are unstaffed pods with no spotter, so a true
+// 1-3-rep unsupervised max-effort attempt is a real injury risk this app
+// won't create.
+export const PHASE_DURATION_WEEKS = 4;
+
+export const REP_TARGET_BY_BLOCK_PHASE: Record<"hypertrophy" | "strength", [number, number, number]> = {
+  hypertrophy: [7, 11, 17], // weeks 1-4 (~6-8 reps), 5-8 (~10-12), 9-12 (~15-20)
+  strength: [6, 4, 3], // weeks 1-4, 5-8, 9-12 — floor of 3, never a max-effort single/double
+};
+
+export const DELOAD_REP_TARGET = 10;
 
 // A deload isn't just a lighter rep target — real deload programming
 // reduces both intensity and volume. Directionally-correct, not a
