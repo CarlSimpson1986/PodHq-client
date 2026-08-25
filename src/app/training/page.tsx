@@ -60,12 +60,12 @@ export default async function TrainingPage() {
           <section>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next session</p>
             {upcomingBooking ? (
-              <Link href={`/workout/${upcomingBooking.id}`} className="card-glass block p-5">
+              <Link href={`/workout/${upcomingBooking.id}`} prefetch={false} className="card-glass block p-5">
                 <p className="text-sm font-semibold text-foreground">Your personalised workout is ready.</p>
                 <p className="mt-1 text-sm text-muted-foreground">View my workout →</p>
               </Link>
             ) : (
-              <Link href="/book" className="card-glass block p-5">
+              <Link href="/book" prefetch={false} className="card-glass block p-5">
                 <p className="text-sm font-semibold text-foreground">No session booked</p>
                 <p className="mt-1 text-sm text-muted-foreground">Book a session to get your next personalised workout.</p>
               </Link>

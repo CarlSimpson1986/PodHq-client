@@ -107,7 +107,7 @@ export default async function HealthPage() {
                       </div>
                     </div>
                   )}
-                  <Link href="/nutrition" className="mt-4 inline-block text-xs font-semibold text-accent underline">
+                  <Link href="/nutrition" prefetch={false} className="mt-4 inline-block text-xs font-semibold text-accent underline">
                     View nutrition →
                   </Link>
                 </div>
@@ -118,7 +118,7 @@ export default async function HealthPage() {
                 <div className="card-light">
                   <TrainingBlockView />
                 </div>
-                <Link href="/training" className="mt-3 inline-block text-xs font-semibold text-accent underline">
+                <Link href="/training" prefetch={false} className="mt-3 inline-block text-xs font-semibold text-accent underline">
                   View training progress →
                 </Link>
               </section>

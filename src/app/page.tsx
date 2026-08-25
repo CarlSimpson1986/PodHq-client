@@ -85,7 +85,7 @@ export default async function HomePage() {
             )}
           </div>
 
-          <Link href="/leaderboard" className="block rounded-xl border border-card-light-border p-5">
+          <Link href="/leaderboard" prefetch={false} className="block rounded-xl border border-card-light-border p-5">
             <p className="text-base font-semibold">Leaderboard →</p>
             <p className="mt-1 text-sm text-card-light-muted">Sessions, streaks and steps — every gym, one board.</p>
           </Link>

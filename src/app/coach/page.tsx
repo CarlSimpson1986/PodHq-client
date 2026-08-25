@@ -76,7 +76,7 @@ export default async function CoachPage() {
         <div className="mx-auto w-full max-w-md space-y-4">
           <WeeklyRecommendationCard recommendation={recommendation} />
 
-          <Link href="/coach/checkin" className="card-glass block p-5">
+          <Link href="/coach/checkin" prefetch={false} className="card-glass block p-5">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Check-in</p>
             {checkInState.kind === "not_due" && (
               <>
