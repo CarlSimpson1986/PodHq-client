@@ -182,17 +182,21 @@ describe("getEquipmentExcludedKeys", () => {
   });
 });
 
+const BLOCK_START = "2026-01-05T00:00:00.000Z"; // a Monday
+
 describe("generateWorkout — training blocks (Stage 12)", () => {
   it("uses the block's rep target instead of the goal's, when a block is active", () => {
     // profile() defaults to muscle_gain (goal reps target 10) — a strength
-    // block (target 5) must still win, proving the block overrides goal.
+    // block's phase-1 target (6) must still win, proving the block
+    // overrides goal.
     const result = generateWorkout({
       profile: profile({ goal: "muscle_gain" }),
       history: [],
       lastSession: null,
-      activeBlock: { blockType: "strength" },
+      activeBlock: { blockType: "strength", startedAt: BLOCK_START },
+      now: new Date(BLOCK_START),
     });
-    expect(result[0].repsTarget).toBe(5);
+    expect(result[0].repsTarget).toBe(6);
   });
 
   it("falls back to the goal-based rep target with no active block — byte-identical to pre-Stage-12 behavior", () => {
@@ -205,7 +209,7 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
       profile: profile(),
       history: [],
       lastSession: null,
-      activeBlock: { blockType: "deload" },
+      activeBlock: { blockType: "deload", startedAt: BLOCK_START },
     });
     expect(result[0].sets).toBe(2);
   });
@@ -220,7 +224,7 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
       profile: profile(),
       history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3 }],
       lastSession: null,
-      activeBlock: { blockType: "deload" },
+      activeBlock: { blockType: "deload", startedAt: BLOCK_START },
     });
     const baseline = withoutBlock.find((e) => e.key === "barbell_bench_press")!.weightTargetKg;
     const deload = withDeload.find((e) => e.key === "barbell_bench_press")!.weightTargetKg;
@@ -234,7 +238,7 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
       profile: profile(),
       history: [],
       lastSession: null,
-      activeBlock: { blockType: "strength" },
+      activeBlock: { blockType: "strength", startedAt: BLOCK_START },
     });
     const compoundKeys = ["barbell_squat", "romanian_deadlift", "barbell_bench_press", "lat_pulldown", "seated_row", "dumbbell_shoulder_press"];
     expect(result.every((e) => compoundKeys.includes(e.key))).toBe(true);
@@ -249,9 +253,72 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
       profile: profile({ injuries: "knee, back, shoulders" }),
       history: [],
       lastSession: null,
-      activeBlock: { blockType: "strength" },
+      activeBlock: { blockType: "strength", startedAt: BLOCK_START },
     });
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((e) => e.key === "dumbbell_bicep_curl")).toBe(true);
+  });
+});
+
+describe("generateWorkout — rep-range phases within a block (2026-08-25)", () => {
+  // Stimulus-variety phasing, not fatigue-driven — Carl's call: general-
+  // population 2-3x/week members benefit more from a fresh rep range
+  // every 4 weeks than from copying a 3-week-push-then-deload cadence
+  // built for far-higher-frequency athletes. See REP_TARGET_BY_BLOCK_PHASE.
+  it("uses hypertrophy's phase 1 (weeks 1-4, ~6-8 reps) target at block start", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "hypertrophy", startedAt: BLOCK_START },
+      now: new Date(BLOCK_START),
+    });
+    expect(result[0].repsTarget).toBe(7);
+  });
+
+  it("uses hypertrophy's phase 2 (weeks 5-8, ~10-12 reps) target 4 weeks in", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "hypertrophy", startedAt: BLOCK_START },
+      now: new Date("2026-02-02T00:00:00.000Z"), // BLOCK_START + 28 days
+    });
+    expect(result[0].repsTarget).toBe(11);
+  });
+
+  it("uses hypertrophy's phase 3 (weeks 9-12, ~15-20 reps) target 8 weeks in", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "hypertrophy", startedAt: BLOCK_START },
+      now: new Date("2026-03-02T00:00:00.000Z"), // BLOCK_START + 56 days
+    });
+    expect(result[0].repsTarget).toBe(17);
+  });
+
+  it("never drops a strength block's reps below 3, even well past the 12-week mark", () => {
+    // No spotter in an unstaffed pod — true 1-3-rep max-effort work is a
+    // real unsupervised-injury risk this app deliberately doesn't create.
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "strength", startedAt: BLOCK_START },
+      now: new Date("2026-05-01T00:00:00.000Z"), // well past 12 weeks — a transition just not yet confirmed
+    });
+    expect(result[0].repsTarget).toBe(3);
+  });
+
+  it("deload's rep target stays flat regardless of block phase", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      activeBlock: { blockType: "deload", startedAt: BLOCK_START },
+      now: new Date("2026-03-02T00:00:00.000Z"),
+    });
+    expect(result[0].repsTarget).toBe(10);
   });
 });

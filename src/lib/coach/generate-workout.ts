@@ -1,13 +1,16 @@
 import { EXERCISE_CATALOG, type CatalogExercise } from "@/lib/coach/exercise-catalog";
 import type { CoachProfile, ExerciseHistoryEntry, RecentSessionSummary } from "@/lib/coach/coach-profile";
 import {
-  REP_TARGET_BY_BLOCK,
+  REP_TARGET_BY_BLOCK_PHASE,
+  DELOAD_REP_TARGET,
+  PHASE_DURATION_WEEKS,
   DELOAD_WEIGHT_MULTIPLIER,
   DELOAD_SETS_PER_EXERCISE,
   type Goal,
   type BlockType,
   type EquipmentType,
 } from "@/lib/coach/types";
+import { londonMidnight } from "@/lib/london-time";
 
 const EXERCISE_COUNT = 4;
 const SETS_PER_EXERCISE = 3;
@@ -37,22 +40,50 @@ export interface GenerateWorkoutInput {
   history: ExerciseHistoryEntry[];
   lastSession: RecentSessionSummary | null;
   // Optional (Stage 12) — absent means today's exact goal-based behavior,
-  // byte-identical to before blocks existed. Only ever set once Stage 12c
-  // wires a real caller; deliberately not wired yet in this stage so
-  // adding block support here changes nothing live.
-  activeBlock?: { blockType: BlockType };
+  // byte-identical to before blocks existed. startedAt drives which
+  // 4-week rep-range phase is active (see REP_TARGET_BY_BLOCK_PHASE);
+  // required whenever activeBlock is given since every real caller
+  // (resolveActiveBlock in workout-session.ts) always has it.
+  activeBlock?: { blockType: BlockType; startedAt: string };
   // Optional, same "absent = today's exact behavior" idiom as
   // activeBlock — undefined or [] both mean unrestricted (the full
   // catalog, no equipment filtering), which is what every gym gets until
   // its pod_resources row is explicitly configured (see
   // getOrCreateWorkoutSession in workout-session.ts).
   availableEquipment?: EquipmentType[];
+  // Injectable for deterministic phase-boundary testing; defaults to the
+  // real current time in production.
+  now?: Date;
+}
+
+// Which of the 3 rep-range phases (0-indexed) startedAt falls into,
+// relative to now — same londonMidnight-based day-bucketing convention
+// as training-block-state.ts's own week-boundary math, for the same
+// reason (a naive UTC/local diff can land a phase change on the wrong
+// day around the BST transition). Clamped to the last phase past week
+// 12 rather than extrapolating a 4th phase — a block that's run past its
+// nominal length (transition not yet confirmed) just holds at its
+// hardest/lightest rep target, not something undefined.
+export function blockPhaseIndex(startedAt: string, now: Date): 0 | 1 | 2 {
+  const startMidnight = londonMidnight(new Date(startedAt)).getTime();
+  const nowMidnight = londonMidnight(now).getTime();
+  const weeksElapsed = Math.floor((nowMidnight - startMidnight) / (7 * 24 * 60 * 60 * 1000));
+  if (weeksElapsed < PHASE_DURATION_WEEKS) return 0;
+  if (weeksElapsed < PHASE_DURATION_WEEKS * 2) return 1;
+  return 2;
+}
+
+function repsTargetForBlock(activeBlock: { blockType: BlockType; startedAt: string } | undefined, goal: Goal, now: Date): number {
+  if (!activeBlock) return REP_TARGET_BY_GOAL[goal];
+  if (activeBlock.blockType === "deload") return DELOAD_REP_TARGET;
+  const phase = blockPhaseIndex(activeBlock.startedAt, now);
+  return REP_TARGET_BY_BLOCK_PHASE[activeBlock.blockType][phase];
 }
 
 export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[] {
-  const { profile, history, lastSession, activeBlock, availableEquipment } = input;
+  const { profile, history, lastSession, activeBlock, availableEquipment, now = new Date() } = input;
   const eligible = selectExercises(profile, lastSession, activeBlock ?? null, availableEquipment);
-  const repsTarget = activeBlock ? REP_TARGET_BY_BLOCK[activeBlock.blockType] : REP_TARGET_BY_GOAL[profile.goal];
+  const repsTarget = repsTargetForBlock(activeBlock, profile.goal, now);
   const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
 

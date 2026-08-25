@@ -61,12 +61,13 @@ export interface WorkoutSessionDetail extends SessionExerciseDetail {
 // Stage 12c real risk: the safe fallback on any error resolving the
 // active block is undefined (today's already-safety-reviewed goal-based
 // generation), never a hardcoded block type — a caught error must never
-// silently produce e.g. "strength".
-async function resolveActiveBlock(memberId: number, coachProfile: CoachProfile): Promise<{ blockType: BlockType } | undefined> {
+// silently produce e.g. "strength". startedAt is carried through (not
+// just blockType) so generateWorkout can compute which 4-week rep-range
+// phase is active (2026-08-25) — see REP_TARGET_BY_BLOCK_PHASE.
+async function resolveActiveBlock(memberId: number, coachProfile: CoachProfile): Promise<{ blockType: BlockType; startedAt: string } | undefined> {
   try {
     const blockHistory = await getBlockHistory(memberId);
-    const active = getActiveBlock(coachProfile, blockHistory);
-    return { blockType: active.blockType };
+    return getActiveBlock(coachProfile, blockHistory);
   } catch (error) {
     console.error("[workout] failed to resolve active training block, falling back to goal-based generation", {
       error: (error as Error).message,
