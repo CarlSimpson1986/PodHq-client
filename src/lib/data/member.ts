@@ -30,6 +30,10 @@ export interface Member {
   trial_activated_at: string | null;
   trial_started_at: string | null;
   trial_expires_at: string | null;
+  // Multi-site leaderboard (2026-08-25) — off by default; a member's
+  // name/attendance/steps never appear to anyone else until they turn
+  // this on themselves. See src/lib/coach/leaderboard.ts.
+  leaderboard_opt_in: boolean;
 }
 
 // Gate for the physical door Unlock only (not booking/credits) — a member

@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { MenuIcon, HeartPulseIcon, UserIcon, HomeIcon } from "@/components/icons";
+import { MenuIcon, HeartPulseIcon, TrophyIcon, UserIcon, HomeIcon } from "@/components/icons";
 
 const MENU_ITEMS = [
   { href: "/health", label: "Health", icon: HeartPulseIcon },
+  { href: "/leaderboard", label: "Leaderboard", icon: TrophyIcon },
   { href: "/coach/profile", label: "Profile", icon: UserIcon },
   { href: "/", label: "Home", icon: HomeIcon },
 ] as const;

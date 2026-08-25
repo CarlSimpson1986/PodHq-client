@@ -202,6 +202,11 @@ export default async function DashboardPage() {
                 <p className="mt-1 text-sm text-muted-foreground">Training, nutrition, recovery — grounded in your own data.</p>
               </Link>
 
+              <Link href="/leaderboard" className="card-glass block p-5">
+                <p className="text-sm font-semibold text-accent">Leaderboard →</p>
+                <p className="mt-1 text-sm text-muted-foreground">Sessions, streaks and steps — every gym, one board.</p>
+              </Link>
+
               <div className="card-glass p-5">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next session</p>
                 {upcomingBooking ? (

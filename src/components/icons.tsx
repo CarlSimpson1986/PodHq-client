@@ -221,6 +221,19 @@ export function ChatBubbleIcon({ className }: IconProps) {
   );
 }
 
+// The multi-site leaderboard's icon (2026-08-25) — the More menu and
+// its Dashboard card. A simple trophy, distinct from every other icon
+// in the set.
+export function TrophyIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M7 4h10v6a5 5 0 0 1-5 5 5 5 0 0 1-5-5V4Z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 15v3M9 21h6M9.5 21c0-2 1-2.5 1-3M14.5 21c0-2-1-2.5-1-3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // The /coach/health page (Health Centre) header + nav icon.
 export function HeartPulseIcon({ className }: IconProps) {
   return (
