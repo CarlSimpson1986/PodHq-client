@@ -17,6 +17,7 @@ function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
     meal_count_preference: null,
     food_allergies: null,
     food_preferences: null,
+    nutrition_tracking_mode: "calorie_counting",
     ...overrides,
   };
 }

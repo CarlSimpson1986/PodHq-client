@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       mealCountPreference: parsed.data.mealCountPreference ?? null,
       foodAllergies: parsed.data.foodAllergies || null,
       foodPreferences: parsed.data.foodPreferences ?? null,
+      nutritionTrackingMode: parsed.data.nutritionTrackingMode ?? "calorie_counting",
     });
   } catch (error) {
     console.error("[coach-profile] failed to save", { error: (error as Error).message });

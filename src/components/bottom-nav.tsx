@@ -9,7 +9,7 @@ import { useInstallPrompt } from "@/lib/use-install-prompt";
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: HomeIcon, tourId: undefined },
   { href: "/book", label: "Book", icon: DumbbellIcon, tourId: "tour-nav-book" },
-  { href: "/coach", label: "Coach", icon: SparkleIcon, tourId: "tour-nav-coach" },
+  { href: "/dashboard", label: "Coach", icon: SparkleIcon, tourId: "tour-nav-coach" },
   { href: "/shop", label: "Shop", icon: ShopIcon, tourId: "tour-nav-shop" },
   { href: "/profile", label: "Profile", icon: UserIcon, tourId: "tour-nav-profile" },
 ];

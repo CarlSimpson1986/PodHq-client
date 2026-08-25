@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Goal, ExperienceLevel, FoodPreference } from "@/lib/coach/types";
+import type { Goal, ExperienceLevel, FoodPreference, NutritionTrackingMode } from "@/lib/coach/types";
 
 export interface CoachProfile {
   id: number;
@@ -22,6 +22,7 @@ export interface CoachProfile {
   meal_count_preference: number | null;
   food_allergies: string | null;
   food_preferences: FoodPreference | null;
+  nutrition_tracking_mode: NutritionTrackingMode;
 }
 
 // Same session-verified-first, admin-client-second pattern as every other
@@ -49,6 +50,7 @@ export interface CoachProfileInput {
   mealCountPreference: number | null;
   foodAllergies: string | null;
   foodPreferences: FoodPreference | null;
+  nutritionTrackingMode: NutritionTrackingMode;
 }
 
 // One-shot onboarding submission — no partial-save concept (unlike the
@@ -69,6 +71,7 @@ export async function createCoachProfile(memberId: number, input: CoachProfileIn
       meal_count_preference: input.mealCountPreference,
       food_allergies: input.foodAllergies,
       food_preferences: input.foodPreferences,
+      nutrition_tracking_mode: input.nutritionTrackingMode,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "member_id" }

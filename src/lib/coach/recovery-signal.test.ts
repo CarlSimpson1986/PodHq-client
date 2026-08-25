@@ -3,7 +3,7 @@ import { getRecoverySignal } from "./recovery-signal";
 import type { WearableSnapshot } from "@/lib/data/wearables";
 
 function snapshot(overrides: Partial<WearableSnapshot> = {}): WearableSnapshot {
-  return { recordedDate: "2026-08-01", steps: 8000, sleepMinutes: 420, restingHeartRate: 60, ...overrides };
+  return { recordedDate: "2026-08-01", steps: 8000, sleepMinutes: 420, restingHeartRate: 60, hrvMs: 55, ...overrides };
 }
 
 function baselineDays(count: number, overrides: Partial<WearableSnapshot> = {}): WearableSnapshot[] {

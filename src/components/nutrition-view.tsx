@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MEALS, MEAL_LABELS, type Meal } from "@/lib/coach/types";
+import { MEALS, MEAL_LABELS, type Meal, type NutritionTrackingMode } from "@/lib/coach/types";
+import { gramsToPortions } from "@/lib/coach/portions";
 
 interface NutritionTargets {
   calories: number;
@@ -59,7 +60,13 @@ function addDays(dateStr: string, days: number): string {
   return d.toLocaleDateString("en-CA");
 }
 
-export function NutritionView({ targets: initialTargets }: { targets: NutritionTargets | null }) {
+export function NutritionView({
+  targets: initialTargets,
+  trackingMode = "calorie_counting",
+}: {
+  targets: NutritionTargets | null;
+  trackingMode?: NutritionTrackingMode;
+}) {
   const [date, setDate] = useState(todayString());
   const [entries, setEntries] = useState<FoodLogEntry[]>([]);
   const [totals, setTotals] = useState<DayTotals>({ calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
@@ -105,14 +112,18 @@ export function NutritionView({ targets: initialTargets }: { targets: NutritionT
       </div>
 
       {targets ? (
-        <>
-          <CalorieRing target={targets.calories} consumed={totals.calories} remaining={remaining!} />
-          <div className="grid grid-cols-3 gap-3">
-            <MacroBar label="Protein" consumed={totals.proteinG} target={targets.proteinG} />
-            <MacroBar label="Carbs" consumed={totals.carbsG} target={targets.carbsG} />
-            <MacroBar label="Fat" consumed={totals.fatG} target={targets.fatG} />
-          </div>
-        </>
+        trackingMode === "hand_portions" ? (
+          <PortionsSummary consumed={totals} target={targets} />
+        ) : (
+          <>
+            <CalorieRing target={targets.calories} consumed={totals.calories} remaining={remaining!} />
+            <div className="grid grid-cols-3 gap-3">
+              <MacroBar label="Protein" consumed={totals.proteinG} target={targets.proteinG} />
+              <MacroBar label="Carbs" consumed={totals.carbsG} target={targets.carbsG} />
+              <MacroBar label="Fat" consumed={totals.fatG} target={targets.fatG} />
+            </div>
+          </>
+        )
       ) : (
         <div className="rounded-xl border border-card-light-border p-5">
           <p className="text-sm font-semibold">Body stats needed</p>
@@ -140,6 +151,8 @@ export function NutritionView({ targets: initialTargets }: { targets: NutritionT
           ))}
         </div>
       )}
+
+      {targets && <MealSuggestionsCard date={date} trackingMode={trackingMode} onAdded={() => loadDay(date)} />}
 
       {sheetMeal && (
         <AddFoodSheet
@@ -199,6 +212,166 @@ function MacroBar({ label, consumed, target }: { label: string; consumed: number
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-card-light-border">
         <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+function PortionCount({ label, emoji, count, target }: { label: string; emoji: string; count: number; target: number }) {
+  const whole = Math.floor(count);
+  const half = count - whole >= 0.5;
+  const totalSlots = Math.max(target, Math.ceil(count));
+  const slots = Array.from({ length: totalSlots }, (_, i) => {
+    if (i < whole) return 1;
+    if (i === whole && half) return 0.5;
+    return 0;
+  });
+
+  return (
+    <div className="rounded-xl border border-card-light-border p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">{label}</p>
+        <p className="text-sm font-semibold">
+          {count} / {target}
+        </p>
+      </div>
+      <p className="mt-1 text-lg" aria-hidden>
+        {slots.map((v, i) => (
+          <span key={i} style={{ opacity: v === 1 ? 1 : v === 0.5 ? 0.6 : 0.25 }}>
+            {emoji}{" "}
+          </span>
+        ))}
+      </p>
+    </div>
+  );
+}
+
+// The Nutrition tab's "hand portions" mode (2026-08-25 redesign) — same
+// day totals as calorie-counting mode, converted via gramsToPortions
+// instead of shown as grams/kcal. Meal-by-meal logging underneath stays
+// identical either way; only this day-level summary differs.
+function PortionsSummary({ consumed, target }: { consumed: DayTotals; target: NutritionTargets }) {
+  const consumedPortions = gramsToPortions(consumed.proteinG, consumed.carbsG, consumed.fatG);
+  const targetPortions = gramsToPortions(target.proteinG, target.carbsG, target.fatG);
+
+  return (
+    <div className="space-y-3">
+      <PortionCount label="Protein (palm)" emoji="🖐️" count={consumedPortions.palms} target={targetPortions.palms} />
+      <PortionCount label="Carbs (cupped hand)" emoji="🫲" count={consumedPortions.cuppedHands} target={targetPortions.cuppedHands} />
+      <PortionCount label="Fat (thumb)" emoji="👍" count={consumedPortions.thumbs} target={targetPortions.thumbs} />
+    </div>
+  );
+}
+
+interface MealSuggestion {
+  foodName: string;
+  quantityG: number;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  caloriesPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+}
+
+// "What to eat next" — fetches a fresh pair of nearest-fit suggestions for
+// the day's remaining macro budget (see meal-suggestions.ts); "Regenerate"
+// just re-fetches, since the server already randomises among its
+// top-scoring candidates each call.
+function MealSuggestionsCard({
+  date,
+  trackingMode,
+  onAdded,
+}: {
+  date: string;
+  trackingMode: NutritionTrackingMode;
+  onAdded: () => void;
+}) {
+  const [suggestions, setSuggestions] = useState<MealSuggestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/member/nutrition/suggestions?date=${date}`);
+      const body = await res.json();
+      if (body.status === "ok") setSuggestions(body.suggestions);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    queueMicrotask(load);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
+  async function addSuggestion(s: MealSuggestion) {
+    setAdding(s.foodName);
+    try {
+      await fetch("/api/member/nutrition/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meal: "snacks",
+          foodName: s.foodName,
+          quantityG: s.quantityG,
+          caloriesPer100g: s.caloriesPer100g,
+          proteinPer100g: s.proteinPer100g,
+          carbsPer100g: s.carbsPer100g,
+          fatPer100g: s.fatPer100g,
+          source: "uk_food_composition",
+          loggedDate: date,
+        }),
+      });
+      onAdded();
+      load();
+    } finally {
+      setAdding(null);
+    }
+  }
+
+  if (!loading && suggestions.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-card-light-border bg-accent/5 p-4">
+      <p className="text-sm font-semibold">What to eat next</p>
+      {loading ? (
+        <p className="mt-2 text-sm text-card-light-muted">Loading suggestions...</p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {suggestions.map((s) => (
+            <div key={s.foodName} className="flex items-center justify-between rounded-lg bg-white/80 p-3">
+              <div>
+                <p className="text-sm font-medium">{s.foodName}</p>
+                <p className="text-xs text-card-light-muted">
+                  {trackingMode === "hand_portions" ? (
+                    (() => {
+                      const p = gramsToPortions(s.proteinG, s.carbsG, s.fatG);
+                      return `${p.palms} palm, ${p.cuppedHands} cupped hand, ${p.thumbs} thumb`;
+                    })()
+                  ) : (
+                    `${s.quantityG}g · ${s.calories} kcal`
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => addSuggestion(s)}
+                disabled={adding !== null}
+                className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
+              >
+                {adding === s.foodName ? "Adding..." : "+ Add"}
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={load} className="text-xs font-semibold text-accent">
+            Regenerate
+          </button>
+        </div>
+      )}
     </div>
   );
 }

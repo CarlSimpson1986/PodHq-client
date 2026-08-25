@@ -13,6 +13,8 @@ export interface WeeklyReview {
   nutritionDaysInWindow: number;
   avgDailyCalories: number | null;
   avgDailyProteinG: number | null;
+  avgDailyCarbsG: number | null;
+  avgDailyFatG: number | null;
   targets: NutritionTargets | null;
 }
 
@@ -60,7 +62,7 @@ export async function getWeeklyReview(
       .lt("created_at", end.toISOString()),
     admin
       .from("food_log_entries")
-      .select("logged_date, calories, protein_g")
+      .select("logged_date, calories, protein_g, carbs_g, fat_g")
       .eq("member_id", memberId)
       .gte("logged_date", periodStart)
       .lte("logged_date", periodEnd),
@@ -106,6 +108,10 @@ export async function getWeeklyReview(
     nutritionDaysLogged > 0 ? Math.round(foodEntries.reduce((sum, e) => sum + e.calories, 0) / nutritionDaysLogged) : null;
   const avgDailyProteinG =
     nutritionDaysLogged > 0 ? Math.round(foodEntries.reduce((sum, e) => sum + e.protein_g, 0) / nutritionDaysLogged) : null;
+  const avgDailyCarbsG =
+    nutritionDaysLogged > 0 ? Math.round(foodEntries.reduce((sum, e) => sum + e.carbs_g, 0) / nutritionDaysLogged) : null;
+  const avgDailyFatG =
+    nutritionDaysLogged > 0 ? Math.round(foodEntries.reduce((sum, e) => sum + e.fat_g, 0) / nutritionDaysLogged) : null;
 
   const targets = coachProfile ? computeNutritionTargets(coachProfile, gender) : null;
 
@@ -118,6 +124,8 @@ export async function getWeeklyReview(
     nutritionDaysInWindow,
     avgDailyCalories,
     avgDailyProteinG,
+    avgDailyCarbsG,
+    avgDailyFatG,
     targets,
   };
 }

@@ -13,6 +13,7 @@ export interface WearableSnapshot {
   steps: number | null;
   sleepMinutes: number | null;
   restingHeartRate: number | null;
+  hrvMs: number | null;
 }
 
 export async function getWearableConnection(memberId: number): Promise<WearableConnection | null> {
@@ -98,6 +99,7 @@ export async function saveWearableSnapshot(memberId: number, snapshot: WearableS
       steps: snapshot.steps,
       sleep_minutes: snapshot.sleepMinutes,
       resting_heart_rate: snapshot.restingHeartRate,
+      hrv_ms: snapshot.hrvMs,
       synced_at: new Date().toISOString(),
     },
     { onConflict: "member_id,recorded_date" }
@@ -117,7 +119,7 @@ export async function getRecentWearableSnapshots(memberId: number, days = 14): P
 
   const { data, error } = await admin
     .from("member_wearable_data")
-    .select("recorded_date, steps, sleep_minutes, resting_heart_rate")
+    .select("recorded_date, steps, sleep_minutes, resting_heart_rate, hrv_ms")
     .eq("member_id", memberId)
     .gte("recorded_date", sinceIso)
     .lt("recorded_date", todayIso)
@@ -130,6 +132,7 @@ export async function getRecentWearableSnapshots(memberId: number, days = 14): P
     steps: row.steps,
     sleepMinutes: row.sleep_minutes,
     restingHeartRate: row.resting_heart_rate,
+    hrvMs: row.hrv_ms,
   }));
 }
 
@@ -137,7 +140,7 @@ export async function getLatestWearableSnapshot(memberId: number): Promise<Weara
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("member_wearable_data")
-    .select("recorded_date, steps, sleep_minutes, resting_heart_rate")
+    .select("recorded_date, steps, sleep_minutes, resting_heart_rate, hrv_ms")
     .eq("member_id", memberId)
     .order("recorded_date", { ascending: false })
     .limit(1)
@@ -151,5 +154,6 @@ export async function getLatestWearableSnapshot(memberId: number): Promise<Weara
     steps: data.steps,
     sleepMinutes: data.sleep_minutes,
     restingHeartRate: data.resting_heart_rate,
+    hrvMs: data.hrv_ms,
   };
 }

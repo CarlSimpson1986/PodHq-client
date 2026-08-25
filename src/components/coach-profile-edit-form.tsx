@@ -2,7 +2,21 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { GOALS, EXPERIENCE_LEVELS, FOOD_PREFERENCES, type Goal, type ExperienceLevel, type FoodPreference } from "@/lib/coach/types";
+import {
+  GOALS,
+  EXPERIENCE_LEVELS,
+  FOOD_PREFERENCES,
+  NUTRITION_TRACKING_MODES,
+  type Goal,
+  type ExperienceLevel,
+  type FoodPreference,
+  type NutritionTrackingMode,
+} from "@/lib/coach/types";
+
+const NUTRITION_MODE_LABELS: Record<NutritionTrackingMode, string> = {
+  calorie_counting: "Calorie counting",
+  hand_portions: "Hand portions",
+};
 
 const GOAL_LABELS: Record<Goal, string> = {
   weight_loss: "Lose weight",
@@ -48,6 +62,7 @@ export interface CoachProfileEditFormValues {
   mealCountPreference: string;
   foodAllergies: string;
   foodPreferences: FoodPreference | null;
+  nutritionTrackingMode: NutritionTrackingMode;
 }
 
 // A real edit flow for coach_profiles — the earlier onboarding-only path
@@ -90,6 +105,7 @@ export function CoachProfileEditForm({ initial }: { initial: CoachProfileEditFor
           mealCountPreference: form.mealCountPreference ? Number(form.mealCountPreference) : undefined,
           foodAllergies: form.foodAllergies,
           foodPreferences: form.foodPreferences ?? undefined,
+          nutritionTrackingMode: form.nutritionTrackingMode,
         }),
       });
       const body = await res.json();
@@ -220,6 +236,22 @@ export function CoachProfileEditForm({ initial }: { initial: CoachProfileEditFor
               className={optionClass(form.foodPreferences === pref)}
             >
               {FOOD_PREFERENCE_LABELS[pref]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-semibold">Nutrition tracking style</p>
+        <div className="grid grid-cols-2 gap-2">
+          {NUTRITION_TRACKING_MODES.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => update("nutritionTrackingMode", mode)}
+              className={optionClass(form.nutritionTrackingMode === mode)}
+            >
+              {NUTRITION_MODE_LABELS[mode]}
             </button>
           ))}
         </div>
