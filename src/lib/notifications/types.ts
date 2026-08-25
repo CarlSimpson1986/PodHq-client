@@ -10,4 +10,5 @@ export type NotificationEventType =
   | "staff_gift_voucher_purchased"
   | "waitlist_offered"
   | "credits_low"
-  | "win_back";
+  | "win_back"
+  | "training_nudge";

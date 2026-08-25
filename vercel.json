@@ -10,6 +10,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/notifications/training-nudge",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/wearables/sync",
       "schedule": "0 5 * * *"
     }

@@ -223,3 +223,18 @@ export function winBackEmail(input: { memberName: string; gym: string; daysSince
     `),
   };
 }
+
+// Complementary to winBackEmail, not a replacement — this one's
+// personalised to the member's own normal pace (see
+// training-nudge/route.ts), so it fires much sooner for a high-frequency
+// member than win-back's flat 21-day threshold ever would.
+export function trainingNudgeEmail(input: { memberName: string; gym: string; daysSinceLastSession: number; bookUrl: string }): EmailContent {
+  return {
+    subject: "Time to get back in the pod?",
+    html: emailShell(`
+      <p>Hi ${escapeHtml(input.memberName)},</p>
+      <p>It's been ${input.daysSinceLastSession} days since your last session at <strong>${input.gym}</strong> &mdash; a bit longer than your usual pace.</p>
+      <p><a href="${input.bookUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Book your next session</a></p>
+    `),
+  };
+}
