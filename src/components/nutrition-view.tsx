@@ -271,6 +271,8 @@ interface MealSuggestion {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  ingredients: string[];
+  instructions: string[];
   caloriesPer100g: number;
   proteinPer100g: number;
   carbsPer100g: number;
@@ -295,6 +297,7 @@ function MealSuggestionsCard({
   const [suggestions, setSuggestions] = useState<MealSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -346,33 +349,67 @@ function MealSuggestionsCard({
         <p className="mt-2 text-sm text-card-light-muted">Loading suggestions...</p>
       ) : (
         <div className="mt-3 space-y-2">
-          {suggestions.map((s) => (
-            <div key={s.name} className="flex items-center justify-between gap-3 rounded-lg bg-white/80 p-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-accent">{MEAL_LABELS[s.meal]}</p>
-                <p className="text-sm font-medium">{s.name}</p>
-                <p className="text-xs text-card-light-muted">{s.description}</p>
-                <p className="mt-0.5 text-xs text-card-light-muted">
-                  {trackingMode === "hand_portions" ? (
-                    (() => {
-                      const p = gramsToPortions(s.proteinG, s.carbsG, s.fatG);
-                      return `${p.palms} palm, ${p.cuppedHands} cupped hand, ${p.thumbs} thumb`;
-                    })()
-                  ) : (
-                    `${s.calories} kcal · P${s.proteinG}g C${s.carbsG}g F${s.fatG}g`
-                  )}
-                </p>
+          {suggestions.map((s) => {
+            const isExpanded = expanded === s.name;
+            return (
+              <div key={s.name} className="rounded-lg bg-white/80 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-accent">{MEAL_LABELS[s.meal]}</p>
+                    <p className="text-sm font-medium">{s.name}</p>
+                    <p className="text-xs text-card-light-muted">{s.description}</p>
+                    <p className="mt-0.5 text-xs text-card-light-muted">
+                      {trackingMode === "hand_portions" ? (
+                        (() => {
+                          const p = gramsToPortions(s.proteinG, s.carbsG, s.fatG);
+                          return `${p.palms} palm, ${p.cuppedHands} cupped hand, ${p.thumbs} thumb`;
+                        })()
+                      ) : (
+                        `${s.calories} kcal · P${s.proteinG}g C${s.carbsG}g F${s.fatG}g`
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addSuggestion(s)}
+                    disabled={adding !== null}
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
+                  >
+                    {adding === s.name ? "Adding..." : "+ Add"}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isExpanded ? null : s.name)}
+                  className="mt-2 text-xs font-semibold text-accent"
+                >
+                  {isExpanded ? "Hide recipe ▲" : "View recipe ▼"}
+                </button>
+
+                {isExpanded && (
+                  <div className="mt-2 space-y-2 border-t border-card-light-border pt-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Ingredients</p>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-card-light-foreground">
+                        {s.ingredients.map((ing, i) => (
+                          <li key={i}>{ing}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Method</p>
+                      <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-xs text-card-light-foreground">
+                        {s.instructions.map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => addSuggestion(s)}
-                disabled={adding !== null}
-                className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
-              >
-                {adding === s.name ? "Adding..." : "+ Add"}
-              </button>
-            </div>
-          ))}
+            );
+          })}
           <button type="button" onClick={load} className="text-xs font-semibold text-accent">
             Regenerate
           </button>
