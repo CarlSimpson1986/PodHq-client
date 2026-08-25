@@ -30,6 +30,13 @@ export interface RemainingBudget {
 
 const MEAL_PRIORITY: Meal[] = ["breakfast", "lunch", "dinner", "snacks"];
 const SUGGESTION_COUNT = 2;
+// Below this, don't force a suggestion at all — the day's effectively
+// done (every catalog entry is at least 140kcal, so anything smaller
+// than this genuinely has nothing that fits).
+const MIN_REMAINING_CALORIES_TO_SUGGEST = 100;
+// A little headroom so a close-fitting option isn't excluded purely for
+// rounding, but not enough to suggest a whole extra meal.
+const OVER_BUDGET_GRACE_KCAL = 50;
 
 function toSuggestion(entry: MealCatalogEntry): MealSuggestion {
   const scale = 100 / entry.quantityG;
@@ -63,8 +70,18 @@ function scoreAgainstBudget(entry: MealCatalogEntry, remaining: RemainingBudget)
 // Falls back to snacks once every slot already has an entry. Picks
 // randomly among each slot's closest-fitting options so "Regenerate"
 // gives different results without needing separate state.
+//
+// Two real bugs fixed here 2026-08-25 (Carl: "I had to have 2 dinners
+// and three snacks" testing this): (1) nothing stopped a candidate from
+// exceeding the remaining budget — a whole 580kcal dinner could "win" on
+// nearest-fit even with only 80kcal left, so this now hard-filters to
+// what actually fits and returns nothing at all once there's too little
+// budget left for anything (MIN_REMAINING_CALORIES_TO_SUGGEST); (2) the
+// top-up pass searched the whole catalog with no slot awareness, so it
+// could pick a second item from the SAME slot as the first (two dinners)
+// — now prefers slots not already used in this batch before reusing one.
 export function getMealSuggestions(remaining: RemainingBudget, loggedMeals: Meal[]): MealSuggestion[] {
-  if (remaining.calories <= 0) return [];
+  if (remaining.calories < MIN_REMAINING_CALORIES_TO_SUGGEST) return [];
 
   const loggedSet = new Set(loggedMeals);
   const targetSlots = MEAL_PRIORITY.filter((m) => !loggedSet.has(m));
@@ -72,17 +89,23 @@ export function getMealSuggestions(remaining: RemainingBudget, loggedMeals: Meal
 
   const picked: MealSuggestion[] = [];
   const usedNames = new Set<string>();
+  const usedSlots = new Set<Meal>();
+
+  function fits(entry: MealCatalogEntry): boolean {
+    return entry.calories <= remaining.calories + OVER_BUDGET_GRACE_KCAL;
+  }
 
   function pickFrom(pool: MealCatalogEntry[]): void {
     if (picked.length >= SUGGESTION_COUNT) return;
     const candidates = pool
-      .filter((e) => !usedNames.has(e.name))
+      .filter((e) => !usedNames.has(e.name) && fits(e))
       .map((e) => ({ entry: e, score: scoreAgainstBudget(e, remaining) }))
       .sort((a, b) => a.score - b.score);
     const top = candidates.slice(0, 4);
     if (top.length === 0) return;
     const choice = top[Math.floor(Math.random() * top.length)].entry;
     usedNames.add(choice.name);
+    usedSlots.add(choice.meal);
     picked.push(toSuggestion(choice));
   }
 
@@ -90,8 +113,9 @@ export function getMealSuggestions(remaining: RemainingBudget, loggedMeals: Meal
     pickFrom(MEAL_CATALOG.filter((e) => e.meal === slot));
   }
 
-  // Top up from the full catalog if fewer than 2 unlogged slots produced
-  // a pick (e.g. only one meal left to log today).
+  // Top up, preferring a slot not already used in this batch first, only
+  // reusing a used slot if nothing else fits the remaining budget.
+  pickFrom(MEAL_CATALOG.filter((e) => !usedSlots.has(e.meal)));
   pickFrom(MEAL_CATALOG);
 
   return picked;
