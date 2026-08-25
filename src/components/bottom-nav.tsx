@@ -55,6 +55,7 @@ export function BottomNav() {
               key={item.href}
               id={item.tourId}
               href={item.href}
+              prefetch={false}
               className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium ${
                 active ? "text-foreground" : "text-muted-foreground"
               }`}

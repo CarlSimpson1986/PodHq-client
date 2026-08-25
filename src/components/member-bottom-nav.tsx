@@ -18,6 +18,13 @@ const NAV_ITEMS = [
 // "a bit pointless" as a standalone destination — and moved into the
 // MoreMenu overflow instead, replaced here by Coach (check-in + weekly
 // recommendation + chat, all merged onto /coach — see that page).
+//
+// prefetch={false} (2026-08-25, fixing Carl's "lots of lags" report): every
+// one of these routes is a fully dynamic page doing several Supabase
+// queries server-side, so Next's default viewport-triggered prefetch was
+// firing all 4 pages' worth of DB queries in the background on every nav
+// render — confirmed via live network capture, including a 503 on a real
+// navigation competing with the prefetch storm for serverless concurrency.
 export function MemberBottomNav() {
   const pathname = usePathname();
 
@@ -30,6 +37,7 @@ export function MemberBottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
               className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium ${
                 active ? "text-foreground" : "text-muted-foreground"
               }`}
