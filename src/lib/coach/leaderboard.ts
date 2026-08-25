@@ -18,7 +18,9 @@ const STREAK_WEEKS_WINDOW = 12;
 // sessions_per_week to compare against) — "at least one session that
 // week" is the only signal available for someone who never set a
 // personal goal, not a lesser standard, just the only one there is.
-const DEFAULT_WEEKLY_TARGET = 1;
+// Exported since training-nudge/route.ts reuses the exact same fallback
+// for the same reason.
+export const DEFAULT_WEEKLY_TARGET = 1;
 
 // "First L." — never a full name or anything more identifying, and only
 // for members who've explicitly opted in (members.leaderboard_opt_in,
