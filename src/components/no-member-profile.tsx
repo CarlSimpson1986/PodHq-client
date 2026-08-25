@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 // Shown when a signed-in Supabase Auth session has no matching `members`
 // row — most commonly an email that already exists elsewhere in this
@@ -20,7 +19,6 @@ import { useRouter } from "next/navigation";
 // out is the same fetch + service-worker-cache-clear + redirect sequence
 // profile-view.tsx's own logout button uses.
 export function NoMemberProfile() {
-  const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function logout() {
@@ -31,7 +29,9 @@ export function NoMemberProfile() {
         const keys = await caches.keys();
         await Promise.all(keys.filter((key) => key.startsWith("podhq-client-")).map((key) => caches.delete(key)));
       }
-      router.push("/login");
+      // window.location, not router.push — see profile-view.tsx's logout
+      // for why (clears Next's in-memory Client Cache, staleTimes.dynamic).
+      window.location.href = "/login";
     } catch {
       setLoggingOut(false);
     }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PasswordInput } from "@/components/password-input";
 import { PageHero } from "@/components/page-hero";
@@ -13,7 +12,6 @@ const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,8 +29,13 @@ export default function LoginPage() {
       });
       const body = await res.json();
       if (body.status === "ok") {
-        router.push("/book");
-        router.refresh();
+        // window.location, not router.push — a full reload clears Next's
+        // in-memory Client Cache (staleTimes.dynamic, see next.config.ts)
+        // so a previous member's cached pages on this device can never
+        // bleed into this new session. router.refresh() alone only
+        // clears the cache for the route it's called on, not every
+        // previously-cached route.
+        window.location.href = "/book";
       } else {
         setError(body.message ?? "Something went wrong.");
       }

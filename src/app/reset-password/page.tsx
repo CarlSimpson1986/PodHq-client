@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { PasswordInput } from "@/components/password-input";
 import { PageHero } from "@/components/page-hero";
 import { LockIcon } from "@/components/icons";
@@ -10,7 +9,6 @@ const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
 
 export default function ResetPasswordPage() {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +30,9 @@ export default function ResetPasswordPage() {
       });
       const body = await res.json();
       if (body.status === "ok") {
-        router.push("/book");
-        router.refresh();
+        // window.location, not router.push — see login/page.tsx's own
+        // comment for why (clears Next's in-memory Client Cache in full).
+        window.location.href = "/book";
       } else {
         setError(body.message ?? "Something went wrong.");
       }
