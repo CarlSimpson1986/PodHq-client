@@ -186,3 +186,44 @@ found two separate real issues, not one.
    changed as a result of this lead (correctly, in hindsight) — the
    prefetch-storm fix above is the confirmed, real fix for the lag
    report; `proxy.ts` is not a suspect.
+
+## Client-side page cache for bottom-nav tabs — 2026-08-25 (same day, later)
+
+Carl still noticed a slight residual lag and asked whether a native app
+would be less laggy; the honest answer was "somewhat, but mostly because
+native screens don't wait on a network round trip to render the nav
+shell" — closeable on the web side with a client cache instead of a
+native rewrite. Carl asked for that cache layer.
+
+Enabled via Next 16's built-in `experimental.staleTimes.dynamic: 30` in
+`next.config.ts` — once a member has visited a dynamic page (Dashboard/
+Training/Nutrition/Coach etc.), Next's in-memory Client Router Cache
+reuses that RSC payload for 30s on revisits instead of re-fetching, so
+bouncing between recently-visited bottom-nav tabs feels instant. No page
+components changed — this is pure Next router config, still fully
+server-verified Server Components, no client-side Supabase queries
+(CLAUDE.md's rule intact).
+
+**Real risk found and fixed before enabling it**: the Client Cache is
+in-memory per browser tab, keyed by route, not by member. Per Next's own
+docs, `router.refresh()` only clears the cache for its *own* destination
+route, not other previously-visited ones, and nothing at all clears it on
+a plain `router.push()`. Every one of this app's auth-identity-changing
+navigations (login, both logout entry points, password reset, magic-link
+callback) used exactly that pattern — meaning a member logging out and a
+different member logging in on the same device within that 30s window
+could have briefly been served the first member's cached Dashboard/
+Training/Nutrition data. Same bug class as the 2026-08-16 OWASP finding
+that made `public/sw.js` allowlist-only, just via Next's router cache
+instead of the service worker's. Fixed by switching all five of those
+transitions from `router.push`/`router.refresh` to a real
+`window.location.href` navigation — the Client Cache is documented as
+"cleared on page refresh", which a full reload guarantees outright.
+Touched files: `login/page.tsx`, `reset-password/page.tsx`,
+`auth/callback/page.tsx`, `profile-view.tsx`, `no-member-profile.tsx`.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98),
+`next build` all clean. Live: logout confirmed landing cleanly on
+`/login` with a real full-page reload (not a client transition). Login/
+reset-password/callback weren't re-tested live (no test-account password
+in this session) but follow the identical, now-proven pattern.
