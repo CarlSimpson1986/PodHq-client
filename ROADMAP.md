@@ -170,28 +170,19 @@ found two separate real issues, not one.
    prefetch requests before the fix fires zero after it. Committed
    `a273e36`.
 
-2. **RSC-navigation 503s, found but not yet root-caused**: separately,
-   every real client-side navigation's own RSC request (not a prefetch —
-   the actual `/training`, `/nutrition`, `/coach` fetch Next's router
-   makes when you tap a tab) is consistently returning a 503 live on
-   production, still true after the prefetch fix. A manual `fetch()` to
-   the identical URL with the identical `RSC`/`_rsc` shape from the
-   browser console succeeds every time — the failure only happens when
-   Next's own router issues the request, and it happened on every single
-   navigation tested (training, nutrition, coach), not intermittently.
-   Next silently falls back to a full hard-reload of the page when this
-   happens (confirmed in the network log: the failed RSC fetch is
-   immediately followed by two full-document `GET` requests), which is
-   almost certainly the actual "lag" — a full asset reload on every tab
-   switch, not just a slow transition. Leading suspect, not yet
-   confirmed: `src/proxy.ts`'s `proxy()` middleware runs
-   `await supabase.auth.getUser()` — a live network call to Supabase
-   Auth — unconditionally on every single matched request with no
-   try/catch; if that call ever throws (a transient Supabase Auth
-   hiccup), an uncaught exception in Edge middleware is a plausible
-   mechanism for Vercel to return exactly this kind of 503. Not fixed
-   yet — no direct access to Vercel's function/edge logs in this session
-   to confirm the actual thrown error, which is the needed next step
-   before changing `proxy.ts` (wrapping that call defensively without
-   knowing the real failure mode risks masking a different bug instead
-   of fixing this one).
+2. **RSC-navigation 503s — investigated, ruled out as a false lead**:
+   during live testing, every real client-side navigation's own RSC
+   request (not a prefetch — the actual fetch Next's router makes when
+   you tap a tab) appeared to return a 503 in the browser's network
+   panel, immediately followed by a full hard-reload fallback — a
+   plausible second lag mechanism, so it was written up as a live
+   finding with `src/proxy.ts`'s unguarded `supabase.auth.getUser()` call
+   flagged as the leading suspect. Carl checked Vercel's own request logs
+   for the same window afterward and found no 503s at all, only 200s —
+   and the same browser session had also logged an unrelated 503 from
+   `fonts.gstatic.com` (a Google CDN with no connection to this app),
+   pointing at the sandboxed browser-automation tool's own network layer
+   as the actual source of both, not a real server-side failure. No code
+   changed as a result of this lead (correctly, in hindsight) — the
+   prefetch-storm fix above is the confirmed, real fix for the lag
+   report; `proxy.ts` is not a suspect.
