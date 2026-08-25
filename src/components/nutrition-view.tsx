@@ -774,11 +774,40 @@ function ScanTab({ onSelect }: { onSelect: (f: FoodOption) => void }) {
   );
 }
 
+const COOKED_FORM_PATTERN = /\b(cooked|boiled|steamed|grilled|roasted|baked|fried|poached|stewed|braised|made up with)\b/i;
+const RAW_FORM_PATTERN = /\b(raw|uncooked)\b/i;
+
+// Same food weighed dry/raw vs. cooked can have wildly different
+// kcal/100g (cooking oats or rice in water roughly triples-to-quadruples
+// their weight without adding calories, so the cooked form's per-100g
+// figure looks "wrong" if you're not expecting it — Carl, 2026-08-25,
+// hit exactly this with two separate "Porridge oats" entries). Flagging
+// the prep form as a visible pill next to the kcal figure rather than
+// leaving it buried in a long food name, so it's obvious at a glance
+// which one you're picking.
+function describePrepForm(name: string): "Cooked" | "Raw" | null {
+  if (COOKED_FORM_PATTERN.test(name)) return "Cooked";
+  if (RAW_FORM_PATTERN.test(name)) return "Raw";
+  return null;
+}
+
 function FoodResultRow({ food, onSelect }: { food: FoodOption; onSelect: () => void }) {
+  const prepForm = describePrepForm(food.name);
   return (
     <li>
       <button type="button" onClick={onSelect} className="w-full rounded-lg border border-card-light-border p-3 text-left">
-        <p className="text-sm font-medium">{food.name}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium">{food.name}</p>
+          {prepForm && (
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                prepForm === "Cooked" ? "bg-warning/15 text-warning" : "bg-card-light-border text-card-light-muted"
+              }`}
+            >
+              {prepForm}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-card-light-muted">
           {food.brand ? `${food.brand} · ` : ""}
           {Math.round(food.caloriesPer100g)} kcal / 100g
