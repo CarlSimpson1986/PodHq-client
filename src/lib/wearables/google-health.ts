@@ -79,14 +79,19 @@ export interface DailyWearableData {
   steps: number | null;
   sleepMinutes: number | null;
   restingHeartRate: number | null;
+  hrvMs: number | null;
 }
 
 // dataType id strings confirmed live against Google's docs: "steps",
 // "daily-resting-heart-rate" — hyphenated, not underscored. "sleep" is
 // deliberately absent — see the SLEEP_NOT_YET_SUPPORTED comment below.
+// "daily-heart-rate-variability" confirmed present in the discovery
+// document (2026-08-25) but not yet exercised against a live call — see
+// fetchHeartRateVariability's comment for why it goes straight to `list`.
 const DATA_TYPES = {
   steps: "steps",
   restingHeartRate: "daily-resting-heart-rate",
+  heartRateVariability: "daily-heart-rate-variability",
 } as const;
 
 // Sleep is modeled as session records (Sleep/SleepSummary/SleepStage —
@@ -214,7 +219,47 @@ async function fetchRestingHeartRate(client: OAuth2Client, dateIso: string): Pro
   return Math.round(value);
 }
 
-// Fetches one calendar day's steps/sleep/resting-heart-rate for a member
+// HRV goes straight to `list`, skipping the dailyRollUp detour that RHR
+// needed — the discovery document's own comment on
+// HeartRateVariabilityPersonalRangeRollupValue ("returned by default when
+// rolling up data points from the daily-heart-rate-variability data
+// type") is the same personal-range trap RHR's dailyRollUp hit, confirmed
+// live 2026-08-24 ('DailyRollup is not supported for data type
+// daily-resting-heart-rate... supported: list, reconcile'). Field name
+// below (dailyHeartRateVariability.rmssdMillis) is a best-effort guess
+// from the schema name and the RMSSD-in-milliseconds convention Google
+// uses elsewhere in this API — NOT confirmed against a live response yet.
+// Logs the raw shape on any mismatch so the first real sync corrects it,
+// same convention as extractStepsRollupValue.
+async function fetchHeartRateVariability(client: OAuth2Client, dateIso: string): Promise<number | null> {
+  const accessToken = await client.getAccessToken();
+  const { end } = dailyCivilRange(dateIso);
+  const endIso = `${end.date.year}-${String(end.date.month).padStart(2, "0")}-${String(end.date.day).padStart(2, "0")}`;
+  const filter = `daily_heart_rate_variability.date >= "${dateIso}" AND daily_heart_rate_variability.date < "${endIso}"`;
+
+  const res = await fetch(
+    `${API_BASE}/users/me/dataTypes/${DATA_TYPES.heartRateVariability}/dataPoints?filter=${encodeURIComponent(filter)}`,
+    { headers: { Authorization: `Bearer ${accessToken.token}` } }
+  );
+  if (!res.ok) {
+    throw new Error(`Google Health API heart-rate-variability list failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as {
+    dataPoints?: { dailyHeartRateVariability?: { rmssdMillis?: string | number } }[];
+  };
+  const first = body.dataPoints?.[0]?.dailyHeartRateVariability;
+  const raw = first?.rmssdMillis;
+  const value = typeof raw === "string" ? Number(raw) : raw;
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    console.error("[google-health] heart-rate-variability list had no extractable rmssdMillis — logging raw shape to confirm the real field name", {
+      body,
+    });
+    return null;
+  }
+  return Math.round(value);
+}
+
+// Fetches one calendar day's steps/sleep/resting-heart-rate/HRV for a member
 // whose refresh token has already been decrypted by the caller — see
 // src/lib/data/wearables.ts. A single field's request failing (a data
 // type with no data that day, or a transient error) doesn't fail the
@@ -227,9 +272,10 @@ export async function fetchDailyData(refreshToken: string, dateIso: string): Pro
     console.error("[google-health] sleep skipped — dailyRollUp has no sleep field, needs the session-based endpoint instead");
   }
 
-  const [stepsResult, restingHeartRateResult] = await Promise.allSettled([
+  const [stepsResult, restingHeartRateResult, hrvResult] = await Promise.allSettled([
     fetchDailyRollup(client, DATA_TYPES.steps, dateIso),
     fetchRestingHeartRate(client, dateIso),
+    fetchHeartRateVariability(client, dateIso),
   ]);
 
   let steps: number | null = null;
@@ -246,5 +292,12 @@ export async function fetchDailyData(refreshToken: string, dateIso: string): Pro
     console.error("[google-health] resting-heart-rate list request failed", { reason: String(restingHeartRateResult.reason) });
   }
 
-  return { steps, sleepMinutes: null, restingHeartRate };
+  let hrvMs: number | null = null;
+  if (hrvResult.status === "fulfilled") {
+    hrvMs = hrvResult.value;
+  } else {
+    console.error("[google-health] heart-rate-variability list request failed", { reason: String(hrvResult.reason) });
+  }
+
+  return { steps, sleepMinutes: null, restingHeartRate, hrvMs };
 }

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
-    return NextResponse.redirect(new URL("/coach/health", request.url));
+    return NextResponse.redirect(new URL("/health", request.url));
   }
 
   const { searchParams } = request.nextUrl;
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   const expectedState = request.cookies.get(STATE_COOKIE)?.value;
 
   const failureRedirect = () => {
-    const response = NextResponse.redirect(new URL("/coach/health?wearable=error", request.url));
+    const response = NextResponse.redirect(new URL("/health?wearable=error", request.url));
     response.cookies.delete(STATE_COOKIE);
     return response;
   };
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     return failureRedirect();
   }
 
-  const response = NextResponse.redirect(new URL("/coach/health?wearable=connected", request.url));
+  const response = NextResponse.redirect(new URL("/health?wearable=connected", request.url));
   response.cookies.delete(STATE_COOKIE);
   return response;
 }

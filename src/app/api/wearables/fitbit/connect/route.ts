@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const member = await getMemberByAuthUserId(user.id);
   if (!member) {
-    return NextResponse.redirect(new URL("/coach/health", request.url));
+    return NextResponse.redirect(new URL("/health", request.url));
   }
 
   // CSRF protection on the OAuth callback — a random value only this

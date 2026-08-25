@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
         steps: data.steps,
         sleepMinutes: data.sleepMinutes,
         restingHeartRate: data.restingHeartRate,
+        hrvMs: data.hrvMs,
       });
       synced++;
     } catch (err) {

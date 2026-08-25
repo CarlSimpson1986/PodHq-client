@@ -5,15 +5,16 @@ import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { computeNutritionTargets } from "@/lib/coach/nutrition-targets";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
-import { CoachBottomNav } from "@/components/coach-bottom-nav";
+import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { AppleIcon } from "@/components/icons";
 import { NutritionView } from "@/components/nutrition-view";
 
-// Same hasPremium + coachProfile gate as /workout/[bookingId], since
-// targets are computed from the coach profile and aren't useful without
-// one. Stage 6 shipped targets only; Stage 7 adds the MyFitnessPal/
-// Nutracheck-style diary (calorie ring, macro bars, meal sections,
-// search/recent/barcode logging) via NutritionView.
+// Moved from /coach/nutrition (2026-08-25 redesign, see ROADMAP.md).
+// NutritionView itself is unchanged here — its full diary (ring, macro
+// bars, meal sections, search/recent/barcode logging) stays on its
+// existing white card-light surface; the hand-portions mode and meal
+// suggestion generator are separate net-new additions layered on top of
+// this same page.
 export default async function NutritionPage() {
   const session = await createSessionClient();
   const {
@@ -30,7 +31,7 @@ export default async function NutritionPage() {
   }
 
   if (!(await hasPremium(member))) {
-    redirect("/coach");
+    redirect("/dashboard");
   }
 
   const coachProfile = await getCoachProfile(member.id);
@@ -45,10 +46,10 @@ export default async function NutritionPage() {
       <PageHero title="Nutrition" subtitle="Your daily diary" icon={AppleIcon} iconHref="/profile" />
       <div className="card-light flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
-          <NutritionView targets={targets} />
+          <NutritionView targets={targets} trackingMode={coachProfile.nutrition_tracking_mode} />
         </div>
       </div>
-      <CoachBottomNav />
+      <MemberBottomNav />
     </main>
   );
 }

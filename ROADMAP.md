@@ -14,130 +14,117 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-16.md`, covering the pilot
-mechanism proof (2026-08-05) through the full Fitbit-via-Google-Health-
-API thread (2026-08-24) — all split out to keep this file within Claude
-Code's ~15,000-character `@`-import limit. Archives aren't always the
-strictly oldest material — the split point is "what's finished and
-stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s,
-`-15.md`'s, and `-16.md`'s own header notes for three same-day examples
-of this). All archives are reference-only (not auto-loaded by
-CLAUDE.md); check them for full stage-by-stage build history, or
-`git log` on this file for the exact split points. This file's active
-content is the Health Centre (2026-08-24, unified recovery/nutrition/
-training) plus whatever's added after it. If this file grows too large
-again, split it the same way: move whichever section is most clearly
-finished (not necessarily the chronologically oldest) into a numbered
-`ROADMAP-ARCHIVE-17.md`, leave a pointer note at the top of this file,
-and update this paragraph.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-17.md`, covering the pilot
+mechanism proof (2026-08-05) through the Fitbit-via-Google-Health-API
+summary + full Health Centre build (2026-08-24) — all split out to keep
+this file within Claude Code's ~15,000-character `@`-import limit.
+Archives aren't always the strictly oldest material — the split point is
+"what's finished and stable" as much as "what's oldest" (see
+`ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s, `-16.md`'s, and `-17.md`'s own
+header notes for four same-day examples of this). All archives are
+reference-only (not auto-loaded by CLAUDE.md); check them for full
+stage-by-stage build history, or `git log` on this file for the exact
+split points. This file's active content is the flat-tab member app
+redesign (2026-08-25) plus whatever's added after it. If this file grows
+too large again, split it the same way: move whichever section is most
+clearly finished (not necessarily the chronologically oldest) into a
+numbered `ROADMAP-ARCHIVE-18.md`, leave a pointer note at the top of
+this file, and update this paragraph.
 
-## Fitbit via Google Health API — 2026-08-24
+## Member app redesign — flat 4-tab IA + real coach chat — 2026-08-25
 
-Full detail moved to `ROADMAP-ARCHIVE-16.md` the same day, once fully
-finished and acted upon. Summary: scaffolded the connect/disconnect flow
-and daily sync cron against the Google Health API (Fitbit's legacy API
-dies September 2026); Carl completed the Google Cloud OAuth setup and
-connected a real account; a `CRON_SECRET` fragment got pasted while
-testing the sync route manually, so it was rotated as a precaution; and
-a member-facing Refresh button was added so a first connection doesn't
-have to wait up to 24h for the nightly cron. This directly fed into the
-Health Centre work below.
+Carl pasted a Claude-generated design brief + HTML mockup (Dashboard/
+Training/Nutrition/Health tabs + an LLM coach chat) and asked for the
+whole thing built same-session, reusing the real schema rather than the
+brief's invented one. Planned via Plan Mode after a 3-agent parallel
+exploration inventoried exactly what was real vs. assumed; built in one
+continuous pass afterward. Full plan (data-integrity corrections,
+reuse/net-new inventory, build order) archived at
+`C:\Users\carls\.claude\plans\delightful-popping-glade.md` if needed —
+summary below.
 
-## Health Centre — 2026-08-24 (same day, stage two)
+**Data-integrity corrections applied throughout** (the brief assumed
+things this session's own research had already disproven or never had):
+no vendor "readiness score" exists in the Google Health API (confirmed
+against the live discovery document) — Dashboard/Health both use the
+existing `getRecoverySignal` plus a new "Day X of 5, calibrating"
+indicator instead, never a fabricated 0-100 number; sleep still has no
+real data source (`dailyRollUp` has no sleep field), shown as "Not yet
+available", not a fake "7h 32m"; RPE copy uses the app's real 1-5 scale
+(`RPE_SCALE`) and real `adjustForRpe` ±5% math, not the brief's invented
+1-10/+2.5kg language; Coach chat's citations are explicitly softened
+("general sports-science practice, not a live citation lookup") since
+there's no PubMed API anywhere in this codebase and presenting
+LLM-generated citations as verified would be a real trust risk.
 
-Planned via Plan Mode, then built the same session. Three confirmed
-decisions up front: (1) low recovery only ever **suggests** a lighter
-session, member must confirm — same trust tier as
-`block-change-gate.ts`'s block-transition recommendations, never the
-always-automatic tier RPE/deload weight math uses; (2) a new **6th Coach
-tab** (`/coach/health`), not folded into the Dashboard; (3) nutrition
-stays **display-only** in the Health Centre — only recovery actually
-feeds workout generation.
+**Navigation**: new `member-bottom-nav.tsx` (Dashboard/Training/
+Nutrition/Health, replacing the old 6-item `CoachBottomNav`).
+`/coach/training`, `/coach/nutrition`, `/coach/health` moved to
+top-level `/training`, `/nutrition`, `/health`; new `/dashboard` replaces
+`/coach`'s old hub content; `/coach` itself was repurposed in place into
+the new Coach Chat screen. `/coach/checkin` and `/coach/profile` stay
+where they are. All internal links/redirects (wearable OAuth
+connect/callback, main `BottomNav`'s "Coach" tab, `ai-coach-section.tsx`)
+repointed to match.
 
-**Recovery baseline + signal**: `member_wearable_data` already stores
-one row/day, so a trailing baseline needed no schema change — new
-`getRecentWearableSnapshots` (`src/lib/data/wearables.ts`) plus a pure
-`getRecoverySignal` (new `src/lib/coach/recovery-signal.ts`, mirrors
-`block-change-gate.ts`'s exact discriminated-union shape) comparing
-today's synced snapshot against a 14-day trailing average. Two new
-invented-but-documented thresholds in `types.ts`
-(`RECOVERY_RESTING_HR_DELTA` = +5bpm, `RECOVERY_SLEEP_MINUTES_DELTA` =
--60min), gated by `RECOVERY_MIN_BASELINE_DAYS` = 5 below which it
-returns `insufficient_data` rather than guessing — same category as
-`CHECK_IN_GRACE_DAYS`/the block thresholds, Carl can retune the numbers.
-6 new unit tests in `recovery-signal.test.ts`.
+**Training**: new `ExerciseProgressPicker` (dropdown + single chart,
+reusing the existing `ExerciseTrendChart`) replaces the all-exercises
+accordion; new `getLastCompletedSessionDetail`
+(`exercise-performance.ts`) + `LastSessionCard` show real per-set RPE
+badges — didn't exist before (`workout_sets.rpe` was a real column
+nothing surfaced).
 
-**Suggest-and-confirm adjustment**: `WorkoutSessionDetail` gained a
-`recoveryAdvice` field, computed alongside `excludedExerciseKeys` in
-`workout-session.ts` (fails open to `insufficient_data` on any error,
-same posture as `resolveActiveBlock`). New `applyRecoveryAdjustment`
-mirrors `swapExercise`'s exact ownership + `hasProgress` guard — never
-allowed once a set is logged — and applies `DELOAD_WEIGHT_MULTIPLIER` to
-every `workout_sets` row for that session (weight-only, deliberately not
-a set-count reduction too, to keep it a single non-destructive UPDATE;
-flagged for Carl to revisit if he wants more than a weight discount).
-New route `/api/member/workout/[sessionId]/apply-recovery-adjustment`,
-copied from `swap-exercise/route.ts`'s shape. `workout-view.tsx`'s
-overview phase shows a dismissible banner ("Recovery looks low today...")
-with Reduce/Keep-as-planned buttons when `recoveryAdvice.kind ===
-"low_recovery"` and the session hasn't started.
+**Health**: new `fetchHeartRateVariability` in `google-health.ts` (goes
+straight to the `list` endpoint, same personal-range trap RHR hit) + new
+`hrv_ms` column (migration `0059`, **not yet applied to Supabase**). The
+exact response field name (`dailyHeartRateVariability.rmssdMillis`) is a
+best-effort guess from the schema name, not yet confirmed against a live
+call — logs the raw shape on mismatch, same "ship it, correct from real
+Vercel logs" path steps/RHR both went through 2026-08-24. `WearableConnectionCard`
+now shows a 2x2 grid (added HRV) and an honest "Not yet available" for
+sleep instead of "—"; its heading was renamed from the duplicate-reading
+"Health markers" to "Connection" (an old flagged nice-to-have, fixed
+here).
 
-**Health Centre tab**: new `HeartPulseIcon` (`icons.tsx`), added to
-`CoachBottomNav` between Training and Nutrition. New
-`src/app/coach/health/page.tsx` — Recovery section (the
-`WearableConnectionCard` connect/refresh/disconnect flow **moved here
-from Profile**, which now only holds fitness/nutrition onboarding
-fields), Nutrition section (reuses `getWeeklyReview`'s existing fields,
-display-only, links through to `/coach/nutrition`), Training section
-(reuses the existing `TrainingBlockView` component as-is, links through
-to `/coach/training`). The wearable connect/callback/disconnect routes'
-redirect targets were updated from `/coach/profile` to `/coach/health`
-to match.
+**Nutrition**: calorie-counting mode is unchanged functionally (existing
+`NutritionView` diary reused as-is). Hand-portions mode is fully net-new:
+`nutrition_tracking_mode` column on `coach_profiles` (migration `0060`,
+**not yet applied**), a toggle in Coach settings
+(`coach-profile-edit-form.tsx`), `portions.ts`'s `gramsToPortions`
+(25g/palm, 50g/cupped-hand, 15g/thumb — Carl's numbers to retune, 3 unit
+tests), and a `PortionsSummary` component replacing the calorie
+ring/macro bars when that mode is selected. Meal suggestions are new for
+both modes: `meal-suggestions.ts`'s `getMealSuggestions` does a v1
+nearest-fit search over the existing `uk_food_composition` table
+(~2,900 rows, no specialised index needed per that table's own migration
+comment) against the day's remaining macro budget, new
+`/api/member/nutrition/suggestions` route, "What to eat next" card with
+Add/Regenerate.
 
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (77/77,
-including the 6 new recovery-signal tests), `next build` all clean —
-`/coach/health` and the new API route both present in the build output.
-**Not yet manually tested end-to-end** — same-day testing of the actual
-`low_recovery` banner needs either several more days of real synced
-data (only one day exists so far, `RECOVERY_MIN_BASELINE_DAYS` = 5) or a
-deliberately seeded/lowered-threshold test, neither done yet.
+**Coach chat**: fully net-new. `coach_conversations` table (migration
+`0061`, **not yet applied**, one row per member, messages as a jsonb
+array). `coach-chat.ts` assembles real context (training block, recovery
+status, last session's RPEs, weekly nutrition averages) into a system
+prompt and calls the same Groq-first/Claude-Haiku-fallback pattern as
+`coach-bot.ts`/`help-bot.ts`. New `/api/member/coach-chat` route, new
+`CoachChatView` (quick questions, persisted history via
+`coach-conversations.ts`).
 
-**Browser walkthrough + a real bug found, same day**: Carl asked for an
-"objective outlook as if you were a user" — actually drove `/coach/health`
-and `/coach/profile` in Chrome rather than just reasoning from code.
-Confirmed the six-tab nav and all three sections render correctly (a
-hydration-mismatch console error along the way turned out to be a
-dev-mode Fast Refresh artifact, not a real bug — confirmed clean against
-an actual `next build && next start`, which is what Vercel runs).
-
-Tracing the flow as a member surfaced a genuine correctness bug:
-`recoveryAdvice` was recomputed fresh from live wearable data on every
-`getOrCreateWorkoutSession` call, with nothing recording that a member
-had already accepted the adjustment — exiting and reopening an unstarted
-session re-showed the "reduce today's session" banner, and confirming it
-again re-multiplied the already-discounted `weight_target_kg` by
-`DELOAD_WEIGHT_MULTIPLIER` a second time (0.85 × 0.85 = 72.5% of
-original, not 85%). Fixed by adding a `recovery_adjusted_at` column to
-`workout_sessions` (new migration
-`0058_workout_sessions_recovery_adjustment.sql` in podHq's migrations
-folder — **not yet applied to the live database, on Carl**) —
-`applyRecoveryAdjustment` now rejects a second application outright
-(`recovery_already_applied`), and `getRecoveryAdvice` short-circuits to
-`normal` for any session that already has the flag set, so the banner
-never reappears once acted on.
-
-Re-verified after the fix: `tsc --noEmit`, `eslint`, `vitest run`
-(77/77), `next build` all clean.
-
-**Still outstanding before this can be considered done**: apply
-migration 0058 to Supabase (nothing above works correctly without it —
-the column doesn't exist in the live DB yet, so `applyRecoveryAdjustment`
-will error until it's run); a "collecting baseline, day X of 5" indicator
-was flagged as a nice-to-have (currently `insufficient_data` just shows
-nothing, which could read as broken rather than warming up) but not
-built; the "Health markers" card heading duplicating the page's own
-"Recovery" section label was flagged but not renamed. None of this is
-committed or pushed to `main` yet either — still local only.
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (80/80,
+including 3 new `portions.test.ts` cases), `next build` all clean —
+every new route (`/dashboard`, `/training`, `/nutrition`, `/health`,
+`/coach`, `/api/member/coach-chat`, `/api/member/nutrition/suggestions`)
+present in the build output; old `/coach/training`, `/coach/nutrition`,
+`/coach/health` confirmed gone. **Not yet done**: a real authenticated
+browser walkthrough — this session had no test member credentials and
+didn't want to self-serve a live signup against the shared production
+Supabase project without asking first. **Three migrations
+(`0059_member_wearable_data_hrv.sql`, `0060_coach_profiles_nutrition_tracking_mode.sql`,
+`0061_coach_conversations.sql`) still need applying to the live
+database** — nothing above involving HRV, hand-portions mode, or Coach
+chat will work until Carl runs them, same as migration 0058 needed
+applying before the recovery-adjustment feature worked. Not committed or
+pushed yet either.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 

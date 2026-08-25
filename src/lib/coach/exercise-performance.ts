@@ -89,3 +89,80 @@ export async function getExercisePerformanceHistory(memberId: number): Promise<E
     }))
     .sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
 }
+
+export interface LastSessionSet {
+  setNumber: number;
+  weightActualKg: number | null;
+  repsActual: number | null;
+  // 1-5, see RPE_SCALE in types.ts — null if the member didn't rate that set.
+  rpe: number | null;
+}
+
+export interface LastSessionExercise {
+  exerciseKey: string;
+  name: string;
+  muscleGroup: string;
+  sets: LastSessionSet[];
+}
+
+export interface LastSessionDetail {
+  sessionId: number;
+  createdAt: string;
+  exercises: LastSessionExercise[];
+}
+
+// The most recently completed session, exercises + sets + per-set RPE —
+// didn't exist before the 2026-08-25 redesign (getRecentCompletedSessions
+// in workout-session.ts only returns muscle groups + total volume, no
+// per-set detail, even though workout_sets.rpe is a real column). Same
+// three-query batching shape as getWorkoutHistory/getExercisePerformanceHistory.
+export async function getLastCompletedSessionDetail(memberId: number): Promise<LastSessionDetail | null> {
+  const admin = createAdminClient();
+
+  const { data: session, error: sessionError } = await admin
+    .from("workout_sessions")
+    .select("id, created_at")
+    .eq("member_id", memberId)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (sessionError) throw new Error(sessionError.message);
+  if (!session) return null;
+
+  const { data: exercises, error: exercisesError } = await admin
+    .from("workout_exercises")
+    .select("id, exercise_key, name, muscle_group, sort_order")
+    .eq("session_id", session.id)
+    .order("sort_order", { ascending: true });
+  if (exercisesError) throw new Error(exercisesError.message);
+  if (!exercises || exercises.length === 0) {
+    return { sessionId: session.id, createdAt: session.created_at, exercises: [] };
+  }
+
+  const exerciseIds = exercises.map((e) => e.id);
+  const { data: sets, error: setsError } = await admin
+    .from("workout_sets")
+    .select("exercise_id, set_number, weight_actual_kg, reps_actual, rpe")
+    .in("exercise_id", exerciseIds)
+    .order("set_number", { ascending: true });
+  if (setsError) throw new Error(setsError.message);
+
+  const setsByExercise = new Map<number, LastSessionSet[]>();
+  for (const set of sets ?? []) {
+    const list = setsByExercise.get(set.exercise_id) ?? [];
+    list.push({ setNumber: set.set_number, weightActualKg: set.weight_actual_kg, repsActual: set.reps_actual, rpe: set.rpe });
+    setsByExercise.set(set.exercise_id, list);
+  }
+
+  return {
+    sessionId: session.id,
+    createdAt: session.created_at,
+    exercises: exercises.map((e) => ({
+      exerciseKey: e.exercise_key,
+      name: e.name,
+      muscleGroup: e.muscle_group,
+      sets: setsByExercise.get(e.id) ?? [],
+    })),
+  };
+}

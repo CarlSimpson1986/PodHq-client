@@ -12,6 +12,22 @@ export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number];
 export const FOOD_PREFERENCES = ["none", "vegetarian", "vegan", "pescatarian", "halal", "other"] as const;
 export type FoodPreference = (typeof FOOD_PREFERENCES)[number];
 
+// Which view the Nutrition tab renders (2026-08-25 redesign) — detailed
+// calorie/macro diary (the existing NutritionView, unchanged) vs. a
+// simpler palm/cupped-hand/thumb portion count derived from the same
+// food_log_entries totals. Member-toggleable in Coach settings
+// (coach-profile-edit-form.tsx), defaults to calorie_counting (the
+// mode that already existed before this option did).
+export const NUTRITION_TRACKING_MODES = ["calorie_counting", "hand_portions"] as const;
+export type NutritionTrackingMode = (typeof NUTRITION_TRACKING_MODES)[number];
+
+// Portion-size approximations (brief's own numbers, 2026-08-25) — a
+// simple, invented-but-documented conversion from grams, same category as
+// PROTEIN_TARGET_G_PER_KG above: Carl can retune these.
+export const PALM_PROTEIN_G = 25;
+export const CUPPED_HAND_CARBS_G = 50;
+export const THUMB_FAT_G = 15;
+
 // Which pod_resources.equipment a gym's pod can have — gates exercise
 // selection in generate-workout.ts. Duplicated verbatim in podHq's
 // src/lib/data/types.ts, same cross-repo convention as GYM_NAMES (see

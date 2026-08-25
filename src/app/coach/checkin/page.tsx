@@ -3,7 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
-import { CoachBottomNav } from "@/components/coach-bottom-nav";
+import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { SparkleIcon } from "@/components/icons";
 import { CheckInView } from "@/components/checkin-view";
 
@@ -27,7 +27,7 @@ export default async function CheckInPage() {
   }
 
   if (!(await hasPremium(member))) {
-    redirect("/coach");
+    redirect("/dashboard");
   }
 
   return (
@@ -38,7 +38,7 @@ export default async function CheckInPage() {
           <CheckInView />
         </div>
       </div>
-      <CoachBottomNav />
+      <MemberBottomNav />
     </main>
   );
 }

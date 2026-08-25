@@ -32,7 +32,7 @@ export function AICoachSection({ state }: { state: CoachHomeState }) {
 
     case "trial_active":
       return (
-        <Link href="/coach" className="block rounded-xl border border-card-light-border p-5 hover:bg-card-light-border/10">
+        <Link href="/dashboard" className="block rounded-xl border border-card-light-border p-5 hover:bg-card-light-border/10">
           <p className="text-xs font-semibold uppercase tracking-wide text-warning">
             AI Coach · Trial · {state.daysRemaining} {state.daysRemaining === 1 ? "day" : "days"} remaining
           </p>
@@ -58,7 +58,7 @@ export function AICoachSection({ state }: { state: CoachHomeState }) {
 
     case "subscriber":
       return (
-        <Link href="/coach" className="block rounded-xl border border-card-light-border p-5 hover:bg-card-light-border/10">
+        <Link href="/dashboard" className="block rounded-xl border border-card-light-border p-5 hover:bg-card-light-border/10">
           <p className="text-xs font-semibold uppercase tracking-wide text-success">{state.tierName} member</p>
           <p className="mt-1 text-sm text-card-light-muted">View your coach and today&apos;s workout →</p>
         </Link>

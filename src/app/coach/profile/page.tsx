@@ -4,7 +4,7 @@ import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
-import { CoachBottomNav } from "@/components/coach-bottom-nav";
+import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { UserIcon } from "@/components/icons";
 import { CoachProfileEditForm } from "@/components/coach-profile-edit-form";
 
@@ -26,7 +26,7 @@ export default async function CoachProfilePage() {
   }
 
   if (!(await hasPremium(member))) {
-    redirect("/coach");
+    redirect("/dashboard");
   }
 
   const coachProfile = await getCoachProfile(member.id);
@@ -51,11 +51,12 @@ export default async function CoachProfilePage() {
               mealCountPreference: coachProfile.meal_count_preference?.toString() ?? "",
               foodAllergies: coachProfile.food_allergies ?? "",
               foodPreferences: coachProfile.food_preferences,
+              nutritionTrackingMode: coachProfile.nutrition_tracking_mode,
             }}
           />
         </div>
       </div>
-      <CoachBottomNav />
+      <MemberBottomNav />
     </main>
   );
 }

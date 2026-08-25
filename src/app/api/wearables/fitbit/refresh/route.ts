@@ -59,6 +59,7 @@ export async function POST() {
       steps: data.steps,
       sleepMinutes: data.sleepMinutes,
       restingHeartRate: data.restingHeartRate,
+      hrvMs: data.hrvMs,
     });
   } catch (err) {
     console.error("[wearables] manual refresh failed", { memberId: member.id, error: (err as Error).message });

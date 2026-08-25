@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GOALS, EXPERIENCE_LEVELS, FOOD_PREFERENCES } from "@/lib/coach/types";
+import { GOALS, EXPERIENCE_LEVELS, FOOD_PREFERENCES, NUTRITION_TRACKING_MODES } from "@/lib/coach/types";
 
 // weightKg/heightCm/age are required, not optional — Harris-Benedict BMR
 // (the formula the brief specifies for the not-yet-built nutrition
@@ -21,4 +21,5 @@ export const coachProfileSchema = z.object({
   mealCountPreference: z.number().int().min(1).max(8).optional(),
   foodAllergies: z.string().trim().max(500).optional().or(z.literal("")),
   foodPreferences: z.enum(FOOD_PREFERENCES).optional(),
+  nutritionTrackingMode: z.enum(NUTRITION_TRACKING_MODES).optional(),
 });
