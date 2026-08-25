@@ -10,6 +10,8 @@ export interface MealSuggestion {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  ingredients: string[];
+  instructions: string[];
   // Per-100g values, carried through so the "+ Add" action can log this
   // suggestion via the existing POST /api/member/nutrition/log endpoint
   // (logFoodSchema expects per-100g values + quantity, not scaled totals).
@@ -40,6 +42,8 @@ function toSuggestion(entry: MealCatalogEntry): MealSuggestion {
     proteinG: entry.proteinG,
     carbsG: entry.carbsG,
     fatG: entry.fatG,
+    ingredients: entry.ingredients,
+    instructions: entry.instructions,
     caloriesPer100g: Math.round(entry.calories * scale * 10) / 10,
     proteinPer100g: Math.round(entry.proteinG * scale * 10) / 10,
     carbsPer100g: Math.round(entry.carbsG * scale * 10) / 10,
