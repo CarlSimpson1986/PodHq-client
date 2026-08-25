@@ -16,7 +16,7 @@ import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { WeekCalendarStrip } from "@/components/week-calendar-strip";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { TrialBanner } from "@/components/trial-banner";
-import { UserIcon } from "@/components/icons";
+import { MoreMenu } from "@/components/more-menu";
 
 const BLOCK_TYPE_LABEL: Record<string, string> = {
   hypertrophy: "Hypertrophy",
@@ -84,12 +84,7 @@ export default async function DashboardPage() {
             <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
             <p className="mt-1 text-sm text-muted-foreground">Today</p>
           </div>
-          <Link
-            href="/coach/profile"
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground hover:bg-card-border"
-          >
-            <UserIcon className="h-7 w-7" />
-          </Link>
+          <MoreMenu />
         </div>
         <div className="mx-auto mt-6 w-full max-w-md">
           <WeekCalendarStrip />
