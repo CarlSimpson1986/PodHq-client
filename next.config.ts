@@ -27,6 +27,19 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
+  experimental: {
+    // Lets a member bounce between bottom-nav tabs they've recently
+    // visited without waiting on a fresh server round trip each time
+    // (2026-08-25, following the prefetch-storm nav-lag fix). Only safe
+    // because every auth-identity-changing navigation (login, logout,
+    // password reset, magic-link callback) forces a full page reload —
+    // see those files' own comments — which is what actually clears this
+    // cache; without that, a second member on a shared device could
+    // briefly see the previous member's cached page data.
+    staleTimes: {
+      dynamic: 30,
+    },
+  },
   async headers() {
     return [
       {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export default function AuthCallbackPage() {
   return (
@@ -12,7 +12,6 @@ export default function AuthCallbackPage() {
 }
 
 function AuthCallbackInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const ran = useRef(false);
   const [error, setError] = useState(false);
@@ -54,7 +53,10 @@ function AuthCallbackInner() {
         }
 
         if (type === "recovery") {
-          router.push("/reset-password");
+          // window.location, not router.push — see login/page.tsx's own
+          // comment for why (clears Next's in-memory Client Cache, since
+          // this callback just established a real session on this device).
+          window.location.href = "/reset-password";
           return;
         }
 
@@ -73,14 +75,14 @@ function AuthCallbackInner() {
           }
         }
 
-        router.push("/book");
+        window.location.href = "/book";
       } catch {
         setError(true);
       }
     }
 
     run();
-  }, [router, searchParams]);
+  }, [searchParams]);
 
   return (
     <CallbackCard error={error}>

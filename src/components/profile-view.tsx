@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ComponentType } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Membership } from "@/lib/data/member";
 import { BottomNav } from "@/components/bottom-nav";
@@ -90,7 +89,6 @@ export function ProfileView({
   membership: Membership | null;
   accessComplete: boolean;
 }) {
-  const router = useRouter();
   const [membershipState, setMembershipState] = useState(membership);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -129,7 +127,12 @@ export function ProfileView({
         const keys = await caches.keys();
         await Promise.all(keys.filter((key) => key.startsWith("podhq-client-")).map((key) => caches.delete(key)));
       }
-      router.push("/login");
+      // window.location, not router.push — a full reload is what actually
+      // clears Next's in-memory Client Cache (staleTimes.dynamic, see
+      // next.config.ts). router.push alone would leave this member's
+      // cached Dashboard/Training/Nutrition pages sitting in memory for
+      // the next person to log in on this device to briefly see.
+      window.location.href = "/login";
     } catch {
       setLoggingOut(false);
     }
