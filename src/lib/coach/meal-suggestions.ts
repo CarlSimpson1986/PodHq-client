@@ -27,12 +27,44 @@ export interface RemainingBudget {
 const CANDIDATE_QUANTITIES = [100, 150, 200];
 const SUGGESTION_COUNT = 2;
 
-// v1: a simple nearest-fit search over uk_food_composition (~2,900 rows,
-// already a full-table-scan-accepted size per that migration's own
-// comment), not a real optimizer — scores each (food, quantity) candidate
-// by distance from the remaining macro budget, weighting protein more
-// heavily since that's usually the harder target to hit. Picks 2 distinct
-// foods from the top-scoring candidates, randomised each call so
+// uk_food_composition (PHE's CoFID dataset) is a raw-ingredient
+// reference table, not a recipe/meal database — "Butter, salted" and
+// "Oil, vegetable" are real rows in it, and a pure nearest-fit-on-
+// calories search happily suggested them, since a tiny quantity of pure
+// fat is calorie-dense enough to "fit" almost any remaining budget
+// (Carl, 2026-08-25: "the meal ideas are cooking oil and butter wtf").
+// Filtered here rather than fixed by scoring alone — a food that's
+// mostly fat with negligible protein AND negligible carbs is a cooking
+// ingredient, not something anyone would eat as a meal/snack on its own.
+// A short name-based denylist backstops the numeric filter for edge
+// cases (e.g. flavoured oils/spreads whose macros aren't quite as
+// extreme as plain oil).
+const NON_MEAL_NAME_PATTERN = /\b(oil|butter|lard|ghee|margarine|dripping|shortening|suet)\b/i;
+
+function isRealMealCandidate(row: { protein_per_100g: number; carbs_per_100g: number; fat_per_100g: number; food_name: string }): boolean {
+  if (NON_MEAL_NAME_PATTERN.test(row.food_name)) return false;
+  // Near-zero protein AND near-zero carbs means the calories are almost
+  // entirely fat — a cooking ingredient/condiment, not a food to suggest
+  // eating on its own.
+  if (row.protein_per_100g < 3 && row.carbs_per_100g < 3) return false;
+  return true;
+}
+
+interface ScoredCandidate {
+  suggestion: MealSuggestion;
+  score: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+}
+
+// v1: a nearest-fit search over uk_food_composition (~2,900 rows, already
+// a full-table-scan-accepted size per that migration's own comment), not
+// a real recipe generator — there's no dish-level data to draw on, so
+// suggestions are always single whole foods (chicken breast, rice,
+// yoghurt), never composed dishes. Picks one protein-forward item + one
+// carb-forward item when the remaining budget genuinely needs both —
+// reads as a mini-meal pairing rather than two unrelated foods — falling
+// back to pure nearest-fit when it doesn't. Randomised each call so
 // "Regenerate" gives different results without needing separate state.
 export async function getMealSuggestions(remaining: RemainingBudget): Promise<MealSuggestion[]> {
   if (remaining.calories <= 0) return [];
@@ -43,8 +75,10 @@ export async function getMealSuggestions(remaining: RemainingBudget): Promise<Me
     .select("food_name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g");
   if (error) throw new Error(error.message);
 
-  const scored: { suggestion: MealSuggestion; score: number }[] = [];
+  const scored: ScoredCandidate[] = [];
   for (const row of data ?? []) {
+    if (!isRealMealCandidate(row)) continue;
+
     for (const qty of CANDIDATE_QUANTITIES) {
       const scale = qty / 100;
       const calories = row.calories_per_100g * scale;
@@ -70,20 +104,39 @@ export async function getMealSuggestions(remaining: RemainingBudget): Promise<Me
           fatPer100g: row.fat_per_100g,
         },
         score,
+        proteinPer100g: row.protein_per_100g,
+        carbsPer100g: row.carbs_per_100g,
       });
     }
   }
 
   scored.sort((a, b) => a.score - b.score);
-  const top = scored.slice(0, 15).sort(() => Math.random() - 0.5);
+  const top = scored.slice(0, 20).sort(() => Math.random() - 0.5);
 
   const picked: MealSuggestion[] = [];
   const usedNames = new Set<string>();
-  for (const item of top) {
-    if (usedNames.has(item.suggestion.foodName)) continue;
-    usedNames.add(item.suggestion.foodName);
-    picked.push(item.suggestion);
-    if (picked.length === SUGGESTION_COUNT) break;
+
+  function take(pool: ScoredCandidate[]): boolean {
+    const candidate = pool.find((c) => !usedNames.has(c.suggestion.foodName));
+    if (!candidate) return false;
+    usedNames.add(candidate.suggestion.foodName);
+    picked.push(candidate.suggestion);
+    return true;
   }
+
+  // Meal-pairing mode: budget genuinely needs both protein and carbs, so
+  // pick one item that's clearly protein-forward and one that's clearly
+  // carb-forward, rather than two items that both happen to fit calories.
+  if (remaining.proteinG >= 10 && remaining.carbsG >= 10) {
+    const proteinForward = top.filter((c) => c.proteinPer100g >= 12).sort((a, b) => a.score - b.score);
+    const carbForward = top.filter((c) => c.carbsPer100g >= 15).sort((a, b) => a.score - b.score);
+    take(proteinForward);
+    take(carbForward);
+  }
+
+  while (picked.length < SUGGESTION_COUNT && take(top)) {
+    // top is already nearest-fit sorted-then-shuffled; take() skips duplicates.
+  }
+
   return picked;
 }
