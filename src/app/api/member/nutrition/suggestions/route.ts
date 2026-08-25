@@ -44,14 +44,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { totals } = await getDayLog(member.id, date);
+    const { entries, totals } = await getDayLog(member.id, date);
     const remaining = {
       calories: targets.calories - totals.calories,
       proteinG: targets.proteinG - totals.proteinG,
       carbsG: targets.carbsG - totals.carbsG,
       fatG: targets.fatG - totals.fatG,
     };
-    const suggestions = await getMealSuggestions(remaining);
+    const loggedMeals = [...new Set(entries.map((e) => e.meal))];
+    const suggestions = getMealSuggestions(remaining, loggedMeals);
     return NextResponse.json({ status: "ok", suggestions, remaining, trackingMode: coachProfile!.nutrition_tracking_mode });
   } catch (error) {
     console.error("[nutrition-suggestions] failed", { error: (error as Error).message });
