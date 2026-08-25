@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
+import { getMemberByAuthUserId } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getWearableConnection, getLatestWearableSnapshot } from "@/lib/data/wearables";
 import { getRecoveryStatus } from "@/lib/coach/recovery-status";
@@ -24,6 +24,14 @@ import { TrainingBlockView } from "@/components/training-block-view";
 // so it's an actual signal, not just raw numbers. Never shows a
 // fabricated composite "readiness score" — see recovery-status-card.tsx's
 // comment for why no such field exists in the Google Health API.
+//
+// Opened to every member, not just AI Coach subscribers, 2026-08-25
+// (Carl: "open it up" — feeds a universal step-count leaderboard, and
+// the wearable connect/callback/refresh/disconnect API routes never
+// actually checked premium status anyway, only this page's own redirect
+// did). Nutrition/Training sections still need a coach profile to mean
+// anything — no food log or workout data exists without one — so a
+// single upsell card replaces both rather than showing two empty states.
 export default async function HealthPage() {
   const session = await createSessionClient();
   const {
@@ -39,14 +47,7 @@ export default async function HealthPage() {
     return <NoMemberProfile />;
   }
 
-  if (!(await hasPremium(member))) {
-    redirect("/dashboard");
-  }
-
   const coachProfile = await getCoachProfile(member.id);
-  if (!coachProfile) {
-    redirect("/coach-onboarding");
-  }
 
   const wearableConnection = await getWearableConnection(member.id);
   const [wearableSnapshot, recoveryStatus] = await Promise.all([
@@ -54,12 +55,19 @@ export default async function HealthPage() {
     getRecoveryStatus(member.id),
   ]);
 
-  const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-  const weeklyReview = await getWeeklyReview(member.id, periodStart, periodEnd, member.gender);
+  let weeklyReview = null;
+  if (coachProfile) {
+    const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
+    weeklyReview = await getWeeklyReview(member.id, periodStart, periodEnd, member.gender);
+  }
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Health" subtitle="Recovery, nutrition and training in one place" rightSlot={<MoreMenu />} />
+      <PageHero
+        title="Health"
+        subtitle={weeklyReview ? "Recovery, nutrition and training in one place" : "Your recovery data, connected"}
+        rightSlot={<MoreMenu />}
+      />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <section>
@@ -72,42 +80,59 @@ export default async function HealthPage() {
             </div>
           </section>
 
-          <section>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nutrition this week</p>
-            <div className="card-glass p-5">
-              {weeklyReview.nutritionDaysLogged === 0 ? (
-                <p className="text-sm text-muted-foreground">No meals logged this week yet.</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 text-center">
-                  <div>
-                    <p className="text-lg font-semibold text-foreground">{weeklyReview.avgDailyCalories}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Avg. daily kcal{weeklyReview.targets ? ` / ${weeklyReview.targets.calories}` : ""}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-foreground">{weeklyReview.avgDailyProteinG}g</p>
-                    <p className="text-xs text-muted-foreground">
-                      Avg. daily protein{weeklyReview.targets ? ` / ${weeklyReview.targets.proteinG}g` : ""}
-                    </p>
-                  </div>
+          {weeklyReview ? (
+            <>
+              <section>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nutrition this week</p>
+                <div className="card-glass p-5">
+                  {weeklyReview.nutritionDaysLogged === 0 ? (
+                    <p className="text-sm text-muted-foreground">No meals logged this week yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3 text-center">
+                      <div>
+                        <p className="text-lg font-semibold text-foreground">{weeklyReview.avgDailyCalories}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Avg. daily kcal{weeklyReview.targets ? ` / ${weeklyReview.targets.calories}` : ""}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-semibold text-foreground">{weeklyReview.avgDailyProteinG}g</p>
+                        <p className="text-xs text-muted-foreground">
+                          Avg. daily protein{weeklyReview.targets ? ` / ${weeklyReview.targets.proteinG}g` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <Link href="/nutrition" className="mt-4 inline-block text-xs font-semibold text-accent underline">
+                    View nutrition →
+                  </Link>
                 </div>
-              )}
-              <Link href="/nutrition" className="mt-4 inline-block text-xs font-semibold text-accent underline">
-                View nutrition →
+              </section>
+
+              <section>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Training</p>
+                <div className="card-light">
+                  <TrainingBlockView />
+                </div>
+                <Link href="/training" className="mt-3 inline-block text-xs font-semibold text-accent underline">
+                  View training progress →
+                </Link>
+              </section>
+            </>
+          ) : (
+            <div className="card-glass p-5">
+              <p className="text-sm font-semibold text-foreground">Want AI-personalised training and nutrition?</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Set up your AI Coach to unlock programmed workouts, progress tracking, and a daily nutrition diary alongside your recovery data.
+              </p>
+              <Link
+                href="/coach-onboarding"
+                className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
+              >
+                Set up my AI Coach
               </Link>
             </div>
-          </section>
-
-          <section>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Training</p>
-            <div className="card-light">
-              <TrainingBlockView />
-            </div>
-            <Link href="/training" className="mt-3 inline-block text-xs font-semibold text-accent underline">
-              View training progress →
-            </Link>
-          </section>
+          )}
         </div>
       </div>
       <MemberBottomNav />
