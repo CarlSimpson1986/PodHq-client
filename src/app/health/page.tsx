@@ -10,7 +10,7 @@ import { currentCheckInPeriod } from "@/lib/coach/checkin-state";
 import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
-import { MemberBottomNav } from "@/components/member-bottom-nav";
+import { BottomNav } from "@/components/bottom-nav";
 import { MoreMenu } from "@/components/more-menu";
 import { WearableConnectionCard } from "@/components/wearable-connection-card";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
@@ -32,6 +32,10 @@ import { TrainingBlockView } from "@/components/training-block-view";
 // did). Nutrition/Training sections still need a coach profile to mean
 // anything — no food log or workout data exists without one — so a
 // single upsell card replaces both rather than showing two empty states.
+//
+// Renders the main app's BottomNav, not MemberBottomNav — same fix as
+// /leaderboard, same day: a universal, not Coach-specific, page landing
+// on the Coach-area's 4-tab nav read as an unexpected context switch.
 export default async function HealthPage() {
   const session = await createSessionClient();
   const {
@@ -135,7 +139,7 @@ export default async function HealthPage() {
           )}
         </div>
       </div>
-      <MemberBottomNav />
+      <BottomNav />
     </main>
   );
 }

@@ -4,7 +4,7 @@ import { getMemberByAuthUserId } from "@/lib/data/member";
 import { getMonthlySessionsLeaderboard, getWeeklyStepsLeaderboard, getStreakLeaderboard } from "@/lib/coach/leaderboard";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
-import { MemberBottomNav } from "@/components/member-bottom-nav";
+import { BottomNav } from "@/components/bottom-nav";
 import { MoreMenu } from "@/components/more-menu";
 import { LeaderboardView } from "@/components/leaderboard-view";
 
@@ -17,6 +17,13 @@ import { LeaderboardView } from "@/components/leaderboard-view";
 // now connect. Nobody appears on any board until they opt in
 // (members.leaderboard_opt_in, off by default) — see NoMemberProfile-
 // style privacy caution elsewhere in this app for the same reasoning.
+//
+// Renders the main app's BottomNav (Home/Book/Coach/Shop/Profile), not
+// MemberBottomNav — Carl, same day, after reaching this from the new
+// Home page card: landing on the Coach-area's 4-tab nav felt like being
+// dropped into "the coaching environment" from what's meant to be a
+// universal, not Coach-specific, feature. Same fix applied to /health
+// for the same reason.
 export default async function LeaderboardPage() {
   const session = await createSessionClient();
   const {
@@ -46,7 +53,7 @@ export default async function LeaderboardPage() {
           <LeaderboardView initialOptedIn={member.leaderboard_opt_in} initialSessions={sessions} initialStreaks={streaks} initialSteps={steps} />
         </div>
       </div>
-      <MemberBottomNav />
+      <BottomNav />
     </main>
   );
 }
