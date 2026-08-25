@@ -227,3 +227,11 @@ Touched files: `login/page.tsx`, `reset-password/page.tsx`,
 `/login` with a real full-page reload (not a client transition). Login/
 reset-password/callback weren't re-tested live (no test-account password
 in this session) but follow the identical, now-proven pattern.
+
+**Update, same day**: spotted a leftover unguarded `/book` prefetch on
+Training while checking the above and swept the rest of the codebase for
+the same original prefetch-storm pattern — Training's next-session card,
+Health's Nutrition/Training cross-links, Coach's check-in card, Home's
+leaderboard card, and the shared `ai-coach-section.tsx`/
+`recovery-status-card.tsx` components (rendered on Home/Dashboard/Health)
+all still had eager prefetch on. Same fix, all now `prefetch={false}`.
