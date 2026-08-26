@@ -7,6 +7,11 @@ import { getGymStripeAccountId } from "@/lib/data/stripe-config";
 import { getCreditPackageById, hasMemberClaimedItem } from "@/lib/data/catalog";
 import { findApplicablePromoCode, redeemPromoCode, applyDiscount } from "@/lib/data/promo-codes";
 import { checkoutSchema } from "@/lib/validation/checkout";
+import { GYM_NAMES } from "@/lib/gym";
+
+function isGymName(value: string): value is (typeof GYM_NAMES)[number] {
+  return (GYM_NAMES as readonly string[]).includes(value);
+}
 
 export async function POST(request: NextRequest) {
   const session = await createSessionClient();
@@ -40,7 +45,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
   }
 
-  const pkg = await getCreditPackageById(member.gym, parsed.data.packageId);
+  // Which gym's catalog/Stripe account this purchase actually goes
+  // through — the gym the member was browsing (?gym= on /buy-credits,
+  // carried from /book's "Buy more" link), not always their home gym.
+  // Falls back to home gym if absent or not a real gym name, so a plain
+  // link to /buy-credits with no param behaves exactly as before this
+  // change.
+  const gym = parsed.data.gym && isGymName(parsed.data.gym) ? parsed.data.gym : member.gym;
+
+  const pkg = await getCreditPackageById(gym, parsed.data.packageId);
   if (!pkg) {
     return NextResponse.json({ status: "error", message: "Unknown credit package." }, { status: 400 });
   }
@@ -73,7 +86,7 @@ export async function POST(request: NextRequest) {
     priceGBP = pkg.priceGBP * 0.9;
   }
   if (parsed.data.promoCode) {
-    const promoCode = await findApplicablePromoCode(member.gym, parsed.data.promoCode, pkg.catalogItemId);
+    const promoCode = await findApplicablePromoCode(gym, parsed.data.promoCode, pkg.catalogItemId);
     if (!promoCode) {
       return NextResponse.json({ status: "error", message: "That promo code isn't valid for this item." }, { status: 400 });
     }
@@ -90,8 +103,15 @@ export async function POST(request: NextRequest) {
   // Checkout Session created directly against that account — money and
   // Stripe's processing fee land there, not on the shared platform
   // account. null (no connected account yet) falls back to the platform
-  // account exactly as every gym behaved before Connect existed.
-  const stripeAccountId = await getGymStripeAccountId(member.gym);
+  // account exactly as every gym behaved before Connect existed. Uses
+  // the resolved `gym` (not member.gym) — this is the actual point of
+  // today's fix: buying while browsing another gym pays that gym, not
+  // always home.
+  const stripeAccountId = await getGymStripeAccountId(gym);
+  // Carries the purchase-gym back through so a member who bought credit
+  // to spend at another gym lands back on that gym's /book view, not
+  // their own — they'd otherwise have to re-select it after paying.
+  const bookRedirect = gym === member.gym ? "/book" : `/book?gym=${encodeURIComponent(gym)}`;
   const checkoutSession = await stripe.checkout.sessions.create(
     {
       mode: "payment",
@@ -115,8 +135,8 @@ export async function POST(request: NextRequest) {
         packageId: pkg.id,
         creditType: pkg.creditType,
       },
-      success_url: `${origin}/book?purchase=success`,
-      cancel_url: `${origin}/buy-credits?purchase=cancelled`,
+      success_url: `${origin}${bookRedirect}${bookRedirect.includes("?") ? "&" : "?"}purchase=success`,
+      cancel_url: `${origin}/buy-credits?purchase=cancelled${gym !== member.gym ? `&gym=${encodeURIComponent(gym)}` : ""}`,
     },
     stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
   );
