@@ -12,4 +12,5 @@ export type NotificationEventType =
   | "credits_low"
   | "win_back"
   | "training_nudge"
-  | "unanswered_chat_question";
+  | "unanswered_chat_question"
+  | "member_crisis_signal";

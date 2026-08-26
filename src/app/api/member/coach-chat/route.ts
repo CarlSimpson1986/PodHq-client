@@ -12,6 +12,9 @@ import { currentCheckInPeriod } from "@/lib/coach/checkin-state";
 import { askCoach } from "@/lib/coach/coach-chat";
 import { appendCoachConversationTurn } from "@/lib/coach/coach-conversations";
 import { coachChatSchema } from "@/lib/validation/coach-chat";
+import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
+import { notifyFireAndForget } from "@/lib/notifications/core";
+import { memberCrisisSignalEmail } from "@/lib/notifications/templates";
 
 // Same limit as help-chat — this also hits an LLM provider per message.
 const COACH_CHAT_LIMIT_PER_MINUTE = 15;
@@ -61,7 +64,7 @@ export async function POST(request: Request) {
     ]);
     const blockState = getTrainingBlockState(coachProfile, blockHistory, new Date());
 
-    const reply = await askCoach(
+    const { reply, isCrisis } = await askCoach(
       {
         memberName: member.name,
         goal: coachProfile.goal,
@@ -74,6 +77,16 @@ export async function POST(request: Request) {
       parsed.data.message,
       parsed.data.history
     );
+
+    // Same urgent, distinctly-worded staff alert as POD chat's — not a
+    // "couldn't answer" gap, a welfare signal. See src/lib/crisis-response.ts.
+    if (isCrisis) {
+      const staffEmails = await getStaffRecipients(member.gym);
+      const { subject, html } = memberCrisisSignalEmail({ memberName: member.name, gym: member.gym, message: parsed.data.message });
+      for (const to of staffEmails) {
+        await notifyFireAndForget({ eventType: "member_crisis_signal", to, subject, html, gym: member.gym, memberId: member.id });
+      }
+    }
 
     const now = new Date().toISOString();
     await appendCoachConversationTurn(
