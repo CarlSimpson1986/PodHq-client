@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId } from "@/lib/data/member";
+import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { joinWaitlistSchema } from "@/lib/validation/waitlist";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -39,15 +39,25 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // resourceId must belong to the member's own gym — never trusted as-is,
-  // same IDOR-proofing pattern as /api/bookings.
+  // Same cross-gym PAYG rule as /api/bookings (2026-08-26): a resource no
+  // longer has to belong to the member's own gym, but a member with an
+  // active membership is still locked to their home gym.
   const { data: resource } = await admin
     .from("pod_resources")
     .select("id, gym, pod_capacity")
     .eq("id", parsed.data.resourceId)
     .maybeSingle();
-  if (!resource || resource.gym !== member.gym) {
+  if (!resource) {
     return NextResponse.json({ status: "error", message: "Resource not found." }, { status: 404 });
+  }
+  if (resource.gym !== member.gym) {
+    const membership = await getActiveMembership(member.id);
+    if (membership) {
+      return NextResponse.json(
+        { status: "error", message: "Membership bookings are only available at your own gym." },
+        { status: 403 }
+      );
+    }
   }
 
   // Only a genuinely full slot can be waitlisted — a member with an open
@@ -68,7 +78,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await admin.from("waitlist_entries").insert({
     member_id: member.id,
-    gym: member.gym,
+    gym: resource.gym,
     resource_id: resource.id,
     slot_start: parsed.data.slotStart,
   });

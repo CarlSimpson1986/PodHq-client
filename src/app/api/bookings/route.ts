@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId, getPodResourcesForGym, isAccessComplete, getCreditBalance } from "@/lib/data/member";
+import { getMemberByAuthUserId, getPodResourceById, isAccessComplete, getCreditBalance, getActiveMembership } from "@/lib/data/member";
 import { isWithinBookableHours } from "@/lib/pods/bookable-hours";
 import { createBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -45,14 +45,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
   }
 
-  // resourceId must belong to the member's own gym — never trusted as-is,
-  // same IDOR-proofing pattern as every other gym-scoped write in this
-  // app. Also gives us the resource's own open/close hours and credit
-  // type, both needed below.
-  const resources = await getPodResourcesForGym(member.gym);
-  const resource = resources.find((r) => r.id === parsed.data.resourceId);
+  // Cross-gym PAYG booking (2026-08-26): a resource no longer has to
+  // belong to the member's own gym, but a member with an active
+  // membership is still locked to their home gym — membership pricing/
+  // capacity planning assumes members are drawn from that gym's own
+  // catchment (see ROADMAP.md), unlike PAYG credits, which aren't
+  // gym-scoped in the schema at all (credits table has no gym column).
+  const resource = await getPodResourceById(parsed.data.resourceId);
   if (!resource) {
     return NextResponse.json({ status: "error", message: "Resource not found." }, { status: 404 });
+  }
+  if (resource.gym !== member.gym) {
+    const membership = await getActiveMembership(member.id);
+    if (membership) {
+      return NextResponse.json(
+        { status: "error", message: "Membership bookings are only available at your own gym." },
+        { status: 403 }
+      );
+    }
   }
 
   // Self-service-only restriction — staff can knowingly book outside these
@@ -122,7 +132,7 @@ export async function POST(request: NextRequest) {
 
     const { subject, html } = bookingConfirmedEmail({
       memberName: member.name,
-      gym: member.gym,
+      gym: resource.gym,
       slotStart: parsed.data.slotStart,
       isFirstBooking: (priorBookings ?? 0) === 0,
       accessComplete: isAccessComplete(member),
@@ -133,7 +143,7 @@ export async function POST(request: NextRequest) {
       subject,
       html,
       memberId: member.id,
-      gym: member.gym,
+      gym: resource.gym,
     });
 
     const creditsRemaining = await getCreditBalance(member.id, resource.creditType);
