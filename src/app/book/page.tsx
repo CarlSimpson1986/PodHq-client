@@ -3,6 +3,8 @@ import { createSessionClient } from "@/lib/supabase/server";
 import {
   getMemberByAuthUserId,
   getCreditBalance,
+  getTotalCreditBalance,
+  networkCreditType,
   getBookingsForDate,
   getPodResourcesForGym,
   getMemberWaitlistSlots,
@@ -40,14 +42,16 @@ export default async function BookPage({
     return <NoMemberProfile />;
   }
 
-  // Cross-gym PAYG booking (2026-08-26): a member with an active
-  // membership stays locked to their home gym (no picker shown at all —
-  // see BookingGrid); a PAYG member can browse any gym via ?gym=, server-
-  // enforced the same way in /api/bookings and /api/waitlist, not just
-  // hidden in the UI.
+  // Cross-gym booking (2026-08-26, extended same day to cover membership
+  // members too): a PAYG member can spend their base credit anywhere; a
+  // membership member can too, but only via a separate "network" top-up
+  // credit (podHq's 0064_pod_network_credit.sql) — their subscription
+  // credit itself stays home-gym-only. Either way the gym switcher shows
+  // for everyone now; ?gym= is server-enforced for real in /api/bookings
+  // via create_booking()'s own credit-type check, not just hidden in the UI.
   const membership = await getActiveMembership(member.id);
-  const canSwitchGym = !membership;
-  const viewGym = canSwitchGym && params.gym && isGymName(params.gym) ? params.gym : member.gym;
+  const viewGym = params.gym && isGymName(params.gym) ? params.gym : member.gym;
+  const isHomeGymView = viewGym === member.gym;
 
   const [dayBookings, resources, waitlistSlots, reservations] = await Promise.all([
     getBookingsForDate(viewGym, selectedDate),
@@ -60,11 +64,18 @@ export default async function BookPage({
   // resource is still 'pod', so this is one query either way) — fetched
   // per resource rather than once, since a gym with a Recovery Suite
   // (Brighton, Milestone 2) needs each resource's own balance shown, not
-  // one pooled number.
+  // one pooled number. A membership member viewing an away gym only sees
+  // their network-credit balance here — that's genuinely the only type
+  // spendable there, matching create_booking()'s own logic exactly, so a
+  // member with none sees "0" and knows they need a top-up rather than
+  // being shown a misleadingly higher total that includes home-only credit.
   const creditsByType: Record<string, number> = {};
   await Promise.all(
     Array.from(new Set(resources.map((r) => r.creditType))).map(async (creditType) => {
-      creditsByType[creditType] = await getCreditBalance(member.id, creditType);
+      creditsByType[creditType] =
+        membership && !isHomeGymView
+          ? await getCreditBalance(member.id, networkCreditType(creditType))
+          : await getTotalCreditBalance(member.id, creditType);
     })
   );
 
@@ -74,7 +85,7 @@ export default async function BookPage({
         key={`${viewGym}-${formatDateParam(selectedDate)}`}
         gym={viewGym}
         homeGym={member.gym}
-        canSwitchGym={canSwitchGym}
+        hasMembership={!!membership}
         memberName={member.name}
         memberId={member.id}
         creditsByType={creditsByType}

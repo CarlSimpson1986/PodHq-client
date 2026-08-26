@@ -123,6 +123,29 @@ export async function getCreditBalance(memberId: number, creditType = "pod"): Pr
   return data ?? 0;
 }
 
+// Cross-gym PAYG top-up credit (2026-08-26) lives in the same ledger
+// under `<creditType>_network` — a PAYG top-up bought while the member
+// has an active membership (see the Stripe webhook route), spendable at
+// any gym, vs. the base type staying home-gym-only for a member with a
+// membership. See podHq's 0064_pod_network_credit.sql for the full
+// create_booking()/cancel_booking() logic this backs.
+export function networkCreditType(creditType: string): string {
+  return `${creditType}_network`;
+}
+
+// Total credits of a type the member holds, regardless of which type is
+// actually spendable in a given context — for a general "you have N
+// credits" headline (the Home page), not the more precise, context-aware
+// number /book shows (which depends on the viewed gym and membership
+// status, since only one of the two types may be spendable there).
+export async function getTotalCreditBalance(memberId: number, creditType = "pod"): Promise<number> {
+  const [homeBalance, networkBalance] = await Promise.all([
+    getCreditBalance(memberId, creditType),
+    getCreditBalance(memberId, networkCreditType(creditType)),
+  ]);
+  return homeBalance + networkBalance;
+}
+
 export async function getActiveMembership(memberId: number): Promise<Membership | null> {
   const admin = createAdminClient();
   const { data, error } = await admin

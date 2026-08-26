@@ -52,7 +52,7 @@ function formatMonthYear(d: Date) {
 export function BookingGrid({
   gym,
   homeGym,
-  canSwitchGym,
+  hasMembership,
   memberName,
   memberId,
   creditsByType,
@@ -66,7 +66,7 @@ export function BookingGrid({
 }: {
   gym: string;
   homeGym: string;
-  canSwitchGym: boolean;
+  hasMembership: boolean;
   memberName: string;
   memberId: number;
   creditsByType: Record<string, number>;
@@ -268,33 +268,38 @@ export function BookingGrid({
             <UserIcon className="h-7 w-7" />
           </Link>
         </div>
-        {/* PAYG-only (2026-08-26) — a member with an active membership never
-            gets this control at all (see book/page.tsx's canSwitchGym),
-            so there's no need to disable/hide it conditionally here beyond
-            not rendering it. */}
-        {canSwitchGym && (
-          <div className="mx-auto mt-3 w-full max-w-md">
-            <label htmlFor="gym-switcher" className="mb-1 block text-xs text-muted-foreground">
-              Booking at
-            </label>
-            <select
-              id="gym-switcher"
-              value={gym}
-              onChange={(e) => {
-                const nextGym = e.target.value;
-                router.push(nextGym === homeGym ? "/book" : `/book?gym=${encodeURIComponent(nextGym)}`);
-              }}
-              className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm text-foreground"
-            >
-              {GYM_NAMES.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                  {name === homeGym ? " (your gym)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Shown to every member (2026-08-26) — a membership member can now
+            book away from home too, just only by spending a separate
+            network top-up credit rather than their subscription credit
+            (podHq's 0064_pod_network_credit.sql); create_booking() itself
+            enforces that, this control doesn't need to know their
+            membership status to decide whether to render at all. */}
+        <div className="mx-auto mt-3 w-full max-w-md">
+          <label htmlFor="gym-switcher" className="mb-1 block text-xs text-muted-foreground">
+            Booking at
+          </label>
+          <select
+            id="gym-switcher"
+            value={gym}
+            onChange={(e) => {
+              const nextGym = e.target.value;
+              router.push(nextGym === homeGym ? "/book" : `/book?gym=${encodeURIComponent(nextGym)}`);
+            }}
+            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm text-foreground"
+          >
+            {GYM_NAMES.map((name) => (
+              <option key={name} value={name}>
+                {name}
+                {name === homeGym ? " (your gym)" : ""}
+              </option>
+            ))}
+          </select>
+          {hasMembership && isVisiting && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Away bookings spend a PAYG top-up credit, not your membership&apos;s monthly credits.
+            </p>
+          )}
+        </div>
         <div className="mx-auto mt-6 flex w-full max-w-md items-center justify-between rounded-xl border border-card-border px-4 py-3">
           <div>
             <p className="text-2xl font-semibold tabular-nums text-foreground">{credits}</p>

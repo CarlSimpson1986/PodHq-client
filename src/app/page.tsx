@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
 import {
   getMemberByAuthUserId,
-  getCreditBalance,
+  getTotalCreditBalance,
   getActiveMembership,
   getNextUpcomingBooking,
   getPodResourcesForGym,
@@ -32,7 +32,7 @@ export default async function HomePage() {
   }
 
   const [credits, membership, upcomingBooking, resources] = await Promise.all([
-    getCreditBalance(member.id),
+    getTotalCreditBalance(member.id),
     getActiveMembership(member.id),
     getNextUpcomingBooking(member.id),
     getPodResourcesForGym(member.gym),

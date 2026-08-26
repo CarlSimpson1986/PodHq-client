@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId, getPodResourceById, isAccessComplete, getCreditBalance, getActiveMembership } from "@/lib/data/member";
+import { getMemberByAuthUserId, getPodResourceById, isAccessComplete, getTotalCreditBalance } from "@/lib/data/member";
 import { isWithinBookableHours } from "@/lib/pods/bookable-hours";
 import { createBookingSchema } from "@/lib/validation/booking";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -45,24 +45,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
   }
 
-  // Cross-gym PAYG booking (2026-08-26): a resource no longer has to
-  // belong to the member's own gym, but a member with an active
-  // membership is still locked to their home gym — membership pricing/
-  // capacity planning assumes members are drawn from that gym's own
-  // catchment (see ROADMAP.md), unlike PAYG credits, which aren't
-  // gym-scoped in the schema at all (credits table has no gym column).
+  // Cross-gym booking (2026-08-26, extended same day to cover membership
+  // members too): a resource no longer has to belong to the member's own
+  // gym at all — create_booking() itself now decides whether the member
+  // has the right credit to spend there (home-gym base credit, or a
+  // network top-up credit for a member with an active membership; a
+  // member with no membership can spend base credit anywhere, unchanged).
+  // No app-layer gym check needed here any more — the RPC's own
+  // 'insufficient_credits' exception (handled below) covers every case
+  // that used to be a flat 403 here, and does it correctly instead of
+  // blocking a membership member who actually does hold network credit.
   const resource = await getPodResourceById(parsed.data.resourceId);
   if (!resource) {
     return NextResponse.json({ status: "error", message: "Resource not found." }, { status: 404 });
-  }
-  if (resource.gym !== member.gym) {
-    const membership = await getActiveMembership(member.id);
-    if (membership) {
-      return NextResponse.json(
-        { status: "error", message: "Membership bookings are only available at your own gym." },
-        { status: 403 }
-      );
-    }
   }
 
   // Self-service-only restriction — staff can knowingly book outside these
@@ -146,7 +141,12 @@ export async function POST(request: NextRequest) {
       gym: resource.gym,
     });
 
-    const creditsRemaining = await getCreditBalance(member.id, resource.creditType);
+    // Total across both credit types — a member sitting on plenty of
+    // network top-up credit but 1 remaining home credit shouldn't get a
+    // "running low" scare; this should reflect what they can actually
+    // still spend overall, same reasoning as the Home page's headline
+    // number (getTotalCreditBalance).
+    const creditsRemaining = await getTotalCreditBalance(member.id, resource.creditType);
     if (creditsRemaining === LOW_CREDITS_THRESHOLD) {
       const lowCredits = creditsLowEmail({
         memberName: member.name,
