@@ -14,118 +14,22 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-18.md`, covering the pilot
-mechanism proof (2026-08-05) through the full initial build of the
-flat-tab member app redesign (2026-08-25) — all split out to keep this
-file within Claude Code's ~15,000-character `@`-import limit. Archives
-aren't always the strictly oldest material — the split point is "what's
-finished and stable" as much as "what's oldest" (see
-`ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s, `-16.md`'s, `-17.md`'s, and
-`-18.md`'s own header notes for five same-day examples of this). All
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-19.md`, covering the pilot
+mechanism proof (2026-08-05) through the redesign follow-up work (Coach
+restructure, leaderboard, training nudge — 2026-08-25) — all split out to
+keep this file within Claude Code's ~15,000-character `@`-import limit.
+Archives aren't always the strictly oldest material — the split point is
+"what's finished and stable" as much as "what's oldest" (see
+`ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s, `-16.md`'s, `-17.md`'s, `-18.md`'s,
+and `-19.md`'s own header notes for same-day examples of this). All
 archives are reference-only (not auto-loaded by CLAUDE.md); check them
 for full stage-by-stage build history, or `git log` on this file for the
-exact split points. This file's active content is the redesign
-follow-up (2026-08-25) plus whatever's added after it. If this file
+exact split points. This file's active content is the equipment-aware AI
+Coach work (2026-08-24) plus whatever's added after it. If this file
 grows too large again, split it the same way: move whichever section is
 most clearly finished (not necessarily the chronologically oldest) into
-a numbered `ROADMAP-ARCHIVE-19.md`, leave a pointer note at the top of
+a numbered `ROADMAP-ARCHIVE-20.md`, leave a pointer note at the top of
 this file, and update this paragraph.
-
-## Redesign follow-up: fixes, Coach restructure, leaderboard, nudges — 2026-08-25 (same day, rest of it)
-
-**Real bug, found live**: after the redesign shipped, Carl's browser had
-a stale Supabase session (valid cookie, no matching `members` row) and
-got stuck on `NoMemberProfile` with no way out except "Sign up" — which
-silently no-ops for an already-registered email. Fixed by giving that
-screen a real "Log out and try again" button (same logout sequence
-`profile-view.tsx` already uses).
-
-**Meal suggestions, three real bugs found by actually using it**: (1)
-the original nearest-fit search over `uk_food_composition` (a raw-
-ingredient table) suggested "Oil, vegetable" and "Butter, salted" as
-meals — replaced entirely with a hand-written `meal-catalog.ts` (24 real
-composed meals, real measurements + cooking steps, never LLM-generated,
-same principle as the exercise catalog's safety tips); (2) suggestions
-could still exceed the member's remaining calorie budget (a dropped
-guard from the rewrite) — now hard-filtered, with no suggestion at all
-once there's too little budget left; (3) the "pick 2 suggestions" top-up
-had no slot awareness and could suggest two dinners — now prefers an
-unused meal slot first. Food search results also got a Cooked/Raw pill
-next to the kcal figure, after Carl found "100g of cooked porridge =
-84kcal" confusing next to "100g of dry oats = 381kcal" (both correct —
-cooking doesn't destroy calories, it just adds a lot of water weight).
-
-**Dashboard → Coach restructure**: Health stopped being a primary tab
-("seemed a bit pointless" once Coach existed) — replaced by a merged
-Coach tab (check-in + a new weekly habit recommendation +
-`weekly-recommendation.ts`, pure discriminated-union logic over real
-signals, same pattern as `recovery-signal.ts` + chat). The wearable/
-recovery integration moved to a new `MoreMenu` overflow (hamburger,
-top-right) alongside Profile and a link back to the main app's booking
-Home — `PageHero` gained an optional `rightSlot` prop for this without
-touching any other page's icon+iconHref usage. Health's own premium gate
-was removed the same thread ("open it up") — the wearable connect/
-callback/refresh/disconnect routes never actually checked premium
-status, only that page's own redirect did.
-
-**Training rep-range phasing**: hypertrophy/strength blocks now run
-three 4-week phases (hypertrophy ~6-8→~10-12→~15-20 reps; strength
-6→4→3, deliberately floored at 3 — unstaffed pods, no spotter, true
-1-3-rep max-effort work is a real unsupervised-injury risk) instead of
-one flat rep target for all 12 weeks. Deliberately not copying
-Schoenfeld/Oreb's 3-week-push-then-deload cadence — that's built for
-5-6x/week near-max athletes; this member base trains 2-3x/week, so the
-real value of phasing is stimulus variety for adherence, not fatigue
-management. Surfaced on the Training block card ("Phase 2 of 3 · ~10-12
-reps"), not just a silent backend change.
-
-**Multi-site leaderboard** (Gap 3 from a pasted competitive/gap-analysis
-doc): one shared board across every gym, open to every member regardless
-of premium status, opt-in only (`members.leaderboard_opt_in`, off by
-default, shown as first name + last initial even then). Real finding
-while building it: `bookings.status` never actually transitions to
-`'completed'` anywhere in either codebase — every booking that isn't
-cancelled just sits at `'booked'` forever — so it's built on
-`pod_access_events.success` instead (a real Kisi unlock, genuinely
-cheat-proof). Three boards: sessions this month, current streak
-(consecutive weeks hitting **your own** `sessions_per_week` target, not
-an absolute count — a 2x/week and a 4x/week member can both have a
-"perfect" streak), steps this week (universal since Health opened up).
-Real bug found immediately after shipping: the steps board summed 8
-days instead of 7 (`londonMidnight().toISOString().slice(0,10)` reads
-the wrong calendar date during BST — exactly the class of bug
-`london-time.ts` warns about; fixed with `londonDateString`). Reached
-from a card on the main Home page (`/`), not just `/dashboard` —
-`/dashboard`'s card was invisible to PAYG members, who only ever see
-that page's trial banner.
-
-**Demo data, seeded then removed**: `scripts/seed-demo-data-member-123.sql`
-added realistic workout/nutrition/wearable history to Carl's own test
-account so the redesigned tabs weren't empty; `scripts/remove-demo-data-member-123.sql`
-removed it again once real data started mixing with it on the
-leaderboard (deliberately excluding two rows: today's wearable sync and
-today's food log, both genuinely real by the time cleanup ran).
-
-**Training nudge** (Gap 2): new `/api/notifications/training-nudge`
-cron, same shape as the existing `win-back` cron but personalised —
-nudges once a member's gone 2x their own normal gap between sessions
-(`7 / sessions_per_week`, floored at 4 days, capped at win-back's 21)
-without a real attendance event, not a flat day count for everyone.
-Confirmed before building: this needed no iOS/App Store dependency at
-all (it's email, same as win-back) — that constraint only applies to
-push notifications specifically, a separate already-built system with a
-real iOS 16.4+ home-screen-install limitation.
-
-**Deferred, deliberately**: Gap 6 (loyalty/rewards — points redeemable
-for free credits, à la The Gym Pod Singapore's Activity Points, earned
-faster at higher membership tiers) discussed in depth but not built —
-Carl's call to prove the leaderboard's attendance data is trustworthy
-over a few real weeks before tying free credits to it, and to not bundle
-a new financial-liability feature into the same window as the Coach
-redesign and the Hove launch. Gap 5 (tier-based feature-gating — Gold
-unlocks full AI Coach personalisation, Platinum unlocks nutrition —
-distinct from just renaming tiers, which is pure config today) raised
-but not started.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
@@ -235,3 +139,52 @@ Health's Nutrition/Training cross-links, Coach's check-in card, Home's
 leaderboard card, and the shared `ai-coach-section.tsx`/
 `recovery-status-card.tsx` components (rendered on Home/Dashboard/Health)
 all still had eager prefetch on. Same fix, all now `prefetch={false}`.
+
+## POD chat fixes: dead in production, invisible input text, tour-replay chip — 2026-08-26
+
+Carl reported the "?" chat ("POD", `help-chat-view.tsx` /
+`src/lib/help-bot.ts`) didn't work at all live, plus the chat's own text
+input showed typed text in white (invisible against the panel).
+
+**Root cause of the dead chat — not a code bug**: `askHelpBot` throws if
+neither `GROQ_API_KEY` nor `ANTHROPIC_API_KEY` is set, and podhq-client's
+Vercel project had never had either — `GROQ_API_KEY` was only ever
+configured for the sibling `../podHq` project, and (being a fully
+separate Next.js app/deploy per this file's own header) podhq-client
+needed its own copy, which it never got. Confirmed locally first (a
+throwaway Node script loaded `.env.local` and called the real Groq
+endpoint directly — 200 OK, valid reply — ruling out the prompt/logic
+itself), then confirmed via `vercel env ls production` that the key was
+absent from this project specifically. Fixed by adding `GROQ_API_KEY` to
+this project's Production (and initially Preview, though Carl later said
+Vercel only let him pick one scope at a time when he went to configure
+it himself, so Preview may still need doing manually — Production is
+what live members hit and is confirmed set).
+
+**Invisible input text**: `help-chat-view.tsx`'s `<input>` never set a
+text colour, so — sitting inside the white `.card-light` panel while the
+rest of the app is dark-themed white-on-black — it inherited the global
+white body colour with no background override, i.e. white text with no
+opaque background under it. Fixed by adding `text-card-light-foreground`
+(the pattern already used in `buy-credits-list.tsx` etc.).
+
+**"Replay app tour" as a chat question**: added a quick-question chip
+row shown when the chat is empty — "Replay app tour" plus the 3
+`FAQ_ITEMS` questions. Tour replay is a UI action the LLM can't perform,
+so that chip bypasses the API entirely and calls the same `driver.js`
+`.drive()` the existing "?" menu item already uses, via a new
+`onReplayTour` prop passed down from `onboarding-tour.tsx`; the FAQ
+chips send their question straight into the existing chat flow.
+
+**Verified**: `npx tsc --noEmit` and `eslint` on both changed files clean.
+Not yet re-tested live post-deploy (no test-account password in this
+session, same limitation as the 2026-08-25 client-cache session).
+
+**Friction, worth noting**: this session ran `vercel env ls production`
+to diagnose the missing key, which surfaces variable *names* (not
+values — Vercel's CLI shows `Hidden` for every value). Carl reacted
+strongly to seeing even just names of production env vars in the
+conversation without being asked first, despite no value ever being
+displayed or logged. Going forward: always ask before running any
+`vercel env ls/add/rm` (or equivalent) against either Vercel project,
+even for a read-only names-only listing.

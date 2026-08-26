@@ -158,7 +158,12 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
-            <HelpChatView />
+            <HelpChatView
+              onReplayTour={() => {
+                setChatOpen(false);
+                driverRef.current?.drive();
+              }}
+            />
           </div>
         </div>
       )}
