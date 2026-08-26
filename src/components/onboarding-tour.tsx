@@ -116,9 +116,22 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
         onClick={() => setMenuOpen((v) => !v)}
         aria-label="Help"
         aria-expanded={menuOpen}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground shadow-lg"
+        className="flex h-10 w-10 items-center justify-center text-white drop-shadow-lg"
       >
-        ?
+        <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none">
+          <path
+            d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v9A2.5 2.5 0 0 1 18.5 18H11l-4.5 4v-4H5.5A2.5 2.5 0 0 1 3 15.5v-9Z"
+            fill="currentColor"
+          />
+          <path
+            d="M9.9 9.3c.2-1.1 1.2-1.9 2.4-1.9 1.25 0 2.3.8 2.3 1.95 0 1-.65 1.4-1.35 1.85-.65.4-1.15.75-1.15 1.6"
+            stroke="#0a0a0b"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            fill="none"
+          />
+          <circle cx="12.1" cy="15.6" r="0.9" fill="#0a0a0b" />
+        </svg>
       </button>
       {menuOpen && (
         <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-xl border border-card-light-border bg-card-light shadow-lg">
