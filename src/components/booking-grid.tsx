@@ -306,7 +306,7 @@ export function BookingGrid({
             <p className="text-xs text-muted-foreground">credits available</p>
           </div>
           <Link
-            href="/buy-credits"
+            href={isVisiting ? `/buy-credits?gym=${encodeURIComponent(gym)}` : "/buy-credits"}
             className="rounded-lg border border-card-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-foreground hover:text-background"
           >
             Buy more

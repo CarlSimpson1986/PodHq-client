@@ -9,9 +9,14 @@ type PackageWithClaimStatus = CreditPackage & { alreadyClaimed: boolean };
 export function BuyCreditsList({
   packages,
   subscriberDiscount,
+  gym,
 }: {
   packages: PackageWithClaimStatus[];
   subscriberDiscount: boolean;
+  // Only set when buying for a gym other than home (see buy-credits/
+  // page.tsx) — omitted from the request otherwise, letting the API
+  // route's own member.gym default apply exactly as before this change.
+  gym?: string;
 }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +30,11 @@ export function BuyCreditsList({
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId, ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}) }),
+        body: JSON.stringify({
+          packageId,
+          ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
+          ...(gym ? { gym } : {}),
+        }),
       });
       const body = await res.json();
       if (body.status !== "ok" || !body.url) {
@@ -92,7 +101,10 @@ export function BuyCreditsList({
           </button>
         </div>
       ))}
-      <Link href="/book" className="mt-2 inline-block text-sm text-card-light-muted hover:text-card-light-foreground">
+      <Link
+        href={gym ? `/book?gym=${encodeURIComponent(gym)}` : "/book"}
+        className="mt-2 inline-block text-sm text-card-light-muted hover:text-card-light-foreground"
+      >
         Back to booking
       </Link>
     </div>

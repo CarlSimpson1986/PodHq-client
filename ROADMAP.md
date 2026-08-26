@@ -14,21 +14,21 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-21.md`, covering the pilot
-mechanism proof (2026-08-05) through the client-side page-cache work
-(2026-08-25) — all split out to keep this file within Claude Code's
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-22.md`, covering the pilot
+mechanism proof (2026-08-05) through the POD chat production fixes
+(2026-08-26) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s,
-`-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s, and
-`-21.md`'s own header notes for same-day examples of this). All archives
-are reference-only (not auto-loaded by CLAUDE.md); check them for full
-stage-by-stage build history, or `git log` on this file for the exact
-split points. This file's active content is the equipment-aware AI
+`-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s, `-21.md`'s,
+and `-22.md`'s own header notes for same-day examples of this). All
+archives are reference-only (not auto-loaded by CLAUDE.md); check them
+for full stage-by-stage build history, or `git log` on this file for the
+exact split points. This file's active content is the equipment-aware AI
 Coach work (2026-08-24) plus whatever's added after it. If this file
 grows too large again, split it the same way: move whichever section is
 most clearly finished (not necessarily the chronologically oldest) into
-a numbered `ROADMAP-ARCHIVE-22.md`, leave a pointer note at the top of
+a numbered `ROADMAP-ARCHIVE-23.md`, leave a pointer note at the top of
 this file, and update this paragraph.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
@@ -42,55 +42,6 @@ pod Settings panel gained equipment checkboxes. **Still outstanding**: no
 gym's equipment has actually been set yet (including Hove's already-
 confirmed real equipment) — every gym runs unrestricted until Carl works
 through the Settings panel gym by gym.
-
-## POD chat fixes: dead in production, invisible input text, tour-replay chip — 2026-08-26
-
-Carl reported the "?" chat ("POD", `help-chat-view.tsx` /
-`src/lib/help-bot.ts`) didn't work at all live, plus the chat's own text
-input showed typed text in white (invisible against the panel).
-
-**Root cause of the dead chat — not a code bug**: `askHelpBot` throws if
-neither `GROQ_API_KEY` nor `ANTHROPIC_API_KEY` is set, and podhq-client's
-Vercel project had never had either — `GROQ_API_KEY` was only ever
-configured for the sibling `../podHq` project, and (being a fully
-separate Next.js app/deploy per this file's own header) podhq-client
-needed its own copy, which it never got. Confirmed locally first (a
-throwaway Node script loaded `.env.local` and called the real Groq
-endpoint directly — 200 OK, valid reply — ruling out the prompt/logic
-itself), then confirmed via `vercel env ls production` that the key was
-absent from this project specifically. Fixed by adding `GROQ_API_KEY` to
-this project's Production (and initially Preview, though Carl later said
-Vercel only let him pick one scope at a time when he went to configure
-it himself, so Preview may still need doing manually — Production is
-what live members hit and is confirmed set).
-
-**Invisible input text**: `help-chat-view.tsx`'s `<input>` never set a
-text colour, so — sitting inside the white `.card-light` panel while the
-rest of the app is dark-themed white-on-black — it inherited the global
-white body colour with no background override, i.e. white text with no
-opaque background under it. Fixed by adding `text-card-light-foreground`
-(the pattern already used in `buy-credits-list.tsx` etc.).
-
-**"Replay app tour" as a chat question**: added a quick-question chip
-row shown when the chat is empty — "Replay app tour" plus the 3
-`FAQ_ITEMS` questions. Tour replay is a UI action the LLM can't perform,
-so that chip bypasses the API entirely and calls the same `driver.js`
-`.drive()` the existing "?" menu item already uses, via a new
-`onReplayTour` prop passed down from `onboarding-tour.tsx`; the FAQ
-chips send their question straight into the existing chat flow.
-
-**Verified**: `npx tsc --noEmit` and `eslint` on both changed files clean.
-Not yet re-tested live post-deploy (no test-account password in this
-session, same limitation as the 2026-08-25 client-cache session).
-
-**Friction, worth noting**: this session ran `vercel env ls production`
-to diagnose the missing key, which surfaces variable *names* (not
-values — Vercel's CLI shows `Hidden` for every value). Carl reacted
-strongly to seeing even just names of production env vars in the
-conversation without being asked first, despite no value ever being
-displayed or logged. Going forward: always ask before running any
-`vercel env ls/add/rm` (or equivalent) against either Vercel project,
-even for a read-only names-only listing.
 
 ## Continuous-improvement loop for POD chat: FAQ moved to a DB, unanswered questions logged — 2026-08-26 (same day, later)
 
@@ -242,3 +193,38 @@ through), so a real live pass — book home, book away with a top-up, book
 away *without* one and confirm rejection, cancel each and check the
 refund lands in the right type — matters more here than anywhere else
 shipped this session.
+
+## Network-credit follow-ups from live testing: /buy-credits messaging + gym-aware checkout — 2026-08-26 (same day, later still)
+
+Carl set up a real test membership and tried the flow live (a scratch
+membership row + cleared credits, inserted directly via a one-off admin
+script for member id 123 — same pattern as podHq's existing
+`create-pilot-member.mjs`-style scripts, not something this repo's own
+code does). Two real gaps found:
+
+**`/buy-credits` explained nothing**: the 10% subscriber discount only
+appeared once Stripe's checkout page loaded, and nothing on the page
+told a member that credit bought now works at any gym. Now shows the
+discounted price directly (original struck through) plus a short note,
+skipped for a founding member (their 20% already wins at checkout, so
+this shouldn't be previewed).
+
+**Bigger one — checkout ignored which gym you were actually buying
+for**: `/api/checkout` always priced from and paid out to `member.gym`,
+with zero awareness of the gym being browsed on `/book`. Buying credit
+while looking at Hove still priced and paid Aylesbury. Fixed by
+threading a `?gym=` param end to end: `/book`'s "Buy more" link → `/buy-
+credits` (prices from that gym's catalog, page title/subtitle say which
+gym) → `/api/checkout` (resolves and validates the gym, uses it for both
+`getCreditPackageById`/`findApplicablePromoCode` and — the actual point
+of the fix — `getGymStripeAccountId`, so the money lands with the gym
+actually being bought for) → success/cancel URLs carry the same gym back
+through so a member isn't dropped back on their home gym's `/book` after
+paying for a different one. A plain link to `/buy-credits` with no
+param behaves exactly as before this change (falls back to `member.gym`
+throughout).
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean. Not yet re-tested live after this specific fix —
+found via Carl's own live testing of the network-credit work above, not
+yet re-verified by him.
