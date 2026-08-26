@@ -14,22 +14,23 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-23.md`, covering the pilot
-mechanism proof (2026-08-05) through the POD chat continuous-improvement
-loop (2026-08-26) — all split out to keep this file within Claude Code's
-~15,000-character `@`-import limit. Archives aren't always the strictly
-oldest material — the split point is "what's finished and stable" as
-much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s,
-`-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s, `-21.md`'s,
-`-22.md`'s, and `-23.md`'s own header notes for same-day examples of
-this). All archives are reference-only (not auto-loaded by CLAUDE.md);
-check them for full stage-by-stage build history, or `git log` on this
-file for the exact split points. This file's active content is the
-equipment-aware AI Coach work (2026-08-24) plus whatever's added after
-it. If this file grows too large again, split it the same way: move
-whichever section is most clearly finished (not necessarily the
-chronologically oldest) into a numbered `ROADMAP-ARCHIVE-24.md`, leave a
-pointer note at the top of this file, and update this paragraph.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-24.md`, covering the pilot
+mechanism proof (2026-08-05) through the first cross-gym PAYG booking
+stage (2026-08-26) — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. Archives aren't always the
+strictly oldest material — the split point is "what's finished and
+stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s,
+`-15.md`'s, `-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s,
+`-21.md`'s, `-22.md`'s, `-23.md`'s, and `-24.md`'s own header notes for
+same-day examples of this). All archives are reference-only (not
+auto-loaded by CLAUDE.md); check them for full stage-by-stage build
+history, or `git log` on this file for the exact split points. This
+file's active content is the equipment-aware AI Coach work (2026-08-24)
+plus whatever's added after it. If this file grows too large again,
+split it the same way: move whichever section is most clearly finished
+(not necessarily the chronologically oldest) into a numbered
+`ROADMAP-ARCHIVE-25.md`, leave a pointer note at the top of this file,
+and update this paragraph.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
@@ -42,58 +43,6 @@ pod Settings panel gained equipment checkboxes. **Still outstanding**: no
 gym's equipment has actually been set yet (including Hove's already-
 confirmed real equipment) — every gym runs unrestricted until Carl works
 through the Settings panel gym by gym.
-
-## Cross-gym PAYG booking + Access-log visiting-member fix — 2026-08-26 (same day, later)
-
-Prompted directly by the POD chat loop above doing its job: it flagged a
-member's "can I use my membership at other gyms?" question as
-unanswered, and Carl mentioned a few members had asked this before —
-real, repeated demand, not a one-off. Confirmed real policy first:
-membership is meant to be locked to one home gym (matches what the app
-already does — every booking write is gym-scoped to `member.gym`).
-Scoped to **PAYG only** — a subscription membership's `sessions_per_week`
-capacity planning assumes members drawn from that gym's own catchment
-(same reasoning the leaderboard's per-member streak target already
-documents), so opening *membership* access network-wide risks
-oversubscribing a popular gym; PAYG credits carry no such assumption —
-confirmed the `credits` table has no `gym` column at all, and
-`create_booking()`/`cancel_booking()` (`0039_pod_resources_functions.sql`)
-already derive gym from the resource row, not from a trusted parameter —
-so cross-gym PAYG booking needed **no RPC or migration changes at all**,
-only loosening the app-layer restriction that never let a member browse
-or book any gym but their own.
-
-**Money stays put**: Carl was explicit — the gym a member buys PAYG
-credits from keeps that revenue regardless of where the credit later
-gets spent; not touched (`checkout`'s Stripe Connect routing is still
-keyed on `member.gym`, unrelated to booking). What he did want: visibility
-into which gym actually *hosted* a session, separate from which gym sold
-the credits — `bookings.gym`/`waitlist_entries.gym` already capture the
-hosting gym correctly once cross-gym booking works (no schema change
-needed), surfaced as a "(visiting from X)" tag wherever `../podHq` shows
-a booked/waiting member (Calendar's slot detail panel) — full detail in
-`../podHq`'s own ROADMAP, including a real pre-existing bug this surfaced
-in the Access log.
-
-**Changed**: `/book` accepts `?gym=` for PAYG members only (server-derived
-`canSwitchGym` from `getActiveMembership`, not trusted from the client);
-`BookingGrid` gained a gym-switcher `<select>` (PAYG-only) and an empty
-state for a gym with no bookable resources configured yet.
-`/api/bookings` and `/api/waitlist` replaced their "resource must belong
-to `member.gym`" check with "must belong to `member.gym`, OR the member
-has no active membership" — new `getPodResourceById()` (not gym-scoped,
-unlike the existing `getPodResourcesForGym()`) backs this. Booking/
-cancellation confirmation emails now say the resource's/booking's own
-gym, not `member.gym` — those could silently diverge once cross-gym
-booking is possible.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean in both repos. **Not yet tested live** — no
-test-account password in this session (same limitation as the
-2026-08-25 client-cache session); the underlying mechanism (booking by
-`resourceId` alone, gym-agnostic) is exactly what `create_booking()`
-already did today for every existing booking, until the follow-up below
-extended it further the same session.
 
 ## Cross-gym booking extended to membership members: network top-up credit — 2026-08-26 (same day, later still)
 
@@ -222,3 +171,44 @@ had to act on unprompted.
 `next build` all clean in both repos. Moderation prompt changes were
 live-tested against the real model; the network-eligible restriction and
 booking-page prompt weren't — same limitation as elsewhere this session.
+
+## Crisis-signal detection for both LLM chats — 2026-08-26 (same day, later still, urgent)
+
+Carl tested POD chat with "I want to kill myself." The abuse/off-topic
+redirect just added would have caught it and replied "I can only help
+with questions about bookings, credits, and gym policies" — a genuinely
+harmful response to send someone expressing suicidal intent, not just an
+unhelpful one. Fixed immediately as its own priority rule, not a subcase
+of the abuse redirect.
+
+**Deliberately not model-generated**: the model is only ever asked to
+*signal* detection via a hidden `<<CRISIS_SIGNAL>>` marker (new
+`CRISIS_SYSTEM_PROMPT_RULE`, overrides every other instruction in the
+prompt) — the actual reply is fixed, pre-written UK crisis-resource text
+(Samaritans 116 123, 999 if in immediate danger), shared between
+`help-bot.ts` and `coach-chat.ts` via new `src/lib/crisis-response.ts`.
+Never trusting the LLM to freely write this response itself — a wrong
+phrasing, a cut-off sentence, or a hallucinated number would matter most
+exactly when it's least acceptable to get wrong.
+
+Both `askHelpBot`/`askCoach` now return an `isCrisis` flag; both API
+routes send a distinct, urgently-worded staff email
+(`memberCrisisSignalEmail`, new `member_crisis_signal` notification
+type) the moment it fires — deliberately *not* routed through the
+generic "unanswered FAQ question" queue/email, since this is a welfare
+signal, not an FAQ gap, and shouldn't wait for someone to check a queue.
+
+**Live-tested against the real model before shipping** (a throwaway
+script, same pattern as the moderation smoke test earlier today): Carl's
+exact input, a plain "I want to kill myself," and an indirect phrasing
+("I've been thinking about ending it all") all correctly triggered the
+fixed crisis reply with nothing else in the output; a normal FAQ
+question continued answering normally, unaffected.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean. The crisis-detection prompt itself was live-
+tested against the real model (see above) — the strongest verification
+any change got today. The staff-email path (`memberCrisisSignalEmail`/
+`notifyFireAndForget`) follows the exact same pattern already proven
+live earlier today (Chat Questions), not independently re-tested this
+pass.

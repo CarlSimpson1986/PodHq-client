@@ -158,6 +158,22 @@ export function staffNewSignupEmail(input: { memberName: string; gym: string }):
   };
 }
 
+// Distinct from unansweredChatQuestionEmail below on purpose — this isn't
+// a "couldn't answer" FAQ gap, it's a welfare signal. Urgent subject line,
+// no "add this to the FAQ" framing, sent the moment help-bot.ts's crisis
+// rule fires (2026-08-26) — see src/lib/crisis-response.ts.
+export function memberCrisisSignalEmail(input: { memberName: string; gym: string; message: string }): EmailContent {
+  return {
+    subject: `⚠️ URGENT — possible welfare concern: ${input.memberName}`,
+    html: emailShell(`
+      <p style="color: #b91c1c; font-weight: 600;">A member's message to the help chat may indicate they're in crisis or at risk of self-harm.</p>
+      <p><strong>${escapeHtml(input.memberName)}</strong> at <strong>${input.gym}</strong> sent:</p>
+      <p style="margin: 16px 0; padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-style: italic;">&ldquo;${escapeHtml(input.message)}&rdquo;</p>
+      <p>They were shown crisis resources (Samaritans 116 123, 999 if in immediate danger) in the app automatically. Please consider reaching out to them directly as soon as possible, per your own welfare policy.</p>
+    `),
+  };
+}
+
 export function unansweredChatQuestionEmail(input: { memberName: string; gym: string; question: string }): EmailContent {
   return {
     subject: `POD chat couldn't answer: ${input.memberName}`,
