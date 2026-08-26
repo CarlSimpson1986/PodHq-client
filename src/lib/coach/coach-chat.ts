@@ -149,19 +149,15 @@ async function askClaude(systemPrompt: string, message: string, history: ChatTur
   return reply.trim();
 }
 
-export interface CoachChatReply {
-  reply: string;
-  // Same crisis-detection contract as help-bot.ts's HelpBotReply — see
-  // src/lib/crisis-response.ts. `reply` is already the fixed CRISIS_REPLY
-  // text in this case, never model-generated.
-  isCrisis: boolean;
-}
-
-export async function askCoach(ctx: CoachChatContext, message: string, history: ChatTurn[]): Promise<CoachChatReply> {
+export async function askCoach(ctx: CoachChatContext, message: string, history: ChatTurn[]): Promise<string> {
   const systemPrompt = buildSystemPrompt(ctx);
   const raw = await askProvider(systemPrompt, message, history);
+  // Deliberately no staff notification for this case — matches how every
+  // mainstream consumer AI product handles a crisis disclosure: show the
+  // resources directly, don't loop in a third party. See help-bot.ts's
+  // extractReply for the fuller reasoning (same rule, same source text).
   if (raw.includes(CRISIS_MARKER)) {
-    return { reply: CRISIS_REPLY, isCrisis: true };
+    return CRISIS_REPLY;
   }
-  return { reply: raw, isCrisis: false };
+  return raw;
 }

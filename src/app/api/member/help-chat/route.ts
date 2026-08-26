@@ -7,7 +7,7 @@ import { helpChatSchema } from "@/lib/validation/help-chat";
 import { logUnansweredQuestion } from "@/lib/data/help-chat-questions";
 import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
 import { notifyFireAndForget } from "@/lib/notifications/core";
-import { unansweredChatQuestionEmail, memberCrisisSignalEmail } from "@/lib/notifications/templates";
+import { unansweredChatQuestionEmail } from "@/lib/notifications/templates";
 
 // Tighter than the default 100/min. Currently free (GROQ_API_KEY), but the
 // same limit will apply once this switches to the paid Anthropic key nearer
@@ -44,19 +44,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { reply, needsStaff, isCrisis } = await askHelpBot(parsed.data.message, parsed.data.history);
-
-    // Checked first, and separately from needsStaff below — a crisis
-    // signal gets its own urgent, distinctly-worded staff alert, not the
-    // generic "couldn't answer this FAQ question" email/queue. See
-    // src/lib/crisis-response.ts.
-    if (isCrisis) {
-      const staffEmails = await getStaffRecipients(member.gym);
-      const { subject, html } = memberCrisisSignalEmail({ memberName: member.name, gym: member.gym, message: parsed.data.message });
-      for (const to of staffEmails) {
-        await notifyFireAndForget({ eventType: "member_crisis_signal", to, subject, html, gym: member.gym, memberId: member.id });
-      }
-    }
+    const { reply, needsStaff } = await askHelpBot(parsed.data.message, parsed.data.history);
 
     if (needsStaff) {
       // Awaited, not fire-and-forget — the response only needs to wait on

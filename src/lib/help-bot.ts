@@ -55,20 +55,22 @@ export interface ChatMessage {
 export interface HelpBotReply {
   reply: string;
   needsStaff: boolean;
-  // Set when the crisis rule fired — the route sends a distinct, urgent
-  // staff alert for this rather than the generic "unanswered question"
-  // queue email; `reply` is already the fixed CRISIS_REPLY text in this
-  // case, never model-generated.
-  isCrisis: boolean;
 }
 
 function extractReply(raw: string): HelpBotReply {
+  // Deliberately no staff notification for this case, unlike needsStaff
+  // below — matches how every mainstream consumer AI product handles a
+  // crisis disclosure: show the resources directly, don't loop in a third
+  // party. Gym staff have no clinical training or confidentiality
+  // obligation, and being notified without the member's consent is a real
+  // UK GDPR special-category-data question, not just an ethics one — see
+  // src/lib/crisis-response.ts.
   if (raw.includes(CRISIS_MARKER)) {
-    return { reply: CRISIS_REPLY, needsStaff: false, isCrisis: true };
+    return { reply: CRISIS_REPLY, needsStaff: false };
   }
   const needsStaff = raw.includes(UNRESOLVED_MARKER);
   const reply = raw.split(UNRESOLVED_MARKER).join("").trim();
-  return { reply, needsStaff, isCrisis: false };
+  return { reply, needsStaff };
 }
 
 export async function askHelpBot(message: string, history: ChatMessage[]): Promise<HelpBotReply> {

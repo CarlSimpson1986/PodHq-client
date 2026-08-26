@@ -212,3 +212,19 @@ any change got today. The staff-email path (`memberCrisisSignalEmail`/
 `notifyFireAndForget`) follows the exact same pattern already proven
 live earlier today (Chat Questions), not independently re-tested this
 pass.
+
+**Correction, same day, minutes later**: Carl pointed out "ChatGPT doesn't
+get an urgent email" — a real objection, not just a style difference.
+Mental-health disclosures are UK GDPR special-category data; notifying
+gym staff (untrained, no confidentiality obligation, no consent asked)
+is a real data-protection question, and once staff are told, "you knew
+and didn't act" becomes a liability that doesn't exist if the business
+was never told — exactly why every mainstream consumer AI product shows
+crisis resources directly and loops in no one else. Removed the staff
+email entirely (`memberCrisisSignalEmail`, `member_crisis_signal` event
+type, and the `isCrisis` plumbing in both API routes) — `askCoach`
+reverted to its original plain-string return, since exposing `isCrisis`
+had no remaining consumer. The member-facing fix (fixed crisis-resource
+reply, never model-generated) is unchanged. Should have flagged this
+trade-off before building the staff-alert half, not shipped it as a
+default.
