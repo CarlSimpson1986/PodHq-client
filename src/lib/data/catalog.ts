@@ -17,7 +17,7 @@ export async function getCreditPackages(gym: string): Promise<CreditPackage[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("catalog_items")
-    .select("id, item_id, name, label, credits, credit_type, price_gbp, one_time_per_member")
+    .select("id, item_id, name, label, credits, credit_type, price_gbp, one_time_per_member, network_eligible")
     .eq("gym", gym)
     .eq("type", "credit_pack")
     .eq("enabled", true)
@@ -33,6 +33,7 @@ export async function getCreditPackages(gym: string): Promise<CreditPackage[]> {
     creditType: row.credit_type,
     priceGBP: row.price_gbp,
     oneTimePerMember: row.one_time_per_member,
+    networkEligible: row.network_eligible,
   }));
 }
 

@@ -73,16 +73,18 @@ export async function POST(request: NextRequest) {
   // Member (20% off, permanent) takes priority over the subscriber
   // top-up discount (10% off, 2026-08-26) rather than stacking the two —
   // simplest rule, and a founding member's discount is already the
-  // bigger one. The subscriber discount itself doesn't check what this
-  // credit will actually be spent on — the webhook route separately
-  // decides whether it lands as network (cross-gym) or base (home-gym)
-  // credit purely from current membership status, unrelated to price.
+  // bigger one. The subscriber discount only applies to a network-
+  // eligible pack (pkg.networkEligible — plain gym-session credit, not a
+  // PT pack or Recovery Room pack, see podHq's
+  // 0065_catalog_network_eligible.sql) — it's an incentive specifically
+  // for buying cross-gym-usable credit, not a blanket subscriber
+  // discount on everything.
   // Claimed atomically now (before payment) via redeem_promo_code() — see
   // podHq's 0044_promo_codes.sql for the accepted abandoned-checkout tradeoff.
   let priceGBP = pkg.priceGBP;
   if (member.founding_member) {
     priceGBP = pkg.priceGBP * 0.8;
-  } else if (await getActiveMembership(member.id)) {
+  } else if (pkg.networkEligible && (await getActiveMembership(member.id))) {
     priceGBP = pkg.priceGBP * 0.9;
   }
   if (parsed.data.promoCode) {
@@ -134,6 +136,7 @@ export async function POST(request: NextRequest) {
         credits: String(pkg.credits),
         packageId: pkg.id,
         creditType: pkg.creditType,
+        networkEligible: String(pkg.networkEligible),
       },
       success_url: `${origin}${bookRedirect}${bookRedirect.includes("?") ? "&" : "?"}purchase=success`,
       cancel_url: `${origin}/buy-credits?purchase=cancelled${gym !== member.gym ? `&gym=${encodeURIComponent(gym)}` : ""}`,
