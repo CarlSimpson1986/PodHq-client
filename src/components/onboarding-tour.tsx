@@ -58,20 +58,20 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
 ];
 
 // Guided first-login walkthrough (driver.js). Auto-runs once per member —
-// tourCompletedAt is null until the tour finishes or is closed early, then
-// the "?" menu below can replay it on demand without touching that flag
-// again, or open the Chat panel. v1 is deliberately scoped to the home
-// screen only (no cross-page steps) — see podhq-client's ROADMAP.md for
-// why. The static FAQ page (and its own "Replay app tour" button, which
-// used to force-launch the tour from there via a `?tour=replay` query
-// param) was removed 2026-08-22 once Chat graduated to a real LLM
-// covering the same 3 questions plus the full Ts & Cs — this is now the
-// only page with a "?" button, so that cross-page mechanism no longer has
-// a caller.
+// tourCompletedAt is null until the tour finishes or is closed early.
+// The "?" button opens Chat directly (2026-08-26 — was a two-item
+// dropdown menu with "Replay app tour"/"Chat", but the tour option was
+// redundant with the "Replay app tour" chip already inside the chat
+// panel itself, so the member saw the same option twice on the very
+// first tap). v1 is deliberately scoped to the home screen only (no
+// cross-page steps) — see podhq-client's ROADMAP.md for why. The static
+// FAQ page (and its own "Replay app tour" button, which used to
+// force-launch the tour from there via a `?tour=replay` query param)
+// was removed 2026-08-22 once Chat graduated to a real LLM covering the
+// same 3 questions plus the full Ts & Cs — this is now the only page
+// with a "?" button, so that cross-page mechanism no longer has a caller.
 export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | null }) {
   const driverRef = useRef<Driver | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
@@ -97,25 +97,13 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [menuOpen]);
-
   return (
-    <div ref={menuRef} className="fixed right-4 top-4 z-20">
+    <div className="fixed right-4 top-4 z-20">
       <button
         type="button"
         id="tour-help-button"
-        onClick={() => setMenuOpen((v) => !v)}
+        onClick={() => setChatOpen(true)}
         aria-label="Help"
-        aria-expanded={menuOpen}
         className="flex h-10 w-10 items-center justify-center text-white drop-shadow-lg"
       >
         <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none">
@@ -133,30 +121,6 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
           <circle cx="12.1" cy="15.6" r="0.9" fill="#0a0a0b" />
         </svg>
       </button>
-      {menuOpen && (
-        <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-xl border border-card-light-border bg-card-light shadow-lg">
-          <button
-            type="button"
-            onClick={() => {
-              setMenuOpen(false);
-              driverRef.current?.drive();
-            }}
-            className="block w-full px-4 py-3 text-left text-sm font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
-          >
-            Replay app tour
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMenuOpen(false);
-              setChatOpen(true);
-            }}
-            className="block w-full border-t border-card-light-border px-4 py-3 text-left text-sm font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
-          >
-            Chat
-          </button>
-        </div>
-      )}
       {chatOpen && (
         <div className="fixed inset-x-4 bottom-4 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl sm:inset-x-auto sm:right-4 sm:w-96">
           <div className="flex items-center justify-between border-b border-card-light-border px-4 py-3">
