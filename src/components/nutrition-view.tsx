@@ -296,8 +296,14 @@ function MealSuggestionsCard({
 }) {
   const [suggestions, setSuggestions] = useState<MealSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Portion scaling for suggestions (2026-08-26) — previously "+ Add"
+  // logged the catalog's fixed serving straight away with no way to
+  // adjust it, unlike search/barcode/custom, which already went through
+  // QuantityStep. Reuses that same component instead of a bespoke
+  // duplicate, pre-filled at the catalog's own suggested grams rather
+  // than QuantityStep's normal 100g default.
+  const [adjusting, setAdjusting] = useState<MealSuggestion | null>(null);
 
   async function load() {
     setLoading(true);
@@ -315,32 +321,34 @@ function MealSuggestionsCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  async function addSuggestion(s: MealSuggestion) {
-    setAdding(s.name);
-    try {
-      await fetch("/api/member/nutrition/log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          meal: s.meal,
-          foodName: s.name,
-          quantityG: s.quantityG,
-          caloriesPer100g: s.caloriesPer100g,
-          proteinPer100g: s.proteinPer100g,
-          carbsPer100g: s.carbsPer100g,
-          fatPer100g: s.fatPer100g,
-          source: "manual",
-          loggedDate: date,
-        }),
-      });
-      onAdded();
-      load();
-    } finally {
-      setAdding(null);
-    }
-  }
-
   if (!loading && suggestions.length === 0) return null;
+
+  if (adjusting) {
+    return (
+      <div className="rounded-xl border border-card-light-border bg-accent/5 p-4">
+        <QuantityStep
+          meal={adjusting.meal}
+          food={{
+            name: adjusting.name,
+            brand: null,
+            caloriesPer100g: adjusting.caloriesPer100g,
+            proteinPer100g: adjusting.proteinPer100g,
+            carbsPer100g: adjusting.carbsPer100g,
+            fatPer100g: adjusting.fatPer100g,
+            source: "manual",
+          }}
+          initialQuantity={adjusting.quantityG}
+          loggedDate={date}
+          onBack={() => setAdjusting(null)}
+          onLogged={() => {
+            setAdjusting(null);
+            onAdded();
+            load();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-card-light-border bg-accent/5 p-4">
@@ -371,11 +379,10 @@ function MealSuggestionsCard({
                   </div>
                   <button
                     type="button"
-                    onClick={() => addSuggestion(s)}
-                    disabled={adding !== null}
-                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
+                    onClick={() => setAdjusting(s)}
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground"
                   >
-                    {adding === s.name ? "Adding..." : "+ Add"}
+                    + Add
                   </button>
                 </div>
 
@@ -857,15 +864,30 @@ function FoodResultRow({ food, onSelect }: { food: FoodOption; onSelect: () => v
 function QuantityStep({
   meal,
   food,
+  initialQuantity,
+  loggedDate,
   onBack,
   onLogged,
 }: {
   meal: Meal;
   food: FoodOption;
+  // Meal suggestions (MealSuggestionsCard) open this pre-filled at the
+  // catalog's own suggested serving (e.g. 250g) rather than resetting to
+  // a generic 100g — 2026-08-26, portions previously couldn't be scaled
+  // at all from that card, this is the same scaling step search/barcode/
+  // custom already had, just given a sensible starting point instead of
+  // always 100.
+  initialQuantity?: number;
+  // Only meal suggestions pass this — search/barcode/custom (via
+  // AddFoodSheet) have never sent it and always log to today, unrelated
+  // pre-existing behaviour this fix isn't touching. Meal suggestions
+  // already respected whichever date was being viewed before this
+  // change, so that still needs to reach the log API here too.
+  loggedDate?: string;
   onBack: () => void;
   onLogged: () => void;
 }) {
-  const [quantity, setQuantity] = useState(100);
+  const [quantity, setQuantity] = useState(initialQuantity ?? 100);
   const [logging, setLogging] = useState(false);
   const factor = quantity / 100;
 
@@ -885,6 +907,7 @@ function QuantityStep({
           carbsPer100g: food.carbsPer100g,
           fatPer100g: food.fatPer100g,
           source: food.source,
+          ...(loggedDate ? { loggedDate } : {}),
         }),
       });
       onLogged();

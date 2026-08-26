@@ -14,22 +14,23 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-25.md`, covering the pilot
-mechanism proof (2026-08-05) through cross-gym booking extended to
-membership members (2026-08-26) — all split out to keep this file within
-Claude Code's ~15,000-character `@`-import limit. Archives aren't always
-the strictly oldest material — the split point is "what's finished and
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-26.md`, covering the pilot
+mechanism proof (2026-08-05) through the network-credit live-testing
+follow-ups (2026-08-26) — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. Archives aren't always the
+strictly oldest material — the split point is "what's finished and
 stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s,
 `-15.md`'s, `-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s,
-`-21.md`'s, `-22.md`'s, `-23.md`'s, `-24.md`'s, and `-25.md`'s own header
-notes for same-day examples of this). All archives are reference-only
-(not auto-loaded by CLAUDE.md); check them for full stage-by-stage build
-history, or `git log` on this file for the exact split points. This
-file's active content is the equipment-aware AI Coach work (2026-08-24)
-plus whatever's added after it. If this file grows too large again,
-split it the same way: move whichever section is most clearly finished
-(not necessarily the chronologically oldest) into a numbered
-`ROADMAP-ARCHIVE-26.md`, leave a pointer note at the top of this file,
+`-21.md`'s, `-22.md`'s, `-23.md`'s, `-24.md`'s, `-25.md`'s, and `-26.md`'s
+own header notes for same-day examples of this). All archives are
+reference-only (not auto-loaded by CLAUDE.md); check them for full
+stage-by-stage build history, or `git log` on this file for the exact
+split points. This file's active content is the equipment-aware AI
+Coach work (2026-08-24) plus whatever's added after it. If this file
+grows too large again, split it the same way: move whichever section is
+most clearly finished (not necessarily the chronologically oldest) into
+a numbered `ROADMAP-ARCHIVE-27.md`, leave a pointer note at the top of
+this file,
 and update this paragraph.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
@@ -43,41 +44,6 @@ pod Settings panel gained equipment checkboxes. **Still outstanding**: no
 gym's equipment has actually been set yet (including Hove's already-
 confirmed real equipment) — every gym runs unrestricted until Carl works
 through the Settings panel gym by gym.
-
-## Network-credit follow-ups from live testing: /buy-credits messaging + gym-aware checkout — 2026-08-26 (same day, later still)
-
-Carl set up a real test membership and tried the flow live (a scratch
-membership row + cleared credits, inserted directly via a one-off admin
-script for member id 123 — same pattern as podHq's existing
-`create-pilot-member.mjs`-style scripts, not something this repo's own
-code does). Two real gaps found:
-
-**`/buy-credits` explained nothing**: the 10% subscriber discount only
-appeared once Stripe's checkout page loaded, and nothing on the page
-told a member that credit bought now works at any gym. Now shows the
-discounted price directly (original struck through) plus a short note,
-skipped for a founding member (their 20% already wins at checkout, so
-this shouldn't be previewed).
-
-**Bigger one — checkout ignored which gym you were actually buying
-for**: `/api/checkout` always priced from and paid out to `member.gym`,
-with zero awareness of the gym being browsed on `/book`. Buying credit
-while looking at Hove still priced and paid Aylesbury. Fixed by
-threading a `?gym=` param end to end: `/book`'s "Buy more" link → `/buy-
-credits` (prices from that gym's catalog, page title/subtitle say which
-gym) → `/api/checkout` (resolves and validates the gym, uses it for both
-`getCreditPackageById`/`findApplicablePromoCode` and — the actual point
-of the fix — `getGymStripeAccountId`, so the money lands with the gym
-actually being bought for) → success/cancel URLs carry the same gym back
-through so a member isn't dropped back on their home gym's `/book` after
-paying for a different one. A plain link to `/buy-credits` with no
-param behaves exactly as before this change (falls back to `member.gym`
-throughout).
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean. Not yet re-tested live after this specific fix —
-found via Carl's own live testing of the network-credit work above, not
-yet re-verified by him.
 
 ## Network credit scoped to gym packs + both LLM chats hardened — 2026-08-26 (same day, later still)
 
@@ -223,3 +189,69 @@ sessions/week) — no new setup needed there.
 **Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
 `next build` all clean. The tool-calling loop and PubMed search were
 both live-tested against the real APIs (see above).
+
+## Coach Manual (tone/philosophy) + nutrition portion-scaling fix — 2026-08-26 (same day, end of session)
+
+**Coach Manual**: Carl wanted to be able to shape the Coach's tone/style
+himself without a code review each time, but a full admin-editable field
+in podHq was overkill for a single-operator business — landed on a plain
+file instead, `src/lib/coach/coach-manual.ts`, a text block Carl edits
+directly (with my help) and no deploy step beyond the normal one.
+Appended into `buildSystemPrompt()` as its own clearly-labelled section,
+layered on top of (never able to override) the hard rules already there
+— crisis detection, injection resistance, citation-only-from-real-
+PubMed-results.
+
+First draft covers: the pod format's actual appeal (a private, judgment-
+free space for a genuine mix of clientele — intimidated beginners,
+time-poor professionals, self-conscious members), warm-but-direct
+non-patronizing tone, consistency-over-intensity (this member base
+trains 2-3x/week, not like competitive athletes), no shame-based
+motivation.
+
+**Real feedback from Carl's own test conversation, acted on same
+session**: reviewed his actual `coach_conversations` row (Coach chat
+persists full history per member, unlike POD chat) — a "machines vs
+free weights" answer had called free weights inherently more
+"functional," a vague gym-culture claim without real backing (machines
+and free weights produce comparable hypertrophy when volume/effort are
+matched — "functional" gets used as a buzzword far more than a precise
+claim). Added an explicit manual rule against repeating fitness dogma as
+settled fact. Live-retested the identical question: the answer now
+correctly leads with "comparable for muscle growth," though it still
+used the word "functional" once, softened ("can feel more functional"
+rather than stated as fact) — a real, verified improvement, not a full
+elimination; Carl was told this honestly rather than oversold.
+
+**Nutrition portion-scaling gap, found from a separate real complaint**:
+Carl logged 3 real meals (smoked salmon & eggs, chicken wrap, salmon)
+and found the numbers felt off. Investigated: `MealSuggestionsCard`
+("What to eat next") let a member log the catalog's fixed serving with
+zero ability to scale it — the ONE gap in an otherwise-working system,
+since search/barcode/custom entries already had this via `QuantityStep`
+(a working grams input + live-recalculated macros). Fixed by routing
+suggestions through that same `QuantityStep` instead of a bespoke
+fixed-log call, pre-filled at the catalog's own suggested grams (not
+`QuantityStep`'s normal 100g default) so adjusting from there is a
+small tweak, not starting from scratch. Also threads a `loggedDate`
+prop through so a suggestion logged while viewing a non-today date still
+logs to that date, matching suggestions' existing (correct) behaviour —
+worth noting as a separate, pre-existing quirk found along the way:
+search/barcode/custom (`AddFoodSheet`) has never respected the viewed
+date at all, always logging to today regardless — not touched, out of
+scope for this fix.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean. The Coach Manual's "functional" fix was live-
+tested against the real model; the nutrition portion-scaling fix was
+not (no test-account password in this session for browser testing, same
+limitation as elsewhere).
+
+**Deferred to next session, Carl's own call**: improving how reliably
+PubMed actually surfaces citable, on-topic evidence — today's build
+proved the tool-calling mechanism works and is appropriately cautious
+(won't force an irrelevant citation), but a real search often doesn't
+surface a directly on-topic paper for a given coaching question, so a
+visible citation won't appear every time it plausibly could. Also open:
+whether to explicitly ban the word "functional" outright in the Coach
+Manual, since the softened version still slipped through once.
