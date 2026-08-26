@@ -14,22 +14,22 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-20.md`, covering the pilot
-mechanism proof (2026-08-05) through the nav-context-switch fix and
-nav-lag investigation (2026-08-25) — all split out to keep this file
-within Claude Code's ~15,000-character `@`-import limit. Archives aren't
-always the strictly oldest material — the split point is "what's
-finished and stable" as much as "what's oldest" (see
-`ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s, `-16.md`'s, `-17.md`'s, `-18.md`'s,
-`-19.md`'s, and `-20.md`'s own header notes for same-day examples of
-this). All archives are reference-only (not auto-loaded by CLAUDE.md);
-check them for full stage-by-stage build history, or `git log` on this
-file for the exact split points. This file's active content is the
-equipment-aware AI Coach work (2026-08-24) plus whatever's added after
-it. If this file grows too large again, split it the same way: move
-whichever section is most clearly finished (not necessarily the
-chronologically oldest) into a numbered `ROADMAP-ARCHIVE-21.md`, leave a
-pointer note at the top of this file, and update this paragraph.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-21.md`, covering the pilot
+mechanism proof (2026-08-05) through the client-side page-cache work
+(2026-08-25) — all split out to keep this file within Claude Code's
+~15,000-character `@`-import limit. Archives aren't always the strictly
+oldest material — the split point is "what's finished and stable" as
+much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s,
+`-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s, and
+`-21.md`'s own header notes for same-day examples of this). All archives
+are reference-only (not auto-loaded by CLAUDE.md); check them for full
+stage-by-stage build history, or `git log` on this file for the exact
+split points. This file's active content is the equipment-aware AI
+Coach work (2026-08-24) plus whatever's added after it. If this file
+grows too large again, split it the same way: move whichever section is
+most clearly finished (not necessarily the chronologically oldest) into
+a numbered `ROADMAP-ARCHIVE-22.md`, leave a pointer note at the top of
+this file, and update this paragraph.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
@@ -42,55 +42,6 @@ pod Settings panel gained equipment checkboxes. **Still outstanding**: no
 gym's equipment has actually been set yet (including Hove's already-
 confirmed real equipment) — every gym runs unrestricted until Carl works
 through the Settings panel gym by gym.
-
-## Client-side page cache for bottom-nav tabs — 2026-08-25 (same day, later)
-
-Carl still noticed a slight residual lag and asked whether a native app
-would be less laggy; the honest answer was "somewhat, but mostly because
-native screens don't wait on a network round trip to render the nav
-shell" — closeable on the web side with a client cache instead of a
-native rewrite. Carl asked for that cache layer.
-
-Enabled via Next 16's built-in `experimental.staleTimes.dynamic: 30` in
-`next.config.ts` — once a member has visited a dynamic page (Dashboard/
-Training/Nutrition/Coach etc.), Next's in-memory Client Router Cache
-reuses that RSC payload for 30s on revisits instead of re-fetching, so
-bouncing between recently-visited bottom-nav tabs feels instant. No page
-components changed — this is pure Next router config, still fully
-server-verified Server Components, no client-side Supabase queries
-(CLAUDE.md's rule intact).
-
-**Real risk found and fixed before enabling it**: the Client Cache is
-in-memory per browser tab, keyed by route, not by member. Per Next's own
-docs, `router.refresh()` only clears the cache for its *own* destination
-route, not other previously-visited ones, and nothing at all clears it on
-a plain `router.push()`. Every one of this app's auth-identity-changing
-navigations (login, both logout entry points, password reset, magic-link
-callback) used exactly that pattern — meaning a member logging out and a
-different member logging in on the same device within that 30s window
-could have briefly been served the first member's cached Dashboard/
-Training/Nutrition data. Same bug class as the 2026-08-16 OWASP finding
-that made `public/sw.js` allowlist-only, just via Next's router cache
-instead of the service worker's. Fixed by switching all five of those
-transitions from `router.push`/`router.refresh` to a real
-`window.location.href` navigation — the Client Cache is documented as
-"cleared on page refresh", which a full reload guarantees outright.
-Touched files: `login/page.tsx`, `reset-password/page.tsx`,
-`auth/callback/page.tsx`, `profile-view.tsx`, `no-member-profile.tsx`.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98),
-`next build` all clean. Live: logout confirmed landing cleanly on
-`/login` with a real full-page reload (not a client transition). Login/
-reset-password/callback weren't re-tested live (no test-account password
-in this session) but follow the identical, now-proven pattern.
-
-**Update, same day**: spotted a leftover unguarded `/book` prefetch on
-Training while checking the above and swept the rest of the codebase for
-the same original prefetch-storm pattern — Training's next-session card,
-Health's Nutrition/Training cross-links, Coach's check-in card, Home's
-leaderboard card, and the shared `ai-coach-section.tsx`/
-`recovery-status-card.tsx` components (rendered on Home/Dashboard/Health)
-all still had eager prefetch on. Same fix, all now `prefetch={false}`.
 
 ## POD chat fixes: dead in production, invisible input text, tour-replay chip — 2026-08-26
 
@@ -234,5 +185,60 @@ booking is possible.
 test-account password in this session (same limitation as the
 2026-08-25 client-cache session); the underlying mechanism (booking by
 `resourceId` alone, gym-agnostic) is exactly what `create_booking()`
-already does today for every existing booking, so the main untested
-surface is the new UI/authorization layer, not the RPC path itself.
+already did today for every existing booking, until the follow-up below
+extended it further the same session.
+
+## Cross-gym booking extended to membership members: network top-up credit — 2026-08-26 (same day, later still)
+
+The cross-gym-PAYG question above turned out to have a follow-on: Carl
+asked whether membership members could get the same cross-gym access,
+via a separate PAYG top-up (10% off) rather than opening their
+subscription credit itself network-wide. Landed on a real
+`create_booking()`/`cancel_booking()` rewrite (podHq's own ROADMAP has
+the full mechanism) rather than a lighter "has this member ever bought a
+top-up" eligibility gate that was considered first — Carl's own
+pushback ("if there's a bug in create_booking at any time, that's
+already an issue") was fair: criticality alone isn't a reason to avoid
+touching a function, and he confirmed he can and will test the real flow
+live himself (booking/cancelling at home and away, with and without a
+top-up), which was the actual gap, not the change itself.
+
+**Mechanism**: a PAYG top-up bought while the member has an active
+membership now mints a `<type>_network` credit (e.g. `pod_network`)
+instead of the base type — spendable at any gym; a top-up bought with no
+active membership keeps minting the base type unchanged (no gym
+restriction to unlock for those members, same as already shipped).
+`checkout/route.ts`'s webhook insert points now resolve this via a new
+`resolvePurchaseCreditType()` — membership renewals (`reason:
+'membership'`) are untouched, always base-type, always home-gym-only.
+Added a 10% checkout discount for members with an active membership
+buying a credit pack (doesn't stack with the existing 20% Founding
+Member discount — that one wins if both apply; an explicit promo code
+still overrides either).
+
+**Removed, now redundant**: the blanket "resource must belong to
+member's own gym unless PAYG" checks in `/api/bookings` and
+`/api/waitlist` from the same-day change above — `create_booking()`
+itself now makes the correct type-aware decision, and the old flat check
+would have wrongly blocked a membership member who *does* hold network
+credit. Waitlist joining dropped the check entirely rather than
+duplicating the credit logic — joining doesn't spend anything, the real
+gate is `create_booking()` at accept time.
+
+**Credit-balance display made honest**: `/book`'s per-resource number
+and the Home page's headline number both had to stop assuming a single
+balance. Home page now shows `getTotalCreditBalance()` (base + network
+summed) as a general "you have N credits" figure; `/book` shows the
+*actually spendable* number for the gym currently being viewed — total
+at home, network-only away for a membership member — so a member with
+no network credit sees "0" at another gym and understands why, rather
+than a misleading total that includes credit they can't use there.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean in both repos. **Not yet tested live** — same
+limitation as above; this is the higher-stakes surface of the two
+(directly rewrites the credit-deduction/refund logic every booking goes
+through), so a real live pass — book home, book away with a top-up, book
+away *without* one and confirm rejection, cancel each and check the
+refund lands in the right type — matters more here than anywhere else
+shipped this session.

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
+import { getMemberByAuthUserId } from "@/lib/data/member";
 import { joinWaitlistSchema } from "@/lib/validation/waitlist";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -39,9 +39,11 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Same cross-gym PAYG rule as /api/bookings (2026-08-26): a resource no
-  // longer has to belong to the member's own gym, but a member with an
-  // active membership is still locked to their home gym.
+  // Cross-gym waitlisting (2026-08-26): a resource no longer has to
+  // belong to the member's own gym — no credit-eligibility check needed
+  // here either, unlike /api/bookings. Joining a waitlist doesn't spend
+  // anything; the real gate is create_booking()'s own credit-type check,
+  // which only matters at the moment an offer is actually accepted.
   const { data: resource } = await admin
     .from("pod_resources")
     .select("id, gym, pod_capacity")
@@ -49,15 +51,6 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (!resource) {
     return NextResponse.json({ status: "error", message: "Resource not found." }, { status: 404 });
-  }
-  if (resource.gym !== member.gym) {
-    const membership = await getActiveMembership(member.id);
-    if (membership) {
-      return NextResponse.json(
-        { status: "error", message: "Membership bookings are only available at your own gym." },
-        { status: 403 }
-      );
-    }
   }
 
   // Only a genuinely full slot can be waitlisted — a member with an open

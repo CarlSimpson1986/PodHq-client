@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId } from "@/lib/data/member";
+import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getStripeClient } from "@/lib/stripe";
 import { getGymStripeAccountId } from "@/lib/data/stripe-config";
@@ -54,12 +54,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // A promo code the member typed in takes priority over the automatic
-  // Founding Member discount rather than stacking with it — an explicit
-  // code is a deliberate choice, the founding discount is passive.
+  // A promo code the member typed in takes priority over either automatic
+  // discount below rather than stacking — an explicit code is a
+  // deliberate choice, both automatic discounts are passive. Founding
+  // Member (20% off, permanent) takes priority over the subscriber
+  // top-up discount (10% off, 2026-08-26) rather than stacking the two —
+  // simplest rule, and a founding member's discount is already the
+  // bigger one. The subscriber discount itself doesn't check what this
+  // credit will actually be spent on — the webhook route separately
+  // decides whether it lands as network (cross-gym) or base (home-gym)
+  // credit purely from current membership status, unrelated to price.
   // Claimed atomically now (before payment) via redeem_promo_code() — see
   // podHq's 0044_promo_codes.sql for the accepted abandoned-checkout tradeoff.
-  let priceGBP = member.founding_member ? pkg.priceGBP * 0.8 : pkg.priceGBP;
+  let priceGBP = pkg.priceGBP;
+  if (member.founding_member) {
+    priceGBP = pkg.priceGBP * 0.8;
+  } else if (await getActiveMembership(member.id)) {
+    priceGBP = pkg.priceGBP * 0.9;
+  }
   if (parsed.data.promoCode) {
     const promoCode = await findApplicablePromoCode(member.gym, parsed.data.promoCode, pkg.catalogItemId);
     if (!promoCode) {

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripeClient } from "@/lib/stripe";
+import { getActiveMembership, networkCreditType } from "@/lib/data/member";
 import { notifyFireAndForget } from "@/lib/notifications/core";
 import { resolveMemberContact } from "@/lib/notifications/resolve-member-contact";
 import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
@@ -162,7 +163,7 @@ export async function POST(request: NextRequest) {
       amount: credits,
       reason: "purchase",
       catalog_item_id: checkoutSession.metadata?.packageId ?? null,
-      credit_type: checkoutSession.metadata?.creditType ?? "pod",
+      credit_type: await resolvePurchaseCreditType(memberId, checkoutSession.metadata?.creditType ?? "pod"),
       stripe_event_id: event.id,
       stripe_payment_intent_id: resolvePaymentIntentId(checkoutSession.payment_intent),
     });
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
         amount: credits,
         reason: "purchase",
         catalog_item_id: paymentIntent.metadata?.packageId ?? null,
-        credit_type: paymentIntent.metadata?.creditType ?? "pod",
+        credit_type: await resolvePurchaseCreditType(memberId, paymentIntent.metadata?.creditType ?? "pod"),
         stripe_event_id: event.id,
         stripe_payment_intent_id: paymentIntent.id,
       });
@@ -578,6 +579,21 @@ async function saveStripeCustomerId(
       });
     }
   }
+}
+
+// Cross-gym PAYG top-up credit (2026-08-26): a 'purchase'-reason credit
+// bought while the member currently has an active membership is minted
+// as the network type instead of the base type — spendable at any gym,
+// vs. their subscription's own base-type credit staying home-gym-only.
+// A member with no active membership keeps the base type, unchanged —
+// they already have no gym restriction at all (see podHq's
+// 0064_pod_network_credit.sql for the create_booking()/cancel_booking()
+// logic this backs). Only 'purchase'-reason inserts call this — a
+// membership renewal (reason: 'membership') always stays the base type,
+// which is exactly the credit that's meant to be home-gym-locked.
+async function resolvePurchaseCreditType(memberId: number, baseCreditType: string): Promise<string> {
+  const membership = await getActiveMembership(memberId);
+  return membership ? networkCreditType(baseCreditType) : baseCreditType;
 }
 
 function resolvePaymentMethodId(value: string | Stripe.PaymentMethod | null | undefined): string | null {
