@@ -82,6 +82,12 @@ export function BookingGrid({
   const [creditBalances, setCreditBalances] = useState(creditsByType);
   const [pendingSlot, setPendingSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set alongside `error` specifically for an insufficient-credits failure
+  // away from home — a plain error message left the member to work out
+  // for themselves that a top-up would fix it and where to get one (Carl's
+  // ask, 2026-08-26); this surfaces the fix right where the failure
+  // happened instead.
+  const [showTopUpPrompt, setShowTopUpPrompt] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [waitlistSlots, setWaitlistSlots] = useState<MemberWaitlistSlot[]>(initialWaitlistSlots);
   const [pendingWaitlistSlot, setPendingWaitlistSlot] = useState<string | null>(null);
@@ -163,6 +169,7 @@ export function BookingGrid({
     // clicked, so per-slot pendingSlot alone isn't a tight enough guard.
     if (pendingSlot || !resource) return;
     setError(null);
+    setShowTopUpPrompt(false);
     setSuccess(null);
     setPendingSlot(slot.toISOString());
     try {
@@ -174,6 +181,10 @@ export function BookingGrid({
       const body = await res.json();
       if (body.status !== "ok") {
         setError(body.message ?? "Could not book that slot.");
+        // Matches the exact message /api/bookings sends for
+        // insufficient_credits specifically — not slot_full/slot_reserved/
+        // duplicate, which a top-up wouldn't fix.
+        setShowTopUpPrompt(body.message === "Not enough credits to book this slot." && gym !== homeGym);
         return;
       }
       setBookings((prev) => [
@@ -381,7 +392,16 @@ export function BookingGrid({
           {membershipSuccess && (
             <p className="text-sm text-success">Membership active — your monthly credits will land shortly.</p>
           )}
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && (
+            <div className="text-sm text-danger">
+              <p>{error}</p>
+              {showTopUpPrompt && (
+                <Link href={`/buy-credits?gym=${encodeURIComponent(gym)}`} className="mt-1 inline-block font-semibold underline">
+                  Buy a top-up for {gym} →
+                </Link>
+              )}
+            </div>
+          )}
           {success && <p className="text-sm text-success">{success}</p>}
           {resources.length === 0 && (
             <p className="text-sm text-card-light-muted">

@@ -13,4 +13,10 @@ export interface CreditPackage {
   creditType: string;
   priceGBP: number;
   oneTimePerMember: boolean;
+  // Whether a PAYG purchase of this pack can become a cross-gym network
+  // credit for a member with an active membership (2026-08-26) — true for
+  // a plain gym-session pack, false for anything tied to a specific
+  // trainer/gym (PT packs) or already its own separate credit type
+  // (Recovery Room). See podHq's 0065_catalog_network_eligible.sql.
+  networkEligible: boolean;
 }

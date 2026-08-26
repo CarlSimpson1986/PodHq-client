@@ -163,7 +163,11 @@ export async function POST(request: NextRequest) {
       amount: credits,
       reason: "purchase",
       catalog_item_id: checkoutSession.metadata?.packageId ?? null,
-      credit_type: await resolvePurchaseCreditType(memberId, checkoutSession.metadata?.creditType ?? "pod"),
+      credit_type: await resolvePurchaseCreditType(
+        memberId,
+        checkoutSession.metadata?.creditType ?? "pod",
+        checkoutSession.metadata?.networkEligible !== "false"
+      ),
       stripe_event_id: event.id,
       stripe_payment_intent_id: resolvePaymentIntentId(checkoutSession.payment_intent),
     });
@@ -233,7 +237,11 @@ export async function POST(request: NextRequest) {
         amount: credits,
         reason: "purchase",
         catalog_item_id: paymentIntent.metadata?.packageId ?? null,
-        credit_type: await resolvePurchaseCreditType(memberId, paymentIntent.metadata?.creditType ?? "pod"),
+        credit_type: await resolvePurchaseCreditType(
+          memberId,
+          paymentIntent.metadata?.creditType ?? "pod",
+          paymentIntent.metadata?.networkEligible !== "false"
+        ),
         stripe_event_id: event.id,
         stripe_payment_intent_id: paymentIntent.id,
       });
@@ -591,7 +599,20 @@ async function saveStripeCustomerId(
 // logic this backs). Only 'purchase'-reason inserts call this — a
 // membership renewal (reason: 'membership') always stays the base type,
 // which is exactly the credit that's meant to be home-gym-locked.
-async function resolvePurchaseCreditType(memberId: number, baseCreditType: string): Promise<string> {
+//
+// Restricted to network-eligible packs only (2026-08-26, same day): a PT
+// pack shares the same base credit_type as a plain gym-session pack, but
+// shouldn't become cross-gym-usable just because the member happens to
+// have a membership — a PT session is tied to a specific trainer at a
+// specific gym. networkEligible comes from the catalog item itself
+// (podHq's 0065_catalog_network_eligible.sql), passed through as Stripe
+// metadata by whichever route created the charge (podhq-client's
+// self-service checkout, or podHq's staff sell/saved-card panels) —
+// missing/malformed metadata defaults to eligible, matching this
+// feature's pre-restriction behaviour rather than silently blocking a
+// legitimate purchase.
+async function resolvePurchaseCreditType(memberId: number, baseCreditType: string, networkEligible: boolean): Promise<string> {
+  if (!networkEligible) return baseCreditType;
   const membership = await getActiveMembership(memberId);
   return membership ? networkCreditType(baseCreditType) : baseCreditType;
 }

@@ -44,12 +44,14 @@ export default async function BuyCreditsPage({ searchParams }: { searchParams: P
     getActiveMembership(member.id),
   ]);
 
-  // Subscriber top-up discount (2026-08-26): only shown when it'd actually
-  // apply — a founding member's own 20% discount already wins over this
-  // 10% one at checkout (/api/checkout), so showing this price to them too
-  // would be wrong. Founding Member's own discount isn't previewed here
-  // either (pre-existing gap, not this change's job to fix).
-  const subscriberDiscount = !member.founding_member && membership !== null;
+  // Subscriber top-up discount (2026-08-26): whether *this member* is
+  // eligible in principle — a founding member's own 20% discount already
+  // wins over this 10% one at checkout (/api/checkout), so it shouldn't
+  // be previewed for them too. Founding Member's own discount isn't
+  // previewed here either (pre-existing gap, not this change's job to
+  // fix). Per-item eligibility (pkg.networkEligible — excludes PT/Recovery
+  // packs) is checked in BuyCreditsList itself, not here.
+  const isSubscriber = !member.founding_member && membership !== null;
 
   return (
     <main className="flex min-h-full flex-1 flex-col">
@@ -67,7 +69,7 @@ export default async function BuyCreditsPage({ searchParams }: { searchParams: P
         <div className="mx-auto w-full max-w-md space-y-6">
           <BuyCreditsList
             packages={creditPackages.map((pkg) => ({ ...pkg, alreadyClaimed: claimedItemIds.has(pkg.id) }))}
-            subscriberDiscount={subscriberDiscount}
+            isSubscriber={isSubscriber}
             gym={gym === member.gym ? undefined : gym}
           />
           <RedeemVoucherForm />

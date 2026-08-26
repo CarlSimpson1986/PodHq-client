@@ -14,22 +14,22 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-22.md`, covering the pilot
-mechanism proof (2026-08-05) through the POD chat production fixes
-(2026-08-26) — all split out to keep this file within Claude Code's
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-23.md`, covering the pilot
+mechanism proof (2026-08-05) through the POD chat continuous-improvement
+loop (2026-08-26) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s,
 `-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s, `-21.md`'s,
-and `-22.md`'s own header notes for same-day examples of this). All
-archives are reference-only (not auto-loaded by CLAUDE.md); check them
-for full stage-by-stage build history, or `git log` on this file for the
-exact split points. This file's active content is the equipment-aware AI
-Coach work (2026-08-24) plus whatever's added after it. If this file
-grows too large again, split it the same way: move whichever section is
-most clearly finished (not necessarily the chronologically oldest) into
-a numbered `ROADMAP-ARCHIVE-23.md`, leave a pointer note at the top of
-this file, and update this paragraph.
+`-22.md`'s, and `-23.md`'s own header notes for same-day examples of
+this). All archives are reference-only (not auto-loaded by CLAUDE.md);
+check them for full stage-by-stage build history, or `git log` on this
+file for the exact split points. This file's active content is the
+equipment-aware AI Coach work (2026-08-24) plus whatever's added after
+it. If this file grows too large again, split it the same way: move
+whichever section is most clearly finished (not necessarily the
+chronologically oldest) into a numbered `ROADMAP-ARCHIVE-24.md`, leave a
+pointer note at the top of this file, and update this paragraph.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
@@ -42,50 +42,6 @@ pod Settings panel gained equipment checkboxes. **Still outstanding**: no
 gym's equipment has actually been set yet (including Hove's already-
 confirmed real equipment) — every gym runs unrestricted until Carl works
 through the Settings panel gym by gym.
-
-## Continuous-improvement loop for POD chat: FAQ moved to a DB, unanswered questions logged — 2026-08-26 (same day, later)
-
-Carl asked how to stop the help chat ("POD") dead-ending members with "not
-sure, ask staff" and nothing captured anywhere — framed as "how big
-companies do continuous improvement." Landed on: the FAQ moves off the
-static `src/lib/faq.ts` array into a DB table admin can edit live
-(`help_faq_items`, no redeploy needed), and every question the bot
-couldn't answer gets logged + emailed to gym staff immediately, reviewable
-in a new `/chat-questions` page in `../podHq` (full detail there).
-
-**Detection**: `help-bot.ts`'s system prompt now tells the model to end
-an unanswerable reply with a hidden `<<STAFF_FOLLOWUP>>` marker (never
-shown to the member) rather than asking for structured JSON output, which
-the Groq/Anthropic calls here aren't set up for. `askHelpBot` now returns
-`{ reply, needsStaff }`; `help-chat/route.ts` strips the marker, and on
-`needsStaff` awaits (not fire-and-forget) a log insert
-(`src/lib/data/help-chat-questions.ts`) plus a staff email — reusing
-`getStaffRecipients`/`notifyFireAndForget`, the same infrastructure
-`staff_new_signup` etc. already use, just a new `unanswered_chat_question`
-event type and template, not a second notification path.
-
-**FAQ off the code file**: `src/lib/data/help-faq.ts` (new) reads
-`help_faq_items` via the service-role client; `src/lib/faq.ts` deleted.
-The chat's own quick-question chips (added earlier this session) now
-fetch from a new `/api/member/help-faq` route instead of a static import,
-since `help-chat-view.tsx` is a client component and can't read the
-server-only data layer directly.
-
-**Shared-schema change, flagged in both apps**: new migration
-`0063_help_faq_and_chat_questions.sql` lives in `../podHq`'s
-`supabase/migrations/` per this file's own convention — **written this
-session, not yet applied**. Carl runs migrations himself via the Supabase
-SQL Editor; a Claude session has no DB DDL access, so this doesn't work
-at all until he does. `../podHq`'s own ROADMAP has the full write-up of
-the new `/chat-questions` admin page (review queue + FAQ CRUD).
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean. **Confirmed live**: migration applied by Carl via
-the Supabase SQL Editor, then genuinely exercised the same session — a
-member question the bot couldn't answer confidently (cross-gym
-membership use, see below) correctly triggered the `<<STAFF_FOLLOWUP>>`
-marker, landed in podHq's Chat Questions queue, and the staff email
-arrived — the full loop working end to end, not just a clean build.
 
 ## Cross-gym PAYG booking + Access-log visiting-member fix — 2026-08-26 (same day, later)
 
@@ -228,3 +184,41 @@ throughout).
 `next build` all clean. Not yet re-tested live after this specific fix —
 found via Carl's own live testing of the network-credit work above, not
 yet re-verified by him.
+
+## Network credit scoped to gym packs + both LLM chats hardened — 2026-08-26 (same day, later still)
+
+More real findings from Carl's own live testing. Full detail in
+`../podHq`'s ROADMAP (the migration and Stripe-metadata plumbing live
+there); summary here:
+
+**PT packs shouldn't get the network discount/type** — only Recovery
+Room packs were actually excluded (separate `credit_type`); PT packs
+share `credit_type: 'pod'` with a plain solo credit, so a new
+`catalog_items.network_eligible` flag (podHq's
+`0065_catalog_network_eligible.sql`) now gates both `/api/checkout`'s
+10% discount and the webhook's network-type minting, per pack rather
+than per member. `/buy-credits` shows the discount per-item now, not as
+one page-wide toggle.
+
+**Content moderation** — Carl tested the POD chat with real abuse; both
+messages got the bot's normal "best-effort + flag for staff" treatment,
+dumping abuse into the FAQ-improvement queue as if it were a real
+candidate question. `help-bot.ts` and `coach-chat.ts` (AI Coach) both
+gained prompt-injection resistance and an abuse/off-topic redirect that
+POD chat specifically never flags for staff. Live-smoke-tested against
+the real model before shipping — abuse and off-topic both redirected
+cleanly, a direct injection attempt was deflected with nothing leaked,
+and the cross-gym FAQ entry answered correctly. Also found and fixed:
+the 3 original FAQ answers (cancel membership, missed-booking credit,
+under-16) were silently dropped when the FAQ moved to a DB table earlier
+today — only Carl's own manually-added entry survived. Restored.
+
+**Booking-page top-up prompt** (Carl's suggestion): a failed cross-gym
+booking on insufficient credits now shows a direct "Buy a top-up for
+{gym}" link in `booking-grid.tsx`, instead of a plain error the member
+had to act on unprompted.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean in both repos. Moderation prompt changes were
+live-tested against the real model; the network-eligible restriction and
+booking-page prompt weren't — same limitation as elsewhere this session.
