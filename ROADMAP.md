@@ -14,22 +14,22 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-19.md`, covering the pilot
-mechanism proof (2026-08-05) through the redesign follow-up work (Coach
-restructure, leaderboard, training nudge — 2026-08-25) — all split out to
-keep this file within Claude Code's ~15,000-character `@`-import limit.
-Archives aren't always the strictly oldest material — the split point is
-"what's finished and stable" as much as "what's oldest" (see
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-20.md`, covering the pilot
+mechanism proof (2026-08-05) through the nav-context-switch fix and
+nav-lag investigation (2026-08-25) — all split out to keep this file
+within Claude Code's ~15,000-character `@`-import limit. Archives aren't
+always the strictly oldest material — the split point is "what's
+finished and stable" as much as "what's oldest" (see
 `ROADMAP-ARCHIVE-14.md`'s, `-15.md`'s, `-16.md`'s, `-17.md`'s, `-18.md`'s,
-and `-19.md`'s own header notes for same-day examples of this). All
-archives are reference-only (not auto-loaded by CLAUDE.md); check them
-for full stage-by-stage build history, or `git log` on this file for the
-exact split points. This file's active content is the equipment-aware AI
-Coach work (2026-08-24) plus whatever's added after it. If this file
-grows too large again, split it the same way: move whichever section is
-most clearly finished (not necessarily the chronologically oldest) into
-a numbered `ROADMAP-ARCHIVE-20.md`, leave a pointer note at the top of
-this file, and update this paragraph.
+`-19.md`'s, and `-20.md`'s own header notes for same-day examples of
+this). All archives are reference-only (not auto-loaded by CLAUDE.md);
+check them for full stage-by-stage build history, or `git log` on this
+file for the exact split points. This file's active content is the
+equipment-aware AI Coach work (2026-08-24) plus whatever's added after
+it. If this file grows too large again, split it the same way: move
+whichever section is most clearly finished (not necessarily the
+chronologically oldest) into a numbered `ROADMAP-ARCHIVE-21.md`, leave a
+pointer note at the top of this file, and update this paragraph.
 
 ## Equipment-aware AI Coach workout generation — 2026-08-24
 
@@ -42,54 +42,6 @@ pod Settings panel gained equipment checkboxes. **Still outstanding**: no
 gym's equipment has actually been set yet (including Hove's already-
 confirmed real equipment) — every gym runs unrestricted until Carl works
 through the Settings panel gym by gym.
-
-## Nav-context-switch fix + nav-lag investigation — 2026-08-25 (same day, evening)
-
-**Nav-context-switch bug**: Carl reported "the leaderboard needs to be on
-the homescreen — when you click on it...it goes to the coaching
-dashboard." The link itself was fine; the actual issue was that
-`/health` and `/leaderboard` (universal pages, reachable from `MoreMenu`
-off both the main app's Home and the Coach area) were rendering
-`MemberBottomNav` (Dashboard/Training/Nutrition/Coach) instead of the
-main app's `BottomNav` (Home/Book/Coach/Shop/Profile) — landing on the
-Coach-area's 4-tab bar read as being dropped into "the coaching
-environment" from what's meant to be a universal feature. Fixed by
-switching both pages to `BottomNav`. Committed `ce921b2`.
-
-**Nav-lag investigation** ("bottom nav lots of lags...switching through
-icons"): measured live via network capture rather than guessing, and
-found two separate real issues, not one.
-
-1. **Prefetch storm, fixed**: Next's default `Link` behaviour eagerly
-   prefetches every link visible in the viewport. `/dashboard` alone has
-   7 such links (`MemberBottomNav`'s 4 + `/coach`, `/coach/checkin`,
-   `/leaderboard`, `/book` cards) — every one a fully dynamic,
-   session-gated route doing several Supabase queries server-side even
-   for a prefetch. Landing on Dashboard was firing ~14 background RSC
-   requests (a duplicated double-batch) that don't correspond to
-   anything the member asked for, competing with real navigations for
-   serverless concurrency. Added `prefetch={false}` to `MemberBottomNav`,
-   `BottomNav`, `MoreMenu`, and every card `Link` on `/dashboard`.
-   Verified live, before/after: the same tab click that fired 14 phantom
-   prefetch requests before the fix fires zero after it. Committed
-   `a273e36`.
-
-2. **RSC-navigation 503s — investigated, ruled out as a false lead**:
-   during live testing, every real client-side navigation's own RSC
-   request (not a prefetch — the actual fetch Next's router makes when
-   you tap a tab) appeared to return a 503 in the browser's network
-   panel, immediately followed by a full hard-reload fallback — a
-   plausible second lag mechanism, so it was written up as a live
-   finding with `src/proxy.ts`'s unguarded `supabase.auth.getUser()` call
-   flagged as the leading suspect. Carl checked Vercel's own request logs
-   for the same window afterward and found no 503s at all, only 200s —
-   and the same browser session had also logged an unrelated 503 from
-   `fonts.gstatic.com` (a Google CDN with no connection to this app),
-   pointing at the sandboxed browser-automation tool's own network layer
-   as the actual source of both, not a real server-side failure. No code
-   changed as a result of this lead (correctly, in hindsight) — the
-   prefetch-storm fix above is the confirmed, real fix for the lag
-   report; `proxy.ts` is not a suspect.
 
 ## Client-side page cache for bottom-nav tabs — 2026-08-25 (same day, later)
 
@@ -226,6 +178,61 @@ at all until he does. `../podHq`'s own ROADMAP has the full write-up of
 the new `/chat-questions` admin page (review queue + FAQ CRUD).
 
 **Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean. **Not yet tested live** — blocked on the
-migration above; `help-chat`/`help-faq` will 500 until `help_faq_items`
-and `help_chat_unanswered_questions` actually exist.
+`next build` all clean. **Confirmed live**: migration applied by Carl via
+the Supabase SQL Editor, then genuinely exercised the same session — a
+member question the bot couldn't answer confidently (cross-gym
+membership use, see below) correctly triggered the `<<STAFF_FOLLOWUP>>`
+marker, landed in podHq's Chat Questions queue, and the staff email
+arrived — the full loop working end to end, not just a clean build.
+
+## Cross-gym PAYG booking + Access-log visiting-member fix — 2026-08-26 (same day, later)
+
+Prompted directly by the POD chat loop above doing its job: it flagged a
+member's "can I use my membership at other gyms?" question as
+unanswered, and Carl mentioned a few members had asked this before —
+real, repeated demand, not a one-off. Confirmed real policy first:
+membership is meant to be locked to one home gym (matches what the app
+already does — every booking write is gym-scoped to `member.gym`).
+Scoped to **PAYG only** — a subscription membership's `sessions_per_week`
+capacity planning assumes members drawn from that gym's own catchment
+(same reasoning the leaderboard's per-member streak target already
+documents), so opening *membership* access network-wide risks
+oversubscribing a popular gym; PAYG credits carry no such assumption —
+confirmed the `credits` table has no `gym` column at all, and
+`create_booking()`/`cancel_booking()` (`0039_pod_resources_functions.sql`)
+already derive gym from the resource row, not from a trusted parameter —
+so cross-gym PAYG booking needed **no RPC or migration changes at all**,
+only loosening the app-layer restriction that never let a member browse
+or book any gym but their own.
+
+**Money stays put**: Carl was explicit — the gym a member buys PAYG
+credits from keeps that revenue regardless of where the credit later
+gets spent; not touched (`checkout`'s Stripe Connect routing is still
+keyed on `member.gym`, unrelated to booking). What he did want: visibility
+into which gym actually *hosted* a session, separate from which gym sold
+the credits — `bookings.gym`/`waitlist_entries.gym` already capture the
+hosting gym correctly once cross-gym booking works (no schema change
+needed), surfaced as a "(visiting from X)" tag wherever `../podHq` shows
+a booked/waiting member (Calendar's slot detail panel) — full detail in
+`../podHq`'s own ROADMAP, including a real pre-existing bug this surfaced
+in the Access log.
+
+**Changed**: `/book` accepts `?gym=` for PAYG members only (server-derived
+`canSwitchGym` from `getActiveMembership`, not trusted from the client);
+`BookingGrid` gained a gym-switcher `<select>` (PAYG-only) and an empty
+state for a gym with no bookable resources configured yet.
+`/api/bookings` and `/api/waitlist` replaced their "resource must belong
+to `member.gym`" check with "must belong to `member.gym`, OR the member
+has no active membership" — new `getPodResourceById()` (not gym-scoped,
+unlike the existing `getPodResourcesForGym()`) backs this. Booking/
+cancellation confirmation emails now say the resource's/booking's own
+gym, not `member.gym` — those could silently diverge once cross-gym
+booking is possible.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean in both repos. **Not yet tested live** — no
+test-account password in this session (same limitation as the
+2026-08-25 client-cache session); the underlying mechanism (booking by
+`resourceId` alone, gym-agnostic) is exactly what `create_booking()`
+already does today for every existing booking, so the main untested
+surface is the new UI/authorization layer, not the RPC path itself.

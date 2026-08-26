@@ -61,17 +61,19 @@ export async function POST(request: NextRequest) {
 
   if (user.email) {
     // cancel_booking() only returns the refund boolean, not the booking's
-    // own slot_start — a cheap extra lookup rather than widening the RPC's
-    // return shape for every other caller of it.
+    // own slot_start/gym — a cheap extra lookup rather than widening the
+    // RPC's return shape for every other caller of it. gym comes from the
+    // booking's own row, not member.gym — since cross-gym PAYG booking
+    // (2026-08-26), those can genuinely differ.
     const { data: booking } = await admin
       .from("bookings")
-      .select("slot_start, resource_id")
+      .select("slot_start, resource_id, gym")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
 
     const { subject, html } = bookingCancelledEmail({
       memberName: member.name,
-      gym: member.gym,
+      gym: booking?.gym ?? member.gym,
       slotStart: booking?.slot_start ?? "",
       refunded: Boolean(refunded),
     });
@@ -81,7 +83,7 @@ export async function POST(request: NextRequest) {
       subject,
       html,
       memberId: member.id,
-      gym: member.gym,
+      gym: booking?.gym ?? member.gym,
     });
 
     if (booking?.slot_start && booking.resource_id) {

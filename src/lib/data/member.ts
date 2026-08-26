@@ -297,3 +297,34 @@ export async function getPodResourcesForGym(gym: string): Promise<PodResource[]>
     closeHour: row.close_hour,
   }));
 }
+
+// Not gym-scoped, unlike getPodResourcesForGym above — needed for the
+// cross-gym PAYG booking flow (2026-08-26), where a resource's own gym
+// isn't known to be the caller's gym in advance. Callers that need an
+// IDOR-proofing check (a resource must belong to a specific gym) do that
+// comparison themselves against the returned row's gym, same principle
+// as every other ownership check in this app.
+export async function getPodResourceById(resourceId: number): Promise<PodResource | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("pod_resources")
+    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, pod_capacity, open_hour, close_hour")
+    .eq("id", resourceId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    gym: data.gym,
+    resourceKey: data.resource_key,
+    label: data.label,
+    creditType: data.credit_type,
+    slotDurationMinutes: data.slot_duration_minutes,
+    accessProvider: data.access_provider,
+    podCapacity: data.pod_capacity,
+    openHour: data.open_hour,
+    closeHour: data.close_hour,
+  };
+}

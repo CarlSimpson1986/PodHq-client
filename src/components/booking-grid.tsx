@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Booking, ActiveReservation, MemberWaitlistSlot, PodResource } from "@/lib/data/member";
 import { UserIcon } from "@/components/icons";
@@ -8,6 +9,7 @@ import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { londonDateParts, londonHour, londonHourOf } from "@/lib/london-time";
 import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 import { BottomNav } from "@/components/bottom-nav";
+import { GYM_NAMES } from "@/lib/gym";
 
 // Slots for a day at the resource's own duration — a 60-minute resource
 // gets 24 hourly slots (00:00, 01:00, ...), a 30-minute one gets 48
@@ -49,6 +51,8 @@ function formatMonthYear(d: Date) {
 
 export function BookingGrid({
   gym,
+  homeGym,
+  canSwitchGym,
   memberName,
   memberId,
   creditsByType,
@@ -61,6 +65,8 @@ export function BookingGrid({
   reservations,
 }: {
   gym: string;
+  homeGym: string;
+  canSwitchGym: boolean;
   memberName: string;
   memberId: number;
   creditsByType: Record<string, number>;
@@ -210,10 +216,22 @@ export function BookingGrid({
     }
   }
 
+  const router = useRouter();
   const windowDates = bookingWindowDates();
   const todayStr = formatDateParam(windowDates[0]);
   const isToday = selectedDate === todayStr;
   const selectedDayDate = windowDates.find((d) => formatDateParam(d) === selectedDate) ?? windowDates[0];
+  // Carries the current gym selection through date navigation — otherwise
+  // clicking a different day would silently drop a PAYG member back to
+  // their home gym's view.
+  const isVisiting = gym !== homeGym;
+  function dayHref(dayStr: string) {
+    const params = new URLSearchParams();
+    if (dayStr !== todayStr) params.set("date", dayStr);
+    if (isVisiting) params.set("gym", gym);
+    const qs = params.toString();
+    return qs ? `/book?${qs}` : "/book";
+  }
 
   // Past slots that aren't the member's own booking are hidden rather than
   // shown greyed-out — a flat 24-row list meant scrolling past 10+ dead
@@ -250,6 +268,33 @@ export function BookingGrid({
             <UserIcon className="h-7 w-7" />
           </Link>
         </div>
+        {/* PAYG-only (2026-08-26) — a member with an active membership never
+            gets this control at all (see book/page.tsx's canSwitchGym),
+            so there's no need to disable/hide it conditionally here beyond
+            not rendering it. */}
+        {canSwitchGym && (
+          <div className="mx-auto mt-3 w-full max-w-md">
+            <label htmlFor="gym-switcher" className="mb-1 block text-xs text-muted-foreground">
+              Booking at
+            </label>
+            <select
+              id="gym-switcher"
+              value={gym}
+              onChange={(e) => {
+                const nextGym = e.target.value;
+                router.push(nextGym === homeGym ? "/book" : `/book?gym=${encodeURIComponent(nextGym)}`);
+              }}
+              className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm text-foreground"
+            >
+              {GYM_NAMES.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                  {name === homeGym ? " (your gym)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="mx-auto mt-6 flex w-full max-w-md items-center justify-between rounded-xl border border-card-border px-4 py-3">
           <div>
             <p className="text-2xl font-semibold tabular-nums text-foreground">{credits}</p>
@@ -286,7 +331,7 @@ export function BookingGrid({
               <Link
                 key={dayStr}
                 ref={isSelected ? selectedDayRef : undefined}
-                href={dayStr === todayStr ? "/book" : `/book?date=${dayStr}`}
+                href={dayHref(dayStr)}
                 onClick={onDayLinkClick}
                 className={`flex shrink-0 select-none flex-col items-center rounded-lg px-3 py-2 text-center ${
                   isSelected ? "bg-foreground text-background" : "text-muted-foreground hover:bg-card-border"
@@ -333,6 +378,11 @@ export function BookingGrid({
           )}
           {error && <p className="text-sm text-danger">{error}</p>}
           {success && <p className="text-sm text-success">{success}</p>}
+          {resources.length === 0 && (
+            <p className="text-sm text-card-light-muted">
+              {gym} doesn&apos;t have online booking set up yet — try another gym, or ask staff.
+            </p>
+          )}
           {slots.map((slot) => {
             const slotBookings = bookings.filter(
               (b) => b.resource_id === resource?.id && new Date(b.slot_start).getTime() === slot.getTime()
