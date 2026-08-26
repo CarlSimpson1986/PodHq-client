@@ -9,11 +9,14 @@
 // confirmed with the user 2026-08-22 that this is OUTDATED. The real,
 // currently-enforced policy is a 3-hour window with credit forfeiture
 // (corrected 2026-08-22 from an earlier 2-hour implementation, per the
-// business's real policy on GymFlow) — see FAQ_ITEMS (src/lib/faq.ts) and
-// cancel_booking() (podHq migration 0046, superseding 0020/0039's 2-hour
-// version). The legal document itself needs updating separately — not done
-// here. help-bot.ts's system prompt explicitly tells the model to defer to
-// FAQ_ITEMS over this document's Clause 9 for that reason.
+// business's real policy on GymFlow) — see the FAQ (DB-backed as of
+// 2026-08-26, src/lib/data/help-faq.ts, editable from podHq's
+// /chat-questions admin page — was a static src/lib/faq.ts array before
+// that) and cancel_booking() (podHq migration 0046, superseding
+// 0020/0039's 2-hour version). The legal document itself needs updating
+// separately — not done here. help-bot.ts's system prompt explicitly
+// tells the model to defer to the FAQ over this document's Clause 9 for
+// that reason.
 export const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS
 
 By completing any transaction with My Fit Pod or using a My Fit Pod service in any format, you are agreeing to abide by the Terms & Conditions. In addition to this, you are also agreeing to our other policies that reside in the Terms & Condition but also form their own entity: House Rules, Cancellation Policy, Privacy Policy.

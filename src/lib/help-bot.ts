@@ -1,5 +1,5 @@
 import "server-only";
-import { FAQ_ITEMS } from "@/lib/faq";
+import { getFaqItems } from "@/lib/data/help-faq";
 import { TERMS_AND_CONDITIONS } from "@/lib/terms-and-conditions";
 
 // Q&A-only help assistant ("POD" chat, graduating the static /faq accordion
@@ -15,36 +15,61 @@ import { TERMS_AND_CONDITIONS } from "@/lib/terms-and-conditions";
 // see podHq's memory notes on why Groq specifically), falling back to
 // ANTHROPIC_API_KEY (Claude Haiku 4.5 — the ~£10-15/mo across all 9 gyms
 // already scoped in that same discussion).
-const SYSTEM_PROMPT = `You are the help assistant for My Fit Pod, a UK private-pod gym booking app. Members reach you by tapping "?" in the app.
 
-Answer ONLY using the information below (the FAQ and the full Terms & Conditions). If a question isn't covered by them, say you're not sure and suggest asking gym staff directly — never guess at or invent a policy.
+// Hidden signal, never shown to the member: told to the model as the exact
+// last line of any reply it can't actually answer, so the route can flag
+// the question for staff (2026-08-26 continuous-improvement loop — see
+// podHq's help_chat_unanswered_questions / /chat-questions admin page)
+// without asking the model to produce structured JSON output, which the
+// Groq/Anthropic calls below aren't set up for.
+const UNRESOLVED_MARKER = "<<STAFF_FOLLOWUP>>";
+
+function buildSystemPrompt(faqItems: { question: string; answer: string }[]): string {
+  return `You are the help assistant for My Fit Pod, a UK private-pod gym booking app. Members reach you by tapping "?" in the app.
+
+Answer ONLY using the information below (the FAQ and the full Terms & Conditions). If a question isn't covered by them, give your best short answer explaining you're not sure and suggest asking gym staff directly — never guess at or invent a policy — then, and only in that case, end your reply with a new line containing exactly ${UNRESOLVED_MARKER} and nothing else after it. Never mention this marker or explain it to the member; it's a hidden signal, not part of the conversation.
 
 IMPORTANT — on cancellations specifically: the Terms & Conditions document's own Cancellation Policy clause (9) is OUTDATED and does not reflect what the app actually does. Always answer cancellation questions using the FAQ's cancellation answer below (3-hour window, credit forfeited), never the Terms & Conditions' printed numbers (4hrs/8hrs/£5 fee) — the FAQ always wins on this specific topic.
 
 Keep answers short: 2-3 sentences, plain language, no markdown formatting.
 
 FAQ (most common questions — these are the current, correct answers):
-${FAQ_ITEMS.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join("\n\n")}
+${faqItems.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join("\n\n")}
 
 Full Terms & Conditions (for anything not covered by the FAQ above):
 ${TERMS_AND_CONDITIONS}`;
+}
 
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-export async function askHelpBot(message: string, history: ChatMessage[]): Promise<string> {
+export interface HelpBotReply {
+  reply: string;
+  needsStaff: boolean;
+}
+
+function extractReply(raw: string): HelpBotReply {
+  const needsStaff = raw.includes(UNRESOLVED_MARKER);
+  const reply = raw.split(UNRESOLVED_MARKER).join("").trim();
+  return { reply, needsStaff };
+}
+
+export async function askHelpBot(message: string, history: ChatMessage[]): Promise<HelpBotReply> {
+  const faqItems = await getFaqItems();
+  const systemPrompt = buildSystemPrompt(faqItems);
+
   if (process.env.GROQ_API_KEY) {
-    return askGroq(message, history);
+    return extractReply(await askGroq(systemPrompt, message, history));
   }
   if (process.env.ANTHROPIC_API_KEY) {
-    return askClaude(message, history);
+    return extractReply(await askClaude(systemPrompt, message, history));
   }
   throw new Error("No help-bot provider configured — set GROQ_API_KEY or ANTHROPIC_API_KEY.");
 }
 
-async function askGroq(message: string, history: ChatMessage[]): Promise<string> {
+async function askGroq(systemPrompt: string, message: string, history: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -54,7 +79,7 @@ async function askGroq(message: string, history: ChatMessage[]): Promise<string>
     body: JSON.stringify({
       model: "openai/gpt-oss-120b",
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         ...history.map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: message },
       ],
@@ -83,7 +108,7 @@ async function askGroq(message: string, history: ChatMessage[]): Promise<string>
   return reply;
 }
 
-async function askClaude(message: string, history: ChatMessage[]): Promise<string> {
+async function askClaude(systemPrompt: string, message: string, history: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -94,7 +119,7 @@ async function askClaude(message: string, history: ChatMessage[]): Promise<strin
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: message }],
     }),
   });

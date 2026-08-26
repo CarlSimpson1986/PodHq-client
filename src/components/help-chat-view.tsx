@@ -1,28 +1,39 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FAQ_ITEMS } from "@/lib/faq";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-// "Replay app tour" isn't a policy question the LLM can answer from the FAQ/
-// Ts & Cs — it's a UI action — so it's handled by onReplayTour directly
-// rather than being sent to /api/member/help-chat like the other chips.
-const QUICK_QUESTIONS = FAQ_ITEMS.map((item) => item.question);
-
 export function HelpChatView({ onReplayTour }: { onReplayTour?: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // FAQ is DB-backed (podHq's /chat-questions admin page), not a static
+  // import — this is a client component, so it fetches rather than
+  // reading src/lib/data/help-faq.ts (server-only) directly.
+  const [quickQuestions, setQuickQuestions] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    fetch("/api/member/help-faq")
+      .then((res) => res.json())
+      .then((body) => {
+        if (body.status === "ok") {
+          setQuickQuestions(body.items.map((item: { question: string }) => item.question));
+        }
+      })
+      .catch(() => {
+        // Non-critical — the chat still works without quick-question chips.
+      });
+  }, []);
 
   async function sendMessage(overrideText?: string) {
     const trimmed = (overrideText ?? input).trim();
@@ -63,6 +74,9 @@ export function HelpChatView({ onReplayTour }: { onReplayTour?: () => void }) {
               us, so I&apos;ll say if I&apos;m not sure rather than guess.
             </p>
             <div className="flex flex-wrap gap-2">
+              {/* Tour replay is a UI action, not a policy question the LLM can
+                  answer — bypasses /api/member/help-chat entirely and calls
+                  the existing driver.js replay via this prop instead. */}
               {onReplayTour && (
                 <button
                   type="button"
@@ -72,7 +86,7 @@ export function HelpChatView({ onReplayTour }: { onReplayTour?: () => void }) {
                   Replay app tour
                 </button>
               )}
-              {QUICK_QUESTIONS.map((question) => (
+              {quickQuestions.map((question) => (
                 <button
                   key={question}
                   type="button"
