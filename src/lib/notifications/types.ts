@@ -11,4 +11,5 @@ export type NotificationEventType =
   | "waitlist_offered"
   | "credits_low"
   | "win_back"
-  | "training_nudge";
+  | "training_nudge"
+  | "unanswered_chat_question";

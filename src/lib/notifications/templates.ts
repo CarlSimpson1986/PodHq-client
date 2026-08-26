@@ -158,6 +158,17 @@ export function staffNewSignupEmail(input: { memberName: string; gym: string }):
   };
 }
 
+export function unansweredChatQuestionEmail(input: { memberName: string; gym: string; question: string }): EmailContent {
+  return {
+    subject: `POD chat couldn't answer: ${input.memberName}`,
+    html: emailShell(`
+      <p><strong>${escapeHtml(input.memberName)}</strong> at <strong>${input.gym}</strong> asked the help chat something it couldn't answer:</p>
+      <p style="margin: 16px 0; padding: 12px 16px; background: #f5f5f5; border-radius: 8px; font-style: italic;">&ldquo;${escapeHtml(input.question)}&rdquo;</p>
+      <p>Worth a reply directly, and a review of podHq's Chat Questions page so it's covered next time.</p>
+    `),
+  };
+}
+
 export function staffMembershipCancelledEmail(input: {
   memberName: string;
   gym: string;
