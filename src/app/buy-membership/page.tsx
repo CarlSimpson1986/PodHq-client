@@ -27,8 +27,8 @@ export default async function BuyMembershipPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Buy membership" subtitle="A monthly credit allowance, billed automatically." icon={IdCardIcon} iconHref="/profile" />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           <BuyMembershipList tiers={membershipTiers} currentTierId={activeMembership?.tier_id ?? null} />
         </div>
       </div>

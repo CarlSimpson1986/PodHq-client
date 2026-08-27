@@ -29,8 +29,8 @@ export default async function BookingsPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Bookings" subtitle="Your upcoming and past sessions." icon={CalendarIcon} iconHref="/profile" />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           <BookingsView bookings={bookings} accessComplete={isAccessComplete(member)} resources={resources} />
         </div>
       </div>

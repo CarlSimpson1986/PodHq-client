@@ -385,8 +385,8 @@ export function BookingGrid({
         )}
       </div>
 
-      <div className="card-light flex-1 space-y-3 px-6 pb-24 pt-8">
-        <div className="mx-auto w-full max-w-md space-y-3">
+      <div className="flex-1 px-6 pb-24 pt-8">
+        <div className="mx-auto w-full max-w-md card-light space-y-3 p-6">
           <p className="text-sm font-semibold text-card-light-muted">{formatDayHeading(selectedDayDate)}</p>
           {purchaseSuccess && <p className="text-sm text-success">Payment received — credits added.</p>}
           {membershipSuccess && (

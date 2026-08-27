@@ -11,8 +11,8 @@ export default function OfflinePage() {
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="You're offline" subtitle="My Fit Pod" icon={WifiOffIcon} />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md space-y-4 text-card-light-foreground">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light space-y-4 p-6 text-card-light-foreground">
           <p>
             We can&apos;t reach My Fit Pod right now — check your signal or Wi-Fi and try
             again.

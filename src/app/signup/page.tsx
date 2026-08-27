@@ -69,8 +69,8 @@ function SignupForm() {
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Create an account" subtitle="My Fit Pod" icon={UserPlusIcon} />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           {message ? (
             <p className="text-sm text-success">{message}</p>
           ) : (

@@ -49,8 +49,8 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Sign in" subtitle="My Fit Pod" icon={LockIcon} />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="mb-1.5 block text-sm text-card-light-muted">

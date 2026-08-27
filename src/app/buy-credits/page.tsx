@@ -65,14 +65,18 @@ export default async function BuyCreditsPage({ searchParams }: { searchParams: P
         icon={CoinIcon}
         iconHref="/profile"
       />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md space-y-6">
-          <BuyCreditsList
-            packages={creditPackages.map((pkg) => ({ ...pkg, alreadyClaimed: claimedItemIds.has(pkg.id) }))}
-            isSubscriber={isSubscriber}
-            gym={gym === member.gym ? undefined : gym}
-          />
-          <RedeemVoucherForm />
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md space-y-4">
+          <div className="card-light p-6">
+            <BuyCreditsList
+              packages={creditPackages.map((pkg) => ({ ...pkg, alreadyClaimed: claimedItemIds.has(pkg.id) }))}
+              isSubscriber={isSubscriber}
+              gym={gym === member.gym ? undefined : gym}
+            />
+          </div>
+          <div className="card-light p-6">
+            <RedeemVoucherForm />
+          </div>
         </div>
       </div>
     </main>

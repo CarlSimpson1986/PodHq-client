@@ -43,8 +43,8 @@ export default function ForgotPasswordPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Reset your password" subtitle="Enter your email and we'll send you a reset link." icon={LockIcon} />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           {message ? (
             <p className="text-sm text-success">{message}</p>
           ) : (

@@ -56,14 +56,10 @@ export default async function ShopPage() {
         </div>
       </div>
 
-      <div className="card-light flex-1 space-y-3 px-6 pb-10 pt-8">
+      <div className="flex-1 space-y-3 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-3">
           {SHOP_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-start gap-4 rounded-xl border border-card-light-border p-5 hover:bg-card-border/10"
-            >
+            <Link key={item.href} href={item.href} className="card-light flex items-start gap-4 p-5 hover:opacity-90">
               <item.icon className="mt-0.5 h-8 w-8 shrink-0 text-card-light-foreground" />
               <div>
                 <p className="text-base font-semibold">{item.title}</p>

@@ -146,9 +146,9 @@ export function ProfileView({
         </div>
       </div>
 
-      <div className="card-light flex-1 space-y-6 px-6 pb-24 pt-8">
-        <div className="mx-auto w-full max-w-md space-y-6">
-          <div className="flex items-center gap-4 rounded-xl border border-card-light-border p-4">
+      <div className="flex-1 space-y-4 px-6 pb-24 pt-8">
+        <div className="mx-auto w-full max-w-md space-y-4">
+          <div className="card-light flex items-center gap-4 p-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-light-border text-lg font-semibold">
               {initials(memberName)}
             </div>
@@ -162,7 +162,7 @@ export function ProfileView({
           </div>
 
           {membershipState ? (
-            <div className="rounded-xl border border-card-light-border p-4">
+            <div className="card-light p-4">
               <p className="text-base font-semibold">{membershipState.tier_name}</p>
               <p className="mt-1 text-sm text-card-light-muted">
                 {membershipState.credits_per_period} credits / month
@@ -178,7 +178,7 @@ export function ProfileView({
               </button>
             </div>
           ) : (
-            <div className="rounded-xl border-2 border-card-light-foreground p-5">
+            <div className="card-light border-2 border-card-light-foreground p-5">
               <p className="text-base font-semibold">Get Your Membership</p>
               <p className="mt-1 text-sm text-card-light-muted">Get started with a monthly credit allowance.</p>
               <Link
@@ -191,8 +191,8 @@ export function ProfileView({
           )}
 
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Account</h2>
-            <div className="rounded-xl border border-card-light-border">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Account</h2>
+            <div className="card-light">
               <ListRow href="/buy-membership" label="Memberships" icon={IdCardIcon} />
               <ListRow href="/buy-credits" label="Credit Packs" icon={CoinIcon} />
               <ListRow href="/gift-voucher" label="Gift Voucher" icon={GiftIcon} />
@@ -206,15 +206,15 @@ export function ProfileView({
           </section>
 
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Booking</h2>
-            <div className="rounded-xl border border-card-light-border">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Booking</h2>
+            <div className="card-light">
               <ListRow href="/bookings" label="Bookings" icon={DumbbellIcon} />
             </div>
           </section>
 
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Your details</h2>
-            <div className="space-y-3 rounded-xl border border-card-light-border p-4 text-sm">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your details</h2>
+            <div className="card-light space-y-3 p-4 text-sm">
               <div className="flex justify-between gap-4">
                 <span className="text-card-light-muted">Email</span>
                 <span className="text-right font-medium">{email ?? "Not provided"}</span>

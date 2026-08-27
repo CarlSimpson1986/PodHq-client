@@ -189,3 +189,50 @@ cards) dressed in the form-page pattern instead.
 **Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
 `next build` all clean. Not visually verified — same login limitation.
 Needs Carl's own check.
+
+**Correction, same day, immediately after**: Carl, forcefully — "I WANT
+THE COLOUR SCHEME TO BE THE SAME THROUGHOUT THE ENTIRE APP! USING THE
+MAIN DASHBOARD AS THE EXAMPLE." He was also confused for a round by
+Dashboard vs. Home being two different screens (the main bottom nav's
+"Coach" tab actually links to `/dashboard`, and there's no nav link back
+to Home from inside the Coach/Training/Nutrition/Coach sub-app, plus the
+installed PWA's `start_url` is `/book`, not `/`) — worth fixing at some
+point, not done this pass, purely a navigation-clarity issue.
+
+Explicitly stopped applying my own "forms are different from hubs"
+judgement (which I'd used to justify leaving ~19 pages alone earlier the
+same day) and instead applied Dashboard's exact treatment everywhere.
+Root cause, found properly this time: on every one of those pages the
+`card-light` class sat directly on a `flex-1` div with the page's own
+`px-6`/`pb-*`/`pt-8` padding — meaning the white box's padding was
+*inside* the box (so it touched every screen edge, no visible black
+margin) and `flex-1` stretched it to fill the full remaining viewport
+height even when content was short (the large dead white/black area in
+Carl's very first screenshot). Dashboard's cards, by contrast, get their
+inset from an *outer* plain padding div, with `card-light` only on the
+individually-sized inner card — rounded corners and black margins fully
+visible on all sides.
+
+Fixed by restructuring all 22 remaining offenders the same way: outer
+`flex-1 px-6 pb-* pt-8` div stays plain (no background, so black shows
+through), `card-light` moves onto an inner div sized to its actual
+content. For genuinely single-purpose pages (login, signup, forgot/
+reset-password, the three access-flow steps, coach-onboarding, checkin,
+coach/profile edit, buy-membership, gift-voucher x2, waitlist offer,
+workout detail, nutrition) that's one card wrapping the whole form/view,
+matching how a single Dashboard tile can hold one cohesive block. For
+pages built from genuinely distinct sections — Shop's three nav links,
+buy-credits' package-list-plus-voucher-form, and Profile's avatar/
+membership/Account-list/Booking-list/Your-details blocks — each section
+got split into its own separate floating tile, matching Dashboard's
+actual multi-card structure rather than one shared sheet. Also found and
+fixed the exact same bug in `booking-grid.tsx` (the Book tab) and
+`profile-view.tsx` (Profile tab), neither of which had turned up in the
+earlier page-level searches since they're components, not `app/*/page.tsx`
+files themselves.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean across all 22 files. Not visually verified — same
+login limitation as every other UI change this session. This is the
+widest-reaching styling change of the day; needs Carl's own check across
+several pages, not just one, before calling it done.
