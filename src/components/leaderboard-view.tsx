@@ -20,9 +20,9 @@ const BOARD_DISPLAY_LIMIT = 10;
 function Board({ title, entries, unit }: { title: string; entries: LeaderboardEntry[]; unit: (value: number) => string }) {
   if (entries.length === 0) {
     return (
-      <div className="card-glass p-5">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">Nobody&apos;s on this board yet — be the first.</p>
+      <div className="card-light p-5">
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="mt-1 text-sm text-card-light-muted">Nobody&apos;s on this board yet — be the first.</p>
       </div>
     );
   }
@@ -32,27 +32,27 @@ function Board({ title, entries, unit }: { title: string; entries: LeaderboardEn
   const selfOutsideTop = selfIndex >= BOARD_DISPLAY_LIMIT;
 
   return (
-    <div className="card-glass p-5">
-      <p className="text-sm font-semibold text-foreground">{title}</p>
+    <div className="card-light p-5">
+      <p className="text-sm font-semibold">{title}</p>
       <ul className="mt-3 space-y-2">
         {top.map((entry, i) => (
           <li
             key={entry.memberId}
-            className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-sm ${entry.isSelf ? "bg-accent/10" : ""}`}
+            className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-sm ${entry.isSelf ? "bg-card-light-border/60" : ""}`}
           >
             <span className="flex items-center gap-2">
-              <span className="w-5 text-xs font-semibold text-muted-foreground">{i + 1}</span>
-              <span className={entry.isSelf ? "font-semibold text-accent" : "text-foreground"}>
+              <span className="w-5 text-xs font-semibold text-card-light-muted">{i + 1}</span>
+              <span className={entry.isSelf ? "font-semibold" : ""}>
                 {entry.displayName}
                 {entry.isSelf ? " (you)" : ""}
               </span>
             </span>
-            <span className="font-semibold text-foreground tabular-nums">{unit(entry.value)}</span>
+            <span className="font-semibold tabular-nums">{unit(entry.value)}</span>
           </li>
         ))}
       </ul>
       {selfOutsideTop && (
-        <p className="mt-3 border-t border-card-border pt-2 text-xs text-muted-foreground">
+        <p className="mt-3 border-t border-card-light-border pt-2 text-xs text-card-light-muted">
           Your rank: #{selfIndex + 1} · {unit(entries[selfIndex].value)}
         </p>
       )}
@@ -100,31 +100,31 @@ export function LeaderboardView({
 
   return (
     <div className="space-y-4">
-      <div className="card-glass p-5">
+      <div className="card-light p-5">
         {optedIn ? (
           <>
             <p className="text-sm font-semibold text-success">You&apos;re on the leaderboard</p>
-            <p className="mt-1 text-sm text-muted-foreground">Shown as your first name + last initial to other members, every gym.</p>
+            <p className="mt-1 text-sm text-card-light-muted">Shown as your first name + last initial to other members, every gym.</p>
             <button
               type="button"
               onClick={toggleOptIn}
               disabled={toggling}
-              className="mt-3 text-xs font-semibold text-muted-foreground underline disabled:opacity-50"
+              className="mt-3 text-xs font-semibold text-card-light-muted underline disabled:opacity-50"
             >
               {toggling ? "Leaving..." : "Leave the leaderboard"}
             </button>
           </>
         ) : (
           <>
-            <p className="text-sm font-semibold text-foreground">Join the leaderboard</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="text-sm font-semibold">Join the leaderboard</p>
+            <p className="mt-1 text-sm text-card-light-muted">
               You can see everyone&apos;s boards already — opt in to appear on them yourself, as your first name + last initial. Off by default, leave any time.
             </p>
             <button
               type="button"
               onClick={toggleOptIn}
               disabled={toggling}
-              className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
+              className="mt-3 inline-block rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {toggling ? "Joining..." : "Join the leaderboard"}
             </button>

@@ -88,26 +88,26 @@ export default async function HealthPage() {
             <>
               <section>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nutrition this week</p>
-                <div className="card-glass p-5">
+                <div className="card-light p-5">
                   {weeklyReview.nutritionDaysLogged === 0 ? (
-                    <p className="text-sm text-muted-foreground">No meals logged this week yet.</p>
+                    <p className="text-sm text-card-light-muted">No meals logged this week yet.</p>
                   ) : (
                     <div className="grid grid-cols-2 gap-3 text-center">
                       <div>
-                        <p className="text-lg font-semibold text-foreground">{weeklyReview.avgDailyCalories}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-lg font-semibold">{weeklyReview.avgDailyCalories}</p>
+                        <p className="text-xs text-card-light-muted">
                           Avg. daily kcal{weeklyReview.targets ? ` / ${weeklyReview.targets.calories}` : ""}
                         </p>
                       </div>
                       <div>
-                        <p className="text-lg font-semibold text-foreground">{weeklyReview.avgDailyProteinG}g</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-lg font-semibold">{weeklyReview.avgDailyProteinG}g</p>
+                        <p className="text-xs text-card-light-muted">
                           Avg. daily protein{weeklyReview.targets ? ` / ${weeklyReview.targets.proteinG}g` : ""}
                         </p>
                       </div>
                     </div>
                   )}
-                  <Link href="/nutrition" prefetch={false} className="mt-4 inline-block text-xs font-semibold text-accent underline">
+                  <Link href="/nutrition" prefetch={false} className="mt-4 inline-block text-xs font-semibold underline">
                     View nutrition →
                   </Link>
                 </div>
@@ -124,9 +124,9 @@ export default async function HealthPage() {
               </section>
             </>
           ) : (
-            <div className="card-glass p-5">
-              <p className="text-sm font-semibold text-foreground">Want AI-personalised training and nutrition?</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+            <div className="card-light p-5">
+              <p className="text-sm font-semibold">Want AI-personalised training and nutrition?</p>
+              <p className="mt-1 text-sm text-card-light-muted">
                 Set up your AI Coach to unlock programmed workouts, progress tracking, and a daily nutrition diary alongside your recovery data.
               </p>
               <Link

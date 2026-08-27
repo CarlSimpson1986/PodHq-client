@@ -15,10 +15,10 @@ const REASON_COPY: Record<"elevated_resting_hr" | "low_sleep", string> = {
 export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {
   if (status.kind === "not_connected") {
     return (
-      <div className="card-glass p-5">
-        <p className="text-sm font-semibold text-foreground">Connect your wearable</p>
-        <p className="mt-1 text-sm text-muted-foreground">Sync Fitbit via Google Health to see your recovery here.</p>
-        <Link href="/health" prefetch={false} className="mt-3 inline-block text-xs font-semibold text-accent underline">
+      <div className="card-light p-5">
+        <p className="text-sm font-semibold">Connect your wearable</p>
+        <p className="mt-1 text-sm text-card-light-muted">Sync Fitbit via Google Health to see your recovery here.</p>
+        <Link href="/health" prefetch={false} className="mt-3 inline-block text-xs font-semibold underline">
           Connect on the Health tab →
         </Link>
       </div>
@@ -29,14 +29,14 @@ export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {
     const baselineDays = status.kind === "calibrating" ? status.baselineDays : 0;
     const baselineDaysNeeded = status.kind === "calibrating" ? status.baselineDaysNeeded : 5;
     return (
-      <div className="card-glass p-5">
-        <p className="text-sm font-semibold text-foreground">Calibrating your recovery</p>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <div className="card-light p-5">
+        <p className="text-sm font-semibold">Calibrating your recovery</p>
+        <p className="mt-1 text-sm text-card-light-muted">
           Day {baselineDays} of {baselineDaysNeeded} — keep your wearable synced and this will start showing real signal.
         </p>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-card-border">
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-card-light-border">
           <div
-            className="h-full rounded-full bg-accent"
+            className="h-full rounded-full bg-card-light-foreground"
             style={{ width: `${Math.min(100, Math.round((baselineDays / baselineDaysNeeded) * 100))}%` }}
           />
         </div>
@@ -46,17 +46,17 @@ export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {
 
   if (status.kind === "low_recovery") {
     return (
-      <div className="card-glass p-5">
+      <div className="card-light p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-warning">Recovery looks low today</p>
-        <p className="mt-1 text-sm text-muted-foreground">{REASON_COPY[status.reason]}</p>
+        <p className="mt-1 text-sm text-card-light-muted">{REASON_COPY[status.reason]}</p>
       </div>
     );
   }
 
   return (
-    <div className="card-glass p-5">
+    <div className="card-light p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-success">Recovery on track</p>
-      <p className="mt-1 text-sm text-muted-foreground">Nothing unusual against your recent average — good to train as planned.</p>
+      <p className="mt-1 text-sm text-card-light-muted">Nothing unusual against your recent average — good to train as planned.</p>
     </div>
   );
 }
