@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MEALS, MEAL_LABELS, type Meal, type NutritionTrackingMode } from "@/lib/coach/types";
 import { gramsToPortions } from "@/lib/coach/portions";
+import { MoreMenu } from "@/components/more-menu";
 
 interface NutritionTargets {
   calories: number;
@@ -166,77 +167,95 @@ export function NutritionView({
   const remaining = targets ? targets.calories - totals.calories : null;
 
   return (
-    <div className="space-y-6">
-      <div
-        ref={dayStripRef}
-        onPointerDown={onDayStripPointerDown}
-        onPointerMove={onDayStripPointerMove}
-        onPointerUp={onDayStripPointerUp}
-        onPointerLeave={onDayStripPointerUp}
-        onPointerCancel={onDayStripPointerUp}
-        className="scrollbar-hide flex cursor-grab gap-2 overflow-x-auto pb-1 active:cursor-grabbing"
-      >
-        {windowDates.map((d) => {
-          const isSelected = d === date;
-          return (
-            <button
-              key={d}
-              ref={isSelected ? selectedDayRef : undefined}
-              type="button"
-              onClick={() => onDayButtonClick(d)}
-              className={`flex shrink-0 select-none flex-col items-center rounded-lg px-3 py-2 text-center ${
-                isSelected ? "bg-card-light-foreground text-white" : "text-card-light-muted hover:bg-card-light-border"
-              }`}
-            >
-              <span className="text-xs uppercase">{formatWeekday(d)}</span>
-              <span className="text-base font-semibold tabular-nums">{formatDayNumber(d)}</span>
-            </button>
-          );
-        })}
+    <>
+      {/* Own hero + white card, same pattern as booking-grid.tsx — the date
+          strip needs to live in the dark hero to match Book's placement
+          and colours (bg-foreground/text-background), not the white card
+          it was wrongly nested inside originally (found live 2026-08-27,
+          Carl: "can you see the difference i want uniformity"). */}
+      <div className="bg-card px-6 pb-8 pt-12 sm:pt-16">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Nutrition</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Your daily diary</p>
+          </div>
+          <MoreMenu />
+        </div>
+        <div
+          ref={dayStripRef}
+          onPointerDown={onDayStripPointerDown}
+          onPointerMove={onDayStripPointerMove}
+          onPointerUp={onDayStripPointerUp}
+          onPointerLeave={onDayStripPointerUp}
+          onPointerCancel={onDayStripPointerUp}
+          className="scrollbar-hide mx-auto mt-6 flex w-full max-w-md cursor-grab gap-2 overflow-x-auto pb-1 active:cursor-grabbing"
+        >
+          {windowDates.map((d) => {
+            const isSelected = d === date;
+            return (
+              <button
+                key={d}
+                ref={isSelected ? selectedDayRef : undefined}
+                type="button"
+                onClick={() => onDayButtonClick(d)}
+                className={`flex shrink-0 select-none flex-col items-center rounded-lg px-3 py-2 text-center ${
+                  isSelected ? "bg-foreground text-background" : "text-muted-foreground hover:bg-card-border"
+                }`}
+              >
+                <span className="text-xs uppercase">{formatWeekday(d)}</span>
+                <span className="text-base font-semibold tabular-nums">{formatDayNumber(d)}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {targets ? (
-        trackingMode === "hand_portions" ? (
-          <PortionsSummary consumed={totals} target={targets} />
-        ) : (
-          <>
-            <CalorieRing target={targets.calories} consumed={totals.calories} remaining={remaining!} />
-            <div className="grid grid-cols-3 gap-3">
-              <MacroBar label="Protein" consumed={totals.proteinG} target={targets.proteinG} />
-              <MacroBar label="Carbs" consumed={totals.carbsG} target={targets.carbsG} />
-              <MacroBar label="Fat" consumed={totals.fatG} target={targets.fatG} />
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light space-y-6 p-6">
+          {targets ? (
+            trackingMode === "hand_portions" ? (
+              <PortionsSummary consumed={totals} target={targets} />
+            ) : (
+              <>
+                <CalorieRing target={targets.calories} consumed={totals.calories} remaining={remaining!} />
+                <div className="grid grid-cols-3 gap-3">
+                  <MacroBar label="Protein" consumed={totals.proteinG} target={targets.proteinG} />
+                  <MacroBar label="Carbs" consumed={totals.carbsG} target={targets.carbsG} />
+                  <MacroBar label="Fat" consumed={totals.fatG} target={targets.fatG} />
+                </div>
+              </>
+            )
+          ) : (
+            <div className="rounded-xl border border-card-light-border p-5">
+              <p className="text-sm font-semibold">Body stats needed</p>
+              <p className="mt-1 text-sm text-card-light-muted">
+                Your weight, height and age from onboarding are needed to work out your daily targets.
+              </p>
             </div>
-          </>
-        )
-      ) : (
-        <div className="rounded-xl border border-card-light-border p-5">
-          <p className="text-sm font-semibold">Body stats needed</p>
-          <p className="mt-1 text-sm text-card-light-muted">
-            Your weight, height and age from onboarding are needed to work out your daily targets.
-          </p>
-        </div>
-      )}
+          )}
 
-      {loading ? (
-        <p className="text-center text-sm text-card-light-muted">Loading...</p>
-      ) : (
-        <div className="space-y-4">
-          {MEALS.map((meal) => (
-            <MealSection
-              key={meal}
-              meal={meal}
-              entries={entries.filter((e) => e.meal === meal)}
-              onAdd={() => setSheetMeal(meal)}
-              onDelete={async (id) => {
-                await fetch(`/api/member/nutrition/log/${id}`, { method: "DELETE" });
-                loadDay(date);
-              }}
-            />
-          ))}
-        </div>
-      )}
+          {loading ? (
+            <p className="text-center text-sm text-card-light-muted">Loading...</p>
+          ) : (
+            <div className="space-y-4">
+              {MEALS.map((meal) => (
+                <MealSection
+                  key={meal}
+                  meal={meal}
+                  entries={entries.filter((e) => e.meal === meal)}
+                  onAdd={() => setSheetMeal(meal)}
+                  onDelete={async (id) => {
+                    await fetch(`/api/member/nutrition/log/${id}`, { method: "DELETE" });
+                    loadDay(date);
+                  }}
+                />
+              ))}
+            </div>
+          )}
 
-      {targets && <MealSuggestionsCard date={date} trackingMode={trackingMode} onAdded={() => loadDay(date)} />}
+          {targets && <MealSuggestionsCard date={date} trackingMode={trackingMode} onAdded={() => loadDay(date)} />}
+        </div>
+      </div>
 
       {sheetMeal && (
         <AddFoodSheet
@@ -248,7 +267,7 @@ export function NutritionView({
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 

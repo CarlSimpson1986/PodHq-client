@@ -4,17 +4,16 @@ import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { computeNutritionTargets } from "@/lib/coach/nutrition-targets";
 import { NoMemberProfile } from "@/components/no-member-profile";
-import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { MoreMenu } from "@/components/more-menu";
 import { NutritionView } from "@/components/nutrition-view";
 
 // Moved from /coach/nutrition (2026-08-25 redesign, see ROADMAP.md).
-// NutritionView itself is unchanged here — its full diary (ring, macro
-// bars, meal sections, search/recent/barcode logging) stays on its
-// existing white card-light surface; the hand-portions mode and meal
-// suggestion generator are separate net-new additions layered on top of
-// this same page.
+// NutritionView owns its own full page body — dark hero (with the date
+// strip) plus the white card-light diary below — same pattern as
+// booking-grid.tsx, not a PageHero + wrapper div at this level (found
+// live 2026-08-27: nesting the date strip inside the white card put it
+// on the wrong background with inverted colours, out of step with
+// Book's identical-looking strip).
 export default async function NutritionPage() {
   const session = await createSessionClient();
   const {
@@ -43,12 +42,7 @@ export default async function NutritionPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Nutrition" subtitle="Your daily diary" rightSlot={<MoreMenu />} />
-      <div className="flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md card-light p-6">
-          <NutritionView targets={targets} trackingMode={coachProfile.nutrition_tracking_mode} />
-        </div>
-      </div>
+      <NutritionView targets={targets} trackingMode={coachProfile.nutrition_tracking_mode} />
       <MemberBottomNav />
     </main>
   );
