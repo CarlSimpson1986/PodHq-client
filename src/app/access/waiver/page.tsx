@@ -24,8 +24,8 @@ export default async function AccessWaiverPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Access — Step 3 of 3" subtitle="Sign the waiver and agreement." icon={IdCardIcon} iconHref="/profile" />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           <AccessWaiverForm initialSignedName={member.waiver_signed_name ?? member.name} />
         </div>
       </div>

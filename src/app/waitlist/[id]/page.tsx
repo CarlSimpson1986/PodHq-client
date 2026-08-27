@@ -33,8 +33,8 @@ export default async function WaitlistOfferPage({ params }: { params: Promise<{ 
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Waitlist offer" subtitle="A spot opened up" icon={CalendarIcon} iconHref="/profile" />
-      <div className="card-light flex-1 px-6 pb-24 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-24 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           <WaitlistOfferView entry={entry} />
         </div>
       </div>

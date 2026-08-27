@@ -33,8 +33,8 @@ export default async function CheckInPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
       <PageHero title="Check-in" subtitle="Your weekly review" icon={SparkleIcon} iconHref="/profile" />
-      <div className="card-light flex-1 px-6 pb-10 pt-8">
-        <div className="mx-auto w-full max-w-md">
+      <div className="flex-1 px-6 pb-10 pt-8">
+        <div className="mx-auto w-full max-w-md card-light p-6">
           <CheckInView />
         </div>
       </div>
