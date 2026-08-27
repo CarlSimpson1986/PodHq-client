@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, getActiveMembership, getNextUpcomingBooking } from "@/lib/data/member";
+import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
 import { getLastCheckIn } from "@/lib/coach/check-ins";
@@ -17,7 +17,7 @@ import { WeekCalendarStrip } from "@/components/week-calendar-strip";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { TrialBanner } from "@/components/trial-banner";
 import { MoreMenu } from "@/components/more-menu";
-import { TrophyIcon } from "@/components/icons";
+import { TrophyIcon, UsersIcon } from "@/components/icons";
 
 const BLOCK_TYPE_LABEL: Record<string, string> = {
   hypertrophy: "Hypertrophy",
@@ -46,11 +46,7 @@ export default async function DashboardPage() {
     return <NoMemberProfile />;
   }
 
-  const [membership, coachProfile, upcomingBooking] = await Promise.all([
-    getActiveMembership(member.id),
-    getCoachProfile(member.id),
-    getNextUpcomingBooking(member.id),
-  ]);
+  const [membership, coachProfile] = await Promise.all([getActiveMembership(member.id), getCoachProfile(member.id)]);
 
   const state = getCoachHomeState(member, membership);
   const lastCheckIn = coachProfile ? await getLastCheckIn(member.id) : null;
@@ -198,35 +194,17 @@ export default async function DashboardPage() {
                 </Link>
               )}
 
-              <Link href="/coach" prefetch={false} className="card-light block p-5">
-                <p className="text-sm font-semibold">Ask your coach →</p>
-                <p className="mt-1 text-sm text-card-light-muted">Training, nutrition, recovery — grounded in your own data.</p>
-              </Link>
-
               <Link href="/leaderboard" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
                 <TrophyIcon className="h-6 w-6 text-card-light-foreground" />
                 <p className="mt-2 text-sm font-semibold">Leaderboard</p>
                 <p className="mt-1 text-sm text-card-light-muted">See how you stack up against everyone else — sessions, streaks and steps, every gym.</p>
               </Link>
 
-              <div className="card-light p-5">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Next session</p>
-                {upcomingBooking ? (
-                  <>
-                    <p className="text-sm">Your personalised workout is ready.</p>
-                    <Link href={`/workout/${upcomingBooking.id}`} prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
-                      View my workout
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-card-light-muted">Book a session to get your next personalised workout.</p>
-                    <Link href="/book" prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
-                      Book a session
-                    </Link>
-                  </>
-                )}
-              </div>
+              <Link href="/professionals" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
+                <UsersIcon className="h-6 w-6 text-card-light-foreground" />
+                <p className="mt-2 text-sm font-semibold">Find a professional</p>
+                <p className="mt-1 text-sm text-card-light-muted">Browse personal trainers at your gym and get in touch.</p>
+              </Link>
 
               {!coachProfile && (
                 <div className="card-light p-5">
