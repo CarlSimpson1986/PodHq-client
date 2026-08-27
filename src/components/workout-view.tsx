@@ -15,7 +15,9 @@ interface WorkoutSet {
   id: number;
   setNumber: number;
   repsTarget: number;
-  weightTargetKg: number;
+  // null the first time a member does this exercise — genuinely blank,
+  // not a guessed default (see generate-workout.ts's GeneratedExercise).
+  weightTargetKg: number | null;
   repsActual: number | null;
   weightActualKg: number | null;
   rpe: number | null;
@@ -106,7 +108,11 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [setIndex, setSetIndex] = useState(0);
   const [reps, setReps] = useState(0);
-  const [weight, setWeight] = useState(0);
+  // "" is a genuine blank, not 0 — the first time a member does an
+  // exercise, weightTargetKg is null and this must show an empty field
+  // for them to fill in, not a pre-filled "0" that reads as a real
+  // target (see workout-session.ts's WorkoutSet comment).
+  const [weight, setWeight] = useState<number | "">(0);
   const [imageFrame, setImageFrame] = useState<0 | 1>(0);
   const [imageMissing, setImageMissing] = useState(false);
   const [logging, setLogging] = useState(false);
@@ -143,7 +149,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         setIntroNarration(body.introNarration);
         const firstSet = body.session.exercises[0]?.sets[0];
         setReps(firstSet?.repsTarget ?? 0);
-        setWeight(firstSet?.weightTargetKg ?? 0);
+        setWeight(firstSet?.weightTargetKg ?? "");
         setPhase(body.introNarration ? "intro" : "overview");
       } catch {
         if (!cancelled) {
@@ -344,7 +350,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             setExerciseIndex(ri);
             setSetIndex(rsi);
             setReps(resumeSet?.repsTarget ?? 0);
-            setWeight(resumeSet?.weightTargetKg ?? 0);
+            setWeight(resumeSet?.weightTargetKg ?? "");
             setImageFrame(0);
             setImageMissing(false);
             setCheckedIndices(new Set());
@@ -432,7 +438,10 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       setExerciseIndex((i) => i + 1);
       setSetIndex(0);
       setReps(nextExercise.sets[0].repsTarget);
-      setWeight(nextExercise.sets[0].weightTargetKg);
+      // A different exercise never carries over the previous one's
+      // weight — reset to its own target, blank if this is also the
+      // first time doing it.
+      setWeight(nextExercise.sets[0].weightTargetKg ?? "");
       setImageFrame(0);
       setImageMissing(false);
       setPhase("active");
@@ -440,7 +449,11 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       const nextSet = exercise.sets[setIndex + 1];
       setSetIndex((i) => i + 1);
       setReps(nextSet.repsTarget);
-      setWeight(nextSet.weightTargetKg);
+      // A null target here means every set of this exercise is blank
+      // (first time doing it, same exercise) — carry forward whatever
+      // was just typed for the previous set rather than making the
+      // member re-enter the identical number 2-3 times in a row.
+      setWeight(nextSet.weightTargetKg ?? weight);
       setPhase("active");
     }
   }
@@ -606,18 +619,26 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             id="weight"
             type="number"
             inputMode="decimal"
+            placeholder={weight === "" ? "Enter weight" : undefined}
             className={inputClass}
             value={weight}
-            onChange={(e) => setWeight(Number(e.target.value))}
+            onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))}
           />
         </div>
       </div>
+
+      {currentSet?.weightTargetKg === null && (
+        <p className="text-xs text-card-light-muted">
+          First time doing {exercise.name} — try a lighter warm-up set or two first to find a comfortable weight, then log what
+          you actually use here. We&apos;ll suggest a starting point from here next time.
+        </p>
+      )}
 
       {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
 
       <button
         type="button"
-        disabled={logging}
+        disabled={logging || weight === ""}
         onClick={() => (isLastSetOfExercise ? setPhase("rpe") : logCurrentSet())}
         className={buttonClass}
       >

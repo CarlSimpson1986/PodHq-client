@@ -85,7 +85,13 @@ const NARRATION_SYSTEM_PROMPT =
   "You are the AI Coach for My Fit Pod, a UK private-pod gym. Write in a direct, confident, encouraging voice — never hedge, never say \"I'm an AI\" or suggest the member should double-check with someone else. 1-2 short sentences, plain language, no markdown.";
 
 export async function narrateSessionIntro(memberName: string, exercises: GeneratedExercise[]): Promise<string> {
-  const plan = exercises.map((e) => `${e.name} (${e.sets}x${e.repsTarget} @ ${e.weightTargetKg}kg)`).join(", ");
+  // weightTargetKg is null the first time a member does an exercise (see
+  // generate-workout.ts's GeneratedExercise) — described as "starting
+  // weight to be logged" rather than interpolating a literal "nullkg"
+  // into the model's input.
+  const plan = exercises
+    .map((e) => `${e.name} (${e.sets}x${e.repsTarget} @ ${e.weightTargetKg !== null ? `${e.weightTargetKg}kg` : "starting weight to be logged"})`)
+    .join(", ");
   const userPrompt = `Write a short, motivating one-line intro for ${memberName}'s workout today: ${plan}`;
   return askProvider(NARRATION_SYSTEM_PROMPT, userPrompt);
 }

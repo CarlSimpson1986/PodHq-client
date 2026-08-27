@@ -32,7 +32,12 @@ export interface GeneratedExercise {
   muscleGroup: string;
   sets: number;
   repsTarget: number;
-  weightTargetKg: number;
+  // null the very first time a member does this exercise — no default
+  // is guessed at all (see computeWeightKg below); the member logs
+  // their own real weight, and RPE-based progression takes over from
+  // their second time on, same as it always has for every session
+  // after the first.
+  weightTargetKg: number | null;
 }
 
 export interface GenerateWorkoutInput {
@@ -159,9 +164,13 @@ function selectExercises(
   return pool.slice(0, EXERCISE_COUNT);
 }
 
-function computeWeightKg(exercise: CatalogExercise, profile: CoachProfile, prior: ExerciseHistoryEntry | undefined): number {
+// null the very first time (see GeneratedExercise's own comment) — no
+// per-experience-level default is guessed at all, deliberately, since
+// even a "conservative" guess is still the app guessing on a beginner's
+// behalf rather than the beginner logging what they actually used.
+function computeWeightKg(exercise: CatalogExercise, profile: CoachProfile, prior: ExerciseHistoryEntry | undefined): number | null {
   if (!prior) {
-    return exercise.startingWeightKg[profile.experience_level];
+    return null;
   }
   return roundToNearestPlate(adjustForRpe(prior.lastWeightKg, prior.lastRpe));
 }
@@ -174,13 +183,16 @@ function computeWeightKg(exercise: CatalogExercise, profile: CoachProfile, prior
 // Exported for reuse by the exercise-swap flow (workout-session.ts),
 // which needs to pick a starting weight for a newly-swapped-in exercise
 // via the exact same RPE-history/deload-discount logic as generation.
+// A still-null raw weight (no history for this exercise yet) stays null
+// — there's nothing for a deload discount to apply to.
 export function computeWeightKgForBlock(
   exercise: CatalogExercise,
   profile: CoachProfile,
   prior: ExerciseHistoryEntry | undefined,
   activeBlock: { blockType: BlockType } | undefined
-): number {
+): number | null {
   const raw = computeWeightKg(exercise, profile, prior);
+  if (raw === null) return null;
   if (activeBlock?.blockType === "deload") {
     return roundToNearestPlate(raw * DELOAD_WEIGHT_MULTIPLIER);
   }

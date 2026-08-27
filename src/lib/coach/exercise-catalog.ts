@@ -1,4 +1,4 @@
-import type { EquipmentType, ExperienceLevel } from "@/lib/coach/types";
+import type { EquipmentType } from "@/lib/coach/types";
 
 export type MuscleGroup = "chest" | "back" | "shoulders" | "legs" | "arms" | "core" | "full_body";
 
@@ -10,9 +10,6 @@ export interface CatalogExercise {
   // free text — an exercise is excluded from generation if any of these
   // keywords appear in the member's stated injuries.
   avoidIfInjury: string[];
-  // Conservative first-time weight, before any real RPE feedback exists
-  // for this exercise. 0 = bodyweight/no added load.
-  startingWeightKg: Record<ExperienceLevel, number>;
   // Reviewed, standard technique/safety cue — hardcoded and written by a
   // person, deliberately never LLM-generated. Same principle as the RPE
   // weight adjustment (generate-workout.ts): nothing with real injury
@@ -52,15 +49,23 @@ export interface CatalogExercise {
 // represented here since it's cardio, not a resistance exercise this
 // catalog generates working sets for, but it's what the warm-up's pulse
 // raiser uses (see warmup-cooldown.ts).
+//
+// No `startingWeightKg` field (removed 2026-08-27) — every exercise now
+// starts with a genuinely blank weight the first time a member does it,
+// rather than a per-experience-level default. Carl: even a "conservative"
+// default is still the app guessing, and a beginner left to interpret a
+// blank field on their own can misjudge what's actually light (e.g.
+// "the bar plus 10kg", not realising an empty barbell is already
+// ~20kg) — so it's not "blank vs. guessed," the member's own honestly-
+// logged first weight becomes the real baseline for RPE-based
+// progression from their second time on. See generate-workout.ts's
+// computeWeightKg.
 export const EXERCISE_CATALOG: CatalogExercise[] = [
   {
     key: "barbell_squat",
     name: "Barbell Squat",
     muscleGroup: "legs",
     avoidIfInjury: ["knee", "back"],
-    // An empty Olympic bar is 20kg — the real floor for this exercise,
-    // not 0.
-    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Keep your chest up and core braced. Push through your heels and don't let your knees cave inward.",
     isCompound: true,
     requiredEquipment: "barbell_rack",
@@ -70,7 +75,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Romanian Deadlift",
     muscleGroup: "legs",
     avoidIfInjury: ["back", "knee"],
-    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Keep the bar close to your legs and your back flat. Hinge at the hips — don't round your lower back.",
     isCompound: true,
     requiredEquipment: "barbell_rack",
@@ -80,7 +84,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Barbell Bench Press",
     muscleGroup: "chest",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Feet flat on the floor, shoulder blades pulled back. Control the bar down — don't bounce it off your chest.",
     isCompound: true,
     requiredEquipment: "barbell_rack",
@@ -90,7 +93,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Lat Pulldown",
     muscleGroup: "back",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
     safetyTip: "Pull with your back, not your arms. Avoid leaning back excessively or using momentum.",
     isCompound: true,
     requiredEquipment: "cable_machine",
@@ -100,7 +102,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Seated Row",
     muscleGroup: "back",
     avoidIfInjury: ["back"],
-    startingWeightKg: { beginner: 15, intermediate: 30, advanced: 45 },
     safetyTip: "Keep your back straight and squeeze your shoulder blades together. Don't round forward at the start.",
     isCompound: true,
     requiredEquipment: "cable_machine",
@@ -110,7 +111,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Dumbbell Shoulder Press",
     muscleGroup: "shoulders",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 6, intermediate: 10, advanced: 16 },
     safetyTip: "Brace your core and avoid arching your lower back. Press straight up, not forward.",
     isCompound: true,
     requiredEquipment: "dumbbells",
@@ -120,7 +120,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Dumbbell Bicep Curl",
     muscleGroup: "arms",
     avoidIfInjury: [],
-    startingWeightKg: { beginner: 4, intermediate: 8, advanced: 12 },
     safetyTip: "Keep your elbows close to your body and avoid swinging the weight. Control the lowering phase.",
     isCompound: false,
     requiredEquipment: "dumbbells",
@@ -130,7 +129,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Tricep Pushdown",
     muscleGroup: "arms",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 30 },
     safetyTip: "Keep your elbows pinned to your sides. Avoid leaning your whole body into the movement.",
     isCompound: false,
     requiredEquipment: "cable_machine",
@@ -140,7 +138,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Leg Extension",
     muscleGroup: "legs",
     avoidIfInjury: ["knee"],
-    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
     safetyTip: "Move through a controlled range — avoid snapping your knees straight at the top.",
     isCompound: false,
     requiredEquipment: "leg_extension_curl_machine",
@@ -150,7 +147,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Lying Leg Curl",
     muscleGroup: "legs",
     avoidIfInjury: ["knee"],
-    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 35 },
     safetyTip: "Keep your hips pressed into the pad. Avoid using momentum to swing the weight up.",
     isCompound: false,
     requiredEquipment: "leg_extension_curl_machine",
@@ -160,7 +156,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Plank",
     muscleGroup: "core",
     avoidIfInjury: ["back"],
-    startingWeightKg: { beginner: 0, intermediate: 0, advanced: 0 },
     safetyTip: "Keep your body in a straight line from head to heels — don't let your hips sag or pike up.",
     isCompound: false,
     requiredEquipment: null,
@@ -185,7 +180,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Incline Dumbbell Press",
     muscleGroup: "chest",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 6, intermediate: 10, advanced: 16 },
     safetyTip: "Set the bench to a moderate incline (30-45°). Keep your wrists stacked over your elbows and lower the dumbbells under control.",
     isCompound: true,
     requiredEquipment: "dumbbells",
@@ -195,7 +189,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Cable Chest Fly",
     muscleGroup: "chest",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 5, intermediate: 10, advanced: 15 },
     safetyTip: "Keep a slight bend in your elbows throughout. Bring your hands together in a wide arc — don't let the weight snap your arms back at the top of the stretch.",
     isCompound: false,
     requiredEquipment: "cable_machine",
@@ -205,7 +198,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Dumbbell Lateral Raise",
     muscleGroup: "shoulders",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 2, intermediate: 4, advanced: 6 },
     safetyTip: "Raise the dumbbells out to shoulder height with a slight bend in your elbows. Avoid swinging or using momentum — control the weight down.",
     isCompound: false,
     requiredEquipment: "dumbbells",
@@ -215,7 +207,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Cable Face Pull",
     muscleGroup: "shoulders",
     avoidIfInjury: ["shoulders"],
-    startingWeightKg: { beginner: 5, intermediate: 10, advanced: 15 },
     safetyTip: "Pull the rope towards your face, leading with your elbows high and wide. Squeeze your shoulder blades together at the end of the movement.",
     isCompound: false,
     requiredEquipment: "cable_machine",
@@ -225,7 +216,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Cable Crunch",
     muscleGroup: "core",
     avoidIfInjury: ["back"],
-    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 30 },
     safetyTip: "Kneel facing the cable, hold the rope by your head, and curl your torso down using your abs — not your arms or hips.",
     isCompound: false,
     requiredEquipment: "cable_machine",
@@ -235,7 +225,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Dumbbell Russian Twist",
     muscleGroup: "core",
     avoidIfInjury: ["back"],
-    startingWeightKg: { beginner: 4, intermediate: 8, advanced: 12 },
     safetyTip: "Sit with your knees bent and lean back slightly, keeping your back straight. Rotate your torso side to side under control — don't just swing your arms.",
     isCompound: false,
     requiredEquipment: "dumbbells",
@@ -245,7 +234,6 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     name: "Barbell Bent-Over Row",
     muscleGroup: "back",
     avoidIfInjury: ["back", "shoulders"],
-    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
     safetyTip: "Hinge at the hips with a flat back, and pull the bar towards your lower ribs. Avoid rounding your back or using your legs to heave the weight up.",
     isCompound: true,
     requiredEquipment: "barbell_rack",

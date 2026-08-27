@@ -68,10 +68,15 @@ describe("generateWorkout — RPE-based weight progression", () => {
     expect(exercise.weightTargetKg).toBe(40);
   });
 
-  it("falls back to the catalog's experience-based starting weight with no history", () => {
+  // Changed 2026-08-27 — Carl: even a "conservative" experience-based
+  // default is still the app guessing on a beginner's behalf. No weight
+  // is suggested at all the first time; the member logs their own real
+  // weight and RPE-based progression takes over from their second time
+  // doing this exercise on.
+  it("weight target is genuinely blank (null) the first time a member does an exercise, regardless of experience level", () => {
     const result = generateWorkout({ profile: profile({ experience_level: "beginner" }), history: [], lastSession: null });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
-    expect(exercise.weightTargetKg).toBe(20);
+    expect(exercise.weightTargetKg).toBeNull();
   });
 });
 

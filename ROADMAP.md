@@ -14,48 +14,24 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-32.md`, covering the pilot
-mechanism proof (2026-08-05) through the bottom-nav/Leaderboard/week-strip
-follow-ups (2026-08-27) — all split out to keep this file within Claude
-Code's ~15,000-character `@`-import limit. Archives aren't always the
-strictly oldest material — the split point is "what's finished and
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-33.md`, covering the pilot
+mechanism proof (2026-08-05) through the Nutrition date-strip placement
+("uniformity") fix (2026-08-27) — all split out to keep this file within
+Claude Code's ~15,000-character `@`-import limit. Archives aren't always
+the strictly oldest material — the split point is "what's finished and
 stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s,
 `-15.md`'s, `-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s,
 `-21.md`'s, `-22.md`'s, `-23.md`'s, `-24.md`'s, `-25.md`'s, `-26.md`'s,
-`-27.md`'s, `-28.md`'s, `-29.md`'s, `-30.md`'s, `-31.md`'s, and `-32.md`'s
-own header notes for same-day examples of this). All archives are
-reference-only (not auto-loaded by CLAUDE.md); check them for full
-stage-by-stage build history, or `git log` on this file for the exact
-split points. This file's active content is the "uniformity" date-strip
-correction (2026-08-27) plus whatever's added after it. If this file
-grows too large again, split it the same way: move whichever section is
-most clearly finished (not necessarily the chronologically oldest) into
-a numbered `ROADMAP-ARCHIVE-33.md`, leave a pointer note at the top of
-this file, and update this paragraph.
-
-**Correction, same day, immediately after**: Carl, three screenshots
-side by side — Book labelled the right example, Dashboard and Nutrition
-both labelled wrong: "i want uniformity." The actual bug in Nutrition:
-the new date strip had been nested *inside* `nutrition-view.tsx`'s white
-`card-light` card rather than in the dark hero where Book's lives, so it
-ended up on the wrong background with inverted colours (black pill on
-white instead of white pill on black) — a real placement mistake, not
-just a missed styling pass. Fixed by restructuring `NutritionView` to
-own its full page body — dark hero (title/subtitle/MoreMenu + the date
-strip, using `bg-foreground`/`text-background` like Book) plus the white
-card below — the same pattern `booking-grid.tsx` already used, rather
-than being nested inside a `PageHero` + wrapper div supplied by
-`nutrition/page.tsx`. That page now just renders `<NutritionView />`
-directly, same as `book/page.tsx` renders `<BookingGrid />`.
-
-Also rebuilt `week-calendar-strip.tsx` (Dashboard's strip) to use the
-exact same pill shape and weekday+day-number content as Book/Nutrition,
-not its own earlier single-letter-in-a-circle design — the color fix
-from earlier the same day wasn't enough on its own once shape/content
-were compared side by side too.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean. Not visually verified — same login limitation.
+`-27.md`'s, `-28.md`'s, `-29.md`'s, `-30.md`'s, `-31.md`'s, `-32.md`'s,
+and `-33.md`'s own header notes for same-day examples of this). All
+archives are reference-only (not auto-loaded by CLAUDE.md); check them
+for full stage-by-stage build history, or `git log` on this file for the
+exact split points. This file's active content is the Dashboard tile
+cleanup / "Find a Professional" directory (2026-08-27) plus whatever's
+added after it. If this file grows too large again, split it the same
+way: move whichever section is most clearly finished (not necessarily
+the chronologically oldest) into a numbered `ROADMAP-ARCHIVE-34.md`,
+leave a pointer note at the top of this file, and update this paragraph.
 
 ## Dashboard tile cleanup + "Find a Professional" directory — 2026-08-27 (same day, later still)
 
@@ -199,3 +175,63 @@ visually verified — same login limitation as every UI change this
 session. **Not yet live** — migration `0067` needs Carl's own paste
 into Supabase's SQL Editor before any of Stage 2's code path actually
 runs; nothing in it has touched a real database yet.
+
+## Blank first-time exercise weight — 2026-08-27 (same day, later still)
+
+Carl caught a real gap in the checkpoint discussion itself, before any
+of it shipped: asked why photos weren't real GIFs/videos (the app
+already has a `youtubeVideoId` mechanism for that, just never populated
+— Carl picks these himself, same "never auto-picked" convention as
+safety tips), then floated letting members add fully custom exercises.
+Followed that to its logical safety question — a custom exercise has no
+catalog starting weight, so it'd start blank — which Carl then flipped
+back onto the *existing* catalog exercises: pre-filling a "conservative"
+per-experience-level default is still the app guessing, and a beginner
+left to interpret a blank field on their own can genuinely misjudge
+what's safe (his example: thinking "the bar plus 10kg" is light,
+without realising an empty barbell is already ~20kg on its own).
+
+**Decision**: every exercise, catalog or (future) custom, starts
+genuinely blank the very first time a member ever does it — no default
+weight suggested at all. The member logs their own real weight, and the
+existing RPE-based progression takes over from their second time on,
+exactly as it always has for every session after the first. Also:
+members should be encouraged to try a lighter warm-up set or two first
+before committing to their logged work-set weight.
+
+**What changed**: `startingWeightKg` removed entirely from
+`exercise-catalog.ts` (dead data now — 18 entries cleaned up).
+`computeWeightKg`/`computeWeightKgForBlock` (`generate-workout.ts`) now
+return `number | null`, `null` on the `!prior` branch instead of a
+catalog default. That ripples through `GeneratedExercise`,
+`WorkoutSet.weightTargetKg`, and — since this app's Supabase layer isn't
+strictly typed against generated DB types — several spots TypeScript
+wouldn't catch on its own, fixed by hand: `applyRecoveryAdjustment`
+skips a still-blank target instead of `null * multiplier` silently
+becoming a wrong `0`; `completeSession`'s next-session weight-change
+preview filters out any comparison where either side is blank;
+`coach-bot.ts`'s session-intro narration describes a blank target as
+"starting weight to be logged" instead of interpolating a literal
+"nullkg" into the model's prompt. `workout-view.tsx`'s weight state
+became `number | ""` (blank, not `0` — `0` is a real bodyweight-exercise
+value already, reusing it as a blank sentinel would have been
+ambiguous), the input shows a placeholder instead of a pre-filled
+number, "Log Set" is disabled until something's entered, and moving to
+the next *set of the same exercise* carries forward whatever was just
+typed (so a first-timer isn't retyping the identical number 2-3 times)
+while moving to a *different* exercise always resets to blank. A hint
+under the input explains why it's blank and encourages the warm-up-set
+suggestion — folded into the existing hint rather than building a
+separate structured warm-up-set feature, since "encouraged" was Carl's
+own word for it, not a request for tracked/logged warm-up sets.
+
+New migration `0068_workout_sets_blank_first_weight.sql` drops
+`workout_sets.weight_target_kg`'s `not null` constraint — it was only
+ever `not null` because a real number was always computed before.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (105/105 —
+one existing test updated for the new behaviour, no new failures
+elsewhere), and `next build` all clean. **Not yet live** — migrations
+`0067` and `0068` both need Carl's own paste into Supabase's SQL Editor;
+nothing in this change has touched a real database or browser session
+yet.
