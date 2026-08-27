@@ -82,6 +82,42 @@ async function fetchAbstracts(pmids: string[]): Promise<Map<string, string>> {
   return byPmid;
 }
 
+// PubMed's own "relevance" sort is plain term-matching — it has no
+// concept of evidence quality, so a narrow single-study paper that
+// happens to share vocabulary with the query can outrank a review that's
+// actually a better source for a general coaching claim. Found live
+// 2026-08-26: "hypertrophy rep range muscle building meta analysis"
+// surfaced a muscle-measurement methodology paper, not a rep-range
+// outcome study — technically on-topic by keyword, useless for citing.
+//
+// Two-tier search: try filtered to secondary/synthesized evidence first
+// (meta-analyses, systematic reviews, and — since exercise science has
+// fewer RCTs than medicine generally — RCTs too), which is both more
+// likely to directly support a general claim and less likely to be one
+// narrow/atypical study. Only fall back to an unfiltered search if that
+// returns nothing, so a niche topic with no reviews yet doesn't come back
+// empty when a real primary study exists.
+const EVIDENCE_FILTER = "(meta-analysis[pt] OR systematic review[pt] OR randomized controlled trial[pt])";
+
+async function esearch(term: string, maxResults: number): Promise<string[]> {
+  const searchParams = new URLSearchParams({
+    db: "pubmed",
+    term,
+    retmax: String(maxResults),
+    sort: "relevance",
+    retmode: "json",
+    tool: PUBMED_TOOL_NAME,
+    email: PUBMED_CONTACT_EMAIL,
+  });
+  const searchRes = await fetch(`${EUTILS_BASE}/esearch.fcgi?${searchParams}`);
+  if (!searchRes.ok) {
+    console.error("[pubmed] esearch failed", { status: searchRes.status });
+    return [];
+  }
+  const searchData = (await searchRes.json()) as EsearchResponse;
+  return searchData.esearchresult?.idlist ?? [];
+}
+
 /**
  * Top matches for a research query, title/authors/year/journal/abstract
  * for each — enough for the model to cite accurately without needing to
@@ -89,24 +125,11 @@ async function fetchAbstracts(pmids: string[]): Promise<Map<string, string>> {
  * error) when nothing relevant is found, so the caller can fall back to
  * general-evidence framing exactly as before this feature existed.
  */
-export async function searchPubMed(query: string, maxResults = 3): Promise<PubMedResult[]> {
-  const searchParams = new URLSearchParams({
-    db: "pubmed",
-    term: query,
-    retmax: String(maxResults),
-    sort: "relevance",
-    retmode: "json",
-    tool: PUBMED_TOOL_NAME,
-    email: PUBMED_CONTACT_EMAIL,
-  });
-
-  const searchRes = await fetch(`${EUTILS_BASE}/esearch.fcgi?${searchParams}`);
-  if (!searchRes.ok) {
-    console.error("[pubmed] esearch failed", { status: searchRes.status });
-    return [];
+export async function searchPubMed(query: string, maxResults = 5): Promise<PubMedResult[]> {
+  let pmids = await esearch(`${query} AND ${EVIDENCE_FILTER}`, maxResults);
+  if (pmids.length === 0) {
+    pmids = await esearch(query, maxResults);
   }
-  const searchData = (await searchRes.json()) as EsearchResponse;
-  const pmids = searchData.esearchresult?.idlist ?? [];
   if (pmids.length === 0) return [];
 
   const summaryParams = new URLSearchParams({
