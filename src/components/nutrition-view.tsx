@@ -60,6 +60,32 @@ function addDays(dateStr: string, days: number): string {
   return d.toLocaleDateString("en-CA");
 }
 
+// Diary review skews backward-looking (mostly "what did I eat"), unlike
+// Book's forward-only window — 13 days back plus a few days forward gives
+// enough scroll room without the strip defaulting to mostly-empty future
+// days. Same drag-to-scroll pattern as booking-grid.tsx's day strip (Carl
+// asked for it to look like Book's, 2026-08-27), adapted from that
+// component's Link-based version to this one's button/setState model.
+const NUTRITION_WINDOW_DAYS_BACK = 13;
+const NUTRITION_WINDOW_DAYS_FORWARD = 3;
+
+function nutritionWindowDates(): string[] {
+  const today = todayString();
+  const dates: string[] = [];
+  for (let i = -NUTRITION_WINDOW_DAYS_BACK; i <= NUTRITION_WINDOW_DAYS_FORWARD; i++) {
+    dates.push(addDays(today, i));
+  }
+  return dates;
+}
+
+function formatWeekday(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
+}
+
+function formatDayNumber(dateStr: string): string {
+  return String(Number(dateStr.slice(-2)));
+}
+
 export function NutritionView({
   targets: initialTargets,
   trackingMode = "calorie_counting",
@@ -73,6 +99,38 @@ export function NutritionView({
   const [targets, setTargets] = useState<NutritionTargets | null>(initialTargets);
   const [loading, setLoading] = useState(true);
   const [sheetMeal, setSheetMeal] = useState<Meal | null>(null);
+  const windowDates = nutritionWindowDates();
+  const selectedDayRef = useRef<HTMLButtonElement>(null);
+  const dayStripRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ down: false, startX: 0, startScroll: 0, moved: false });
+
+  function onDayStripPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "mouse") return;
+    const el = dayStripRef.current;
+    if (!el) return;
+    dragState.current = { down: true, startX: e.clientX, startScroll: el.scrollLeft, moved: false };
+    el.setPointerCapture(e.pointerId);
+  }
+
+  function onDayStripPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const el = dayStripRef.current;
+    if (!el || !dragState.current.down) return;
+    const dx = e.clientX - dragState.current.startX;
+    if (Math.abs(dx) > 3) dragState.current.moved = true;
+    el.scrollLeft = dragState.current.startScroll - dx;
+  }
+
+  function onDayStripPointerUp() {
+    dragState.current.down = false;
+    setTimeout(() => {
+      dragState.current.moved = false;
+    }, 0);
+  }
+
+  function onDayButtonClick(d: string) {
+    if (dragState.current.moved) return;
+    setDate(d);
+  }
 
   async function loadDay(d: string) {
     setLoading(true);
@@ -97,18 +155,44 @@ export function NutritionView({
     queueMicrotask(() => loadDay(date));
   }, [date]);
 
+  // Same reasoning as booking-grid.tsx's identical effect: landing on a
+  // non-default date (or just scrolling the strip away from today) would
+  // otherwise leave the real selection off-screen with nothing indicating
+  // there's more to scroll to.
+  useEffect(() => {
+    selectedDayRef.current?.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
+  }, [date]);
+
   const remaining = targets ? targets.calories - totals.calories : null;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <button type="button" onClick={() => setDate((d) => addDays(d, -1))} className="p-2 text-lg" aria-label="Previous day">
-          ←
-        </button>
-        <p className="text-sm font-semibold">{date === todayString() ? "Today" : date}</p>
-        <button type="button" onClick={() => setDate((d) => addDays(d, 1))} className="p-2 text-lg" aria-label="Next day">
-          →
-        </button>
+      <div
+        ref={dayStripRef}
+        onPointerDown={onDayStripPointerDown}
+        onPointerMove={onDayStripPointerMove}
+        onPointerUp={onDayStripPointerUp}
+        onPointerLeave={onDayStripPointerUp}
+        onPointerCancel={onDayStripPointerUp}
+        className="scrollbar-hide flex cursor-grab gap-2 overflow-x-auto pb-1 active:cursor-grabbing"
+      >
+        {windowDates.map((d) => {
+          const isSelected = d === date;
+          return (
+            <button
+              key={d}
+              ref={isSelected ? selectedDayRef : undefined}
+              type="button"
+              onClick={() => onDayButtonClick(d)}
+              className={`flex shrink-0 select-none flex-col items-center rounded-lg px-3 py-2 text-center ${
+                isSelected ? "bg-card-light-foreground text-white" : "text-card-light-muted hover:bg-card-light-border"
+              }`}
+            >
+              <span className="text-xs uppercase">{formatWeekday(d)}</span>
+              <span className="text-base font-semibold tabular-nums">{formatDayNumber(d)}</span>
+            </button>
+          );
+        })}
       </div>
 
       {targets ? (

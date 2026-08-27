@@ -88,8 +88,8 @@ export default async function HomePage() {
 
           <Link href="/leaderboard" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
             <TrophyIcon className="h-6 w-6 text-card-light-foreground" />
-            <p className="mt-2 text-base font-semibold">Leaderboard →</p>
-            <p className="mt-1 text-sm text-card-light-muted">Sessions, streaks and steps — every gym, one board.</p>
+            <p className="mt-2 text-base font-semibold">Leaderboard</p>
+            <p className="mt-1 text-sm text-card-light-muted">See how you stack up against everyone else — sessions, streaks and steps, every gym.</p>
           </Link>
 
           <p id="tour-credits" className="text-center text-sm text-muted-foreground">{credits} credits available</p>
