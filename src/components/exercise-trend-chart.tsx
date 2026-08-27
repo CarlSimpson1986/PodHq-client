@@ -2,18 +2,45 @@ import type { ExerciseWeeklyPerformance } from "@/lib/coach/exercise-performance
 
 const WEEKS_WINDOW = 8;
 const CHART_HEIGHT = 64;
-const BAR_WIDTH = 18;
-const BAR_GAP = 6;
+const CHART_PADDING_Y = 6;
+const POINT_GAP = 24;
 
-// Plain hand-rolled SVG — no charting library dependency for an 8-bar
-// trend, matching how this app avoids adding a package where a small
-// amount of markup does the job (same reasoning as the hand-rolled icon
-// set in icons.tsx).
+// Plain hand-rolled SVG — no charting library dependency, matching how
+// this app avoids adding a package where a small amount of markup does
+// the job (same reasoning as the hand-rolled icon set in icons.tsx).
+// Was a bar chart until 2026-08-27 — Carl wanted "where they started vs
+// where they are now" as an actual line, not discrete weekly bars, so
+// this now draws a single connected polyline through every logged week
+// (undated weeks in the middle are skipped, not zero-filled, so the line
+// only ever connects real data points) with the start and current weight
+// called out at each end.
 export function ExerciseTrendChart({ performance }: { performance: ExerciseWeeklyPerformance }) {
   const byWeeksAgo = new Map(performance.weeks.map((w) => [w.weeksAgo, w.maxWeightKg]));
-  const maxWeight = Math.max(1, ...performance.weeks.map((w) => w.maxWeightKg));
-  const latest = performance.weeks[0]; // sorted newest-first (weeksAgo ascending order reversed) — see exercise-performance.ts
-  const width = WEEKS_WINDOW * (BAR_WIDTH + BAR_GAP);
+  const points = Array.from({ length: WEEKS_WINDOW }, (_, i) => WEEKS_WINDOW - 1 - i) // oldest (7) -> newest (0)
+    .map((weeksAgo, i) => ({ weeksAgo, x: i * POINT_GAP, weightKg: byWeeksAgo.get(weeksAgo) }))
+    .filter((p): p is { weeksAgo: number; x: number; weightKg: number } => p.weightKg !== undefined);
+
+  const latest = performance.weeks[0]; // sorted newest-first — see exercise-performance.ts
+  const width = (WEEKS_WINDOW - 1) * POINT_GAP;
+
+  if (points.length === 0) {
+    return (
+      <div className="rounded-xl border border-card-light-border p-4">
+        <p className="text-sm font-semibold">{performance.exerciseName}</p>
+        <p className="mt-3 text-sm text-card-light-muted">No logged sets yet.</p>
+      </div>
+    );
+  }
+
+  const maxWeight = Math.max(...points.map((p) => p.weightKg));
+  const minWeight = Math.min(...points.map((p) => p.weightKg));
+  const range = maxWeight - minWeight || 1;
+  const plotHeight = CHART_HEIGHT - CHART_PADDING_Y * 2;
+  const y = (weightKg: number) => CHART_PADDING_Y + plotHeight - ((weightKg - minWeight) / range) * plotHeight;
+
+  const start = points[0];
+  const current = points[points.length - 1];
+  const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${y(p.weightKg)}`).join(" ");
 
   return (
     <div className="rounded-xl border border-card-light-border p-4">
@@ -22,25 +49,15 @@ export function ExerciseTrendChart({ performance }: { performance: ExerciseWeekl
         {latest && <p className="text-sm text-card-light-muted">{latest.maxWeightKg}kg</p>}
       </div>
       <svg viewBox={`0 0 ${width} ${CHART_HEIGHT}`} className="mt-3 w-full" style={{ height: CHART_HEIGHT }}>
-        {Array.from({ length: WEEKS_WINDOW }).map((_, i) => {
-          const weeksAgo = WEEKS_WINDOW - 1 - i; // left = oldest (weeksAgo 7), right = this week (weeksAgo 0)
-          const weightKg = byWeeksAgo.get(weeksAgo);
-          const barHeight = weightKg ? Math.max(2, (weightKg / maxWeight) * CHART_HEIGHT) : 2;
-          const x = i * (BAR_WIDTH + BAR_GAP);
-          return (
-            <rect
-              key={weeksAgo}
-              x={x}
-              y={CHART_HEIGHT - barHeight}
-              width={BAR_WIDTH}
-              height={barHeight}
-              rx={2}
-              className={weightKg ? "fill-card-light-foreground" : "fill-card-light-border"}
-            />
-          );
-        })}
+        <path d={pathD} fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="stroke-card-light-foreground" />
+        {points.map((p) => (
+          <circle key={p.weeksAgo} cx={p.x} cy={y(p.weightKg)} r={p === start || p === current ? 3.5 : 2} className="fill-card-light-foreground" />
+        ))}
       </svg>
-      <p className="mt-1 text-xs text-card-light-muted">Last {WEEKS_WINDOW} weeks</p>
+      <div className="mt-1 flex items-center justify-between text-xs text-card-light-muted">
+        <span>Started {start.weightKg}kg</span>
+        <span>Now {current.weightKg}kg</span>
+      </div>
     </div>
   );
 }

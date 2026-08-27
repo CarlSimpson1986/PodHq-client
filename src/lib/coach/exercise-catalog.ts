@@ -165,6 +165,91 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     isCompound: false,
     requiredEquipment: null,
   },
+
+  // Added 2026-08-27 for the A/B/C workout-template rotation (see
+  // generate-workout.ts's generateWorkoutTemplateSet) — chest, shoulders
+  // and core previously had exactly one catalog exercise each, which
+  // would have forced every template to repeat the identical exercise
+  // for those groups. All still within Hove's existing 4 equipment
+  // categories, no new EQUIPMENT_TYPES entry needed.
+  //
+  // DRAFT SAFETY TIPS — every safetyTip on this app is otherwise
+  // written by a person, deliberately never LLM-generated (see this
+  // file's own top comment and the RPE-adjustment reasoning in
+  // generate-workout.ts). These 7 are a starting draft in the same
+  // voice as the existing ones, not yet Carl-reviewed — treat as
+  // placeholder text, same as this app's other "starts as placeholder"
+  // content, until he's checked/edited them.
+  {
+    key: "incline_dumbbell_press",
+    name: "Incline Dumbbell Press",
+    muscleGroup: "chest",
+    avoidIfInjury: ["shoulders"],
+    startingWeightKg: { beginner: 6, intermediate: 10, advanced: 16 },
+    safetyTip: "Set the bench to a moderate incline (30-45°). Keep your wrists stacked over your elbows and lower the dumbbells under control.",
+    isCompound: true,
+    requiredEquipment: "dumbbells",
+  },
+  {
+    key: "cable_chest_fly",
+    name: "Cable Chest Fly",
+    muscleGroup: "chest",
+    avoidIfInjury: ["shoulders"],
+    startingWeightKg: { beginner: 5, intermediate: 10, advanced: 15 },
+    safetyTip: "Keep a slight bend in your elbows throughout. Bring your hands together in a wide arc — don't let the weight snap your arms back at the top of the stretch.",
+    isCompound: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "dumbbell_lateral_raise",
+    name: "Dumbbell Lateral Raise",
+    muscleGroup: "shoulders",
+    avoidIfInjury: ["shoulders"],
+    startingWeightKg: { beginner: 2, intermediate: 4, advanced: 6 },
+    safetyTip: "Raise the dumbbells out to shoulder height with a slight bend in your elbows. Avoid swinging or using momentum — control the weight down.",
+    isCompound: false,
+    requiredEquipment: "dumbbells",
+  },
+  {
+    key: "cable_face_pull",
+    name: "Cable Face Pull",
+    muscleGroup: "shoulders",
+    avoidIfInjury: ["shoulders"],
+    startingWeightKg: { beginner: 5, intermediate: 10, advanced: 15 },
+    safetyTip: "Pull the rope towards your face, leading with your elbows high and wide. Squeeze your shoulder blades together at the end of the movement.",
+    isCompound: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "cable_crunch",
+    name: "Cable Crunch",
+    muscleGroup: "core",
+    avoidIfInjury: ["back"],
+    startingWeightKg: { beginner: 10, intermediate: 20, advanced: 30 },
+    safetyTip: "Kneel facing the cable, hold the rope by your head, and curl your torso down using your abs — not your arms or hips.",
+    isCompound: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "dumbbell_russian_twist",
+    name: "Dumbbell Russian Twist",
+    muscleGroup: "core",
+    avoidIfInjury: ["back"],
+    startingWeightKg: { beginner: 4, intermediate: 8, advanced: 12 },
+    safetyTip: "Sit with your knees bent and lean back slightly, keeping your back straight. Rotate your torso side to side under control — don't just swing your arms.",
+    isCompound: false,
+    requiredEquipment: "dumbbells",
+  },
+  {
+    key: "barbell_bent_over_row",
+    name: "Barbell Bent-Over Row",
+    muscleGroup: "back",
+    avoidIfInjury: ["back", "shoulders"],
+    startingWeightKg: { beginner: 20, intermediate: 40, advanced: 60 },
+    safetyTip: "Hinge at the hips with a flat back, and pull the bar towards your lower ribs. Avoid rounding your back or using your legs to heave the weight up.",
+    isCompound: true,
+    requiredEquipment: "barbell_rack",
+  },
 ];
 
 // Start/end position photos, sourced from yuhonas/free-exercise-db

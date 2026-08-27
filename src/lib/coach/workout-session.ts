@@ -1,13 +1,17 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCoachProfile, getWorkoutHistory, type CoachProfile } from "@/lib/coach/coach-profile";
+import { getCoachProfile, getWorkoutHistory, type CoachProfile, type ExerciseHistoryEntry } from "@/lib/coach/coach-profile";
 import {
   generateWorkout,
   getInjuryExcludedKeys,
   getEquipmentExcludedKeys,
   computeWeightKgForBlock,
+  blockPhaseIndex,
+  generateWorkoutTemplateSet,
+  instantiateTemplate,
   type GeneratedExercise,
 } from "@/lib/coach/generate-workout";
+import { getTemplateSet, createTemplateSet, countSessionsForTemplates } from "@/lib/coach/workout-templates";
 import { EXERCISE_CATALOG } from "@/lib/coach/exercise-catalog";
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
@@ -136,6 +140,51 @@ async function getRecoveryAdvice(memberId: number, sessionId: number | null): Pr
   }
 }
 
+// Persistent Hypertrophy A/B/C rotation (2026-08-27, see
+// generate-workout.ts's own comment on generateWorkoutTemplateSet for
+// the product reasoning). Resolves this member's A/B/C set for the
+// active block's current phase — generating it once, lazily, the first
+// time a session lands in a phase that doesn't have one yet — then picks
+// the next letter in rotation and turns its fixed exercise list into a
+// live plan (weight/reps computed fresh, never stale from when the
+// template was first created). Returns null (falls back to
+// generateWorkout's original goal-based behavior) only if activeBlock
+// itself is unavailable or template generation produced zero usable
+// exercises (e.g. every catalog exercise excluded) — never a
+// hardcoded/guessed plan, same safety posture as resolveActiveBlock's
+// own try/catch below.
+async function resolveTemplatedPlan(
+  memberId: number,
+  profile: CoachProfile,
+  history: ExerciseHistoryEntry[],
+  activeBlock: { blockType: BlockType; startedAt: string } | undefined,
+  availableEquipment: EquipmentType[]
+): Promise<{ plan: GeneratedExercise[]; templateId: number } | null> {
+  if (!activeBlock) return null;
+
+  const phaseIndex = blockPhaseIndex(activeBlock.startedAt, new Date());
+  let templates = await getTemplateSet(memberId, activeBlock.blockType, activeBlock.startedAt, phaseIndex);
+
+  if (templates.length === 0) {
+    const generated = generateWorkoutTemplateSet({ profile, availableEquipment });
+    templates = await createTemplateSet(memberId, activeBlock.blockType, activeBlock.startedAt, phaseIndex, generated);
+    if (templates.length === 0) {
+      // Lost a create race to a concurrent request (or generation itself
+      // produced nothing) — reload whatever a concurrent winner created;
+      // still empty after that means real exclusion, not a race.
+      templates = await getTemplateSet(memberId, activeBlock.blockType, activeBlock.startedAt, phaseIndex);
+    }
+  }
+  if (templates.length === 0) return null;
+
+  const usedCount = await countSessionsForTemplates(templates.map((t) => t.id));
+  const chosen = templates[usedCount % templates.length];
+  const plan = instantiateTemplate(chosen.exercises, profile, history, activeBlock);
+  if (plan.length === 0) return null;
+
+  return { plan, templateId: chosen.id };
+}
+
 // Fetches an existing workout_session (with exercises/sets) for a booking,
 // or generates + persists a new one. Idempotent on booking_id's unique
 // index — a member re-opening the same booked session's workout screen
@@ -175,11 +224,18 @@ export async function getOrCreateWorkoutSession(
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
-  const plan = generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment });
+  const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment);
+  const plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment });
 
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
-    .insert({ member_id: memberId, booking_id: bookingId, resource_id: resourceId, status: "generated" })
+    .insert({
+      member_id: memberId,
+      booking_id: bookingId,
+      resource_id: resourceId,
+      status: "generated",
+      template_id: templated?.templateId ?? null,
+    })
     .select("id")
     .single();
 
@@ -523,7 +579,12 @@ export async function completeSession(
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
-  const nextPlan = generateWorkout({ profile, history, lastSession, activeBlock });
+  // Same template-if-available, generate-fresh-otherwise resolution as
+  // getOrCreateWorkoutSession — the preview should show what the next
+  // *actual* session will contain, not a plan generated a different way
+  // than what getOrCreateWorkoutSession will really produce next time.
+  const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, []);
+  const nextPlan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock });
 
   const changes: WeightChangePreview[] = nextPlan
     .map((next) => {

@@ -5,7 +5,7 @@ import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { UserIcon } from "@/components/icons";
+import { MoreMenu } from "@/components/more-menu";
 import { CoachProfileEditForm } from "@/components/coach-profile-edit-form";
 
 // The Profile tab — metrics/goals/plan, editable (the earlier onboarding
@@ -36,7 +36,7 @@ export default async function CoachProfilePage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Profile" subtitle="Your metrics, goals and plan" icon={UserIcon} iconHref="/profile" />
+      <PageHero title="Profile" subtitle="Your metrics, goals and plan" rightSlot={<MoreMenu />} />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-8 card-light p-6">
           <CoachProfileEditForm

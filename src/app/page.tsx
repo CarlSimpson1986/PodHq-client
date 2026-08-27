@@ -15,7 +15,7 @@ import { UpcomingSessionCard } from "@/components/upcoming-session-card";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { AICoachSection } from "@/components/ai-coach-section";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
-import { TrophyIcon } from "@/components/icons";
+import { TrophyIcon, UsersIcon } from "@/components/icons";
 
 export default async function HomePage() {
   const session = await createSessionClient();
@@ -90,6 +90,12 @@ export default async function HomePage() {
             <TrophyIcon className="h-6 w-6 text-card-light-foreground" />
             <p className="mt-2 text-base font-semibold">Leaderboard</p>
             <p className="mt-1 text-sm text-card-light-muted">See how you stack up against everyone else — sessions, streaks and steps, every gym.</p>
+          </Link>
+
+          <Link href="/professionals" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
+            <UsersIcon className="h-6 w-6 text-card-light-foreground" />
+            <p className="mt-2 text-base font-semibold">Find a professional</p>
+            <p className="mt-1 text-sm text-card-light-muted">Browse personal trainers at your gym and get in touch.</p>
           </Link>
 
           <p id="tour-credits" className="text-center text-sm text-muted-foreground">{credits} credits available</p>

@@ -1,4 +1,4 @@
-import { EXERCISE_CATALOG, type CatalogExercise } from "@/lib/coach/exercise-catalog";
+import { EXERCISE_CATALOG, type CatalogExercise, type MuscleGroup } from "@/lib/coach/exercise-catalog";
 import type { CoachProfile, ExerciseHistoryEntry, RecentSessionSummary } from "@/lib/coach/coach-profile";
 import {
   REP_TARGET_BY_BLOCK_PHASE,
@@ -73,7 +73,11 @@ export function blockPhaseIndex(startedAt: string, now: Date): 0 | 1 | 2 {
   return 2;
 }
 
-function repsTargetForBlock(activeBlock: { blockType: BlockType; startedAt: string } | undefined, goal: Goal, now: Date): number {
+// Exported for instantiateTemplate below — a template's weight/reps must
+// be recomputed live every time it's used (RPE history and the active
+// phase both change week to week), never baked in once at template
+// creation, so this needs to be callable from outside this file too.
+export function repsTargetForBlock(activeBlock: { blockType: BlockType; startedAt: string } | undefined, goal: Goal, now: Date): number {
   if (!activeBlock) return REP_TARGET_BY_GOAL[goal];
   if (activeBlock.blockType === "deload") return DELOAD_REP_TARGET;
   const phase = blockPhaseIndex(activeBlock.startedAt, now);
@@ -197,4 +201,116 @@ function adjustForRpe(lastWeightKg: number, lastRpe: number | null): number {
 function roundToNearestPlate(kg: number, increment = 1.25): number {
   if (kg === 0) return 0;
   return Math.round(kg / increment) * increment;
+}
+
+// Persistent Hypertrophy A/B/C rotation (2026-08-27) — Carl: pod members
+// realistically train up to ~3x/week, so the default should stay
+// full-body per session, but the exercise *selection* should repeat as
+// a consistent "Workout A/B/C" for the length of a training-block phase
+// instead of being picked fresh every session the way generateWorkout()
+// above always has. See workout-templates.ts for where these get
+// persisted/rotated; this file only ever picks *which* exercises go in
+// each template — weight/reps are deliberately never computed here (see
+// instantiateTemplate below), since RPE history and the active phase
+// both keep changing for as long as a template stays in rotation.
+//
+// Each template covers 4 muscle groups (matching EXERCISE_COUNT) rather
+// than one-per-group — 6 groups exist but a session is still 4
+// exercises, same as today. Legs appears in all three (the largest
+// muscle group, and every full-body program trains it every session);
+// the other 3 slots rotate through chest/back/shoulders/arms/core so
+// the *set* of three templates collectively balances the week, even
+// though any single template doesn't hit all 6 groups.
+const TEMPLATE_LETTERS = ["A", "B", "C"] as const;
+export type TemplateLetter = (typeof TEMPLATE_LETTERS)[number];
+
+const TEMPLATE_MUSCLE_GROUP_PLAN: Record<TemplateLetter, MuscleGroup[]> = {
+  A: ["legs", "chest", "back", "core"],
+  B: ["legs", "shoulders", "back", "arms"],
+  C: ["legs", "chest", "shoulders", "core"],
+};
+
+export interface TemplateExercisePick {
+  key: string;
+  name: string;
+  muscleGroup: string;
+}
+
+export interface GeneratedTemplate {
+  letter: TemplateLetter;
+  exercises: TemplateExercisePick[];
+}
+
+// Only the injury/equipment exclusions apply here — no lastSession
+// rotation (there's no single "last session" once exercises repeat
+// across weeks) and no Strength-block compound preference (a template
+// spans every phase of a block, including ones with different rep
+// targets, so biasing on today's phase wouldn't make sense for a set
+// that outlives it).
+export function generateWorkoutTemplateSet(input: {
+  profile: CoachProfile;
+  availableEquipment?: EquipmentType[];
+}): GeneratedTemplate[] {
+  const { profile, availableEquipment } = input;
+  const excludedKeys = new Set([...getInjuryExcludedKeys(profile.injuries), ...getEquipmentExcludedKeys(availableEquipment)]);
+  const safe = EXERCISE_CATALOG.filter((exercise) => !excludedKeys.has(exercise.key));
+  const usedKeys = new Set<string>();
+
+  return TEMPLATE_LETTERS.map((letter) => {
+    const groups = TEMPLATE_MUSCLE_GROUP_PLAN[letter];
+    const exercises = groups
+      .map((muscleGroup) => {
+        const candidates = safe.filter((e) => e.muscleGroup === muscleGroup);
+        // Prefer an option no earlier template in this set has used yet,
+        // so A/B/C differ as much as the catalog allows — falls back to
+        // reuse only when a muscle group has no fresh candidate left
+        // (e.g. shoulders/core before the 2026-08-27 catalog expansion,
+        // which had exactly one option each).
+        const fresh = candidates.filter((e) => !usedKeys.has(e.key));
+        return (fresh.length > 0 ? fresh : candidates)[0];
+      })
+      // A muscle group with zero eligible exercises (heavy injury/
+      // equipment exclusion) is skipped rather than crashing — same
+      // "never guess, degrade honestly" posture as generateWorkout's own
+      // fallback chain, just meaning a template can end up with fewer
+      // than 4 exercises in an extreme exclusion case.
+      .filter((e): e is CatalogExercise => e !== undefined);
+
+    for (const e of exercises) usedKeys.add(e.key);
+    return { letter, exercises: exercises.map((e) => ({ key: e.key, name: e.name, muscleGroup: e.muscleGroup })) };
+  });
+}
+
+// Turns a chosen template's fixed exercise list into a live plan —
+// weight and reps are computed fresh every time a template is used,
+// exactly the way generateWorkout() always has, so RPE-driven
+// progression keeps working across every repeat of the same template
+// within its phase. A template exercise key that's somehow no longer in
+// the catalog (shouldn't happen — nothing removes catalog entries) is
+// skipped rather than crashing.
+export function instantiateTemplate(
+  templateExercises: TemplateExercisePick[],
+  profile: CoachProfile,
+  history: ExerciseHistoryEntry[],
+  activeBlock: { blockType: BlockType; startedAt: string } | undefined,
+  now: Date = new Date()
+): GeneratedExercise[] {
+  const repsTarget = repsTargetForBlock(activeBlock, profile.goal, now);
+  const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
+  const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
+
+  return templateExercises
+    .map((ex) => {
+      const catalogEntry = EXERCISE_CATALOG.find((c) => c.key === ex.key);
+      if (!catalogEntry) return null;
+      return {
+        key: ex.key,
+        name: ex.name,
+        muscleGroup: ex.muscleGroup,
+        sets,
+        repsTarget,
+        weightTargetKg: computeWeightKgForBlock(catalogEntry, profile, historyByKey.get(ex.key), activeBlock),
+      };
+    })
+    .filter((e): e is GeneratedExercise => e !== null);
 }
