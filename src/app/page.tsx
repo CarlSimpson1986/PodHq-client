@@ -47,12 +47,12 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <div className="card-light flex-1 space-y-4 px-6 pb-10 pt-8">
+      <div className="flex-1 space-y-4 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-4">
           <AICoachSection state={getCoachHomeState(member, membership)} />
 
           {!membership && (
-            <div className="rounded-xl border-2 border-card-light-foreground p-5">
+            <div className="card-light border-2 border-card-light-foreground p-5">
               <p className="text-base font-semibold">Get Your Membership</p>
               <p className="mt-1 text-sm text-card-light-muted">Get started with a monthly credit allowance.</p>
               <Link
@@ -72,7 +72,7 @@ export default async function HomePage() {
                 slotDurationMinutes={resources.find((r) => r.id === upcomingBooking.resource_id)?.slotDurationMinutes ?? 60}
               />
             ) : (
-              <div className="rounded-xl border border-card-light-border p-5 text-center">
+              <div className="card-light p-5 text-center">
                 <p className="text-base font-semibold">No upcoming sessions</p>
                 <p className="mt-1 text-sm text-card-light-muted">Book a session to set your goals in motion.</p>
                 <Link
@@ -85,12 +85,12 @@ export default async function HomePage() {
             )}
           </div>
 
-          <Link href="/leaderboard" prefetch={false} className="block rounded-xl border border-card-light-border p-5">
+          <Link href="/leaderboard" prefetch={false} className="card-light block p-5">
             <p className="text-base font-semibold">Leaderboard →</p>
             <p className="mt-1 text-sm text-card-light-muted">Sessions, streaks and steps — every gym, one board.</p>
           </Link>
 
-          <p id="tour-credits" className="text-center text-sm text-card-light-muted">{credits} credits available</p>
+          <p id="tour-credits" className="text-center text-sm text-muted-foreground">{credits} credits available</p>
         </div>
       </div>
       <OnboardingTour tourCompletedAt={member.tour_completed_at} />

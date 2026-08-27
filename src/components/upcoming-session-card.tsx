@@ -72,7 +72,7 @@ export function UpcomingSessionCard({
   }
 
   return (
-    <div className="rounded-xl border border-card-light-border p-5 text-center">
+    <div className="card-light p-5 text-center">
       <p className="text-base font-semibold">Upcoming session</p>
       <p className="mt-1 text-sm text-card-light-muted">{formatSlot(booking.slot_start)}</p>
 
