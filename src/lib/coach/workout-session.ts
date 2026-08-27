@@ -24,7 +24,9 @@ export interface WorkoutSet {
   id: number;
   setNumber: number;
   repsTarget: number;
-  weightTargetKg: number;
+  // null the first time a member does this exercise — see
+  // generate-workout.ts's GeneratedExercise for the full reasoning.
+  weightTargetKg: number | null;
   repsActual: number | null;
   weightActualKg: number | null;
   rpe: number | null;
@@ -495,6 +497,11 @@ export async function applyRecoveryAdjustment(memberId: number, sessionId: numbe
     if (setsError) throw new Error(setsError.message);
 
     for (const set of sets ?? []) {
+      // A still-blank target (first time doing this exercise, member
+      // hasn't logged their own weight yet) has nothing to discount —
+      // `null * multiplier` would silently become 0 in JS, corrupting a
+      // genuine blank slate into a real (wrong) 0kg suggestion.
+      if (set.weight_target_kg === null) continue;
       const { error: updateError } = await admin
         .from("workout_sets")
         .update({ weight_target_kg: roundToNearestPlateForAdjustment(set.weight_target_kg * DELOAD_WEIGHT_MULTIPLIER) })
@@ -590,7 +597,12 @@ export async function completeSession(
     .map((next) => {
       const current = detail.exercises.find((e) => e.key === next.key);
       const lastSet = current?.sets.filter((s) => s.completedAt).slice(-1)[0];
-      if (!current || !lastSet) return null;
+      // Either side being null (the just-completed set was itself a
+      // first-timer with a blank target, or next session's plan somehow
+      // lands on an exercise with no history yet) means there's nothing
+      // meaningful to show as "changed from" — skip rather than display
+      // a broken/blank comparison.
+      if (!current || !lastSet || lastSet.weightTargetKg === null || next.weightTargetKg === null) return null;
       return { name: next.name, oldWeightKg: lastSet.weightTargetKg, newWeightKg: next.weightTargetKg, lastRpe: lastSet.rpe };
     })
     .filter((c): c is WeightChangePreview => c !== null && c.oldWeightKg !== c.newWeightKg);
