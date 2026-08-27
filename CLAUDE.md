@@ -52,8 +52,14 @@ working across both apps in the same session.
   podHq's CLAUDE.md applies here too)
 - Middleware lives in `src/proxy.ts`, not `middleware.ts` — Next 16's
   renamed convention; `middleware.ts` still works but is deprecated
-- Styling: Tailwind only, dark-only theme (no light mode), matches podHq's
-  `--accent`/`.card-glass` tokens in `globals.css`
+- Styling: Tailwind only, black-and-white brand — matches the marketing
+  site (myfitpod.co.uk) and app icon: black-dominant throughout, with
+  white `.card-light` tiles/cards used deliberately alongside dark
+  `.card-glass` ones (confirmed 2026-08-27; this line previously said
+  "dark-only theme (no light mode)", which was inaccurate — the app's
+  existing mix of light and dark cards, e.g. Training's tiles and the
+  auth pages, is the intended direction, not an inconsistency to fix).
+  Tokens in podHq's `globals.css`.
 - Currency: GBP (£), 2 decimal places, thousands separator
 - British English in all UI copy
 
