@@ -169,6 +169,17 @@ export function unansweredChatQuestionEmail(input: { memberName: string; gym: st
   };
 }
 
+export function professionalInquiryEmail(input: { memberName: string; gym: string; professionalName: string; message: string }): EmailContent {
+  return {
+    subject: `PT inquiry: ${input.memberName} → ${input.professionalName}`,
+    html: emailShell(`
+      <p><strong>${escapeHtml(input.memberName)}</strong> at <strong>${input.gym}</strong> asked to be put in touch with <strong>${escapeHtml(input.professionalName)}</strong>:</p>
+      <p style="margin: 16px 0; padding: 12px 16px; background: #f5f5f5; border-radius: 8px; font-style: italic;">&ldquo;${escapeHtml(input.message)}&rdquo;</p>
+      <p>Reach out to arrange it — this is also logged on podHq's Professionals page.</p>
+    `),
+  };
+}
+
 export function staffMembershipCancelledEmail(input: {
   memberName: string;
   gym: string;

@@ -14,135 +14,24 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-30.md`, covering the pilot
-mechanism proof (2026-08-05) through the coach-chat citation-reliability
-+ response-structure fix (2026-08-27) — all split out to keep this file
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-31.md`, covering the pilot
+mechanism proof (2026-08-05) through the four-round black-and-white
+design-consistency saga (2026-08-27) — all split out to keep this file
 within Claude Code's ~15,000-character `@`-import limit. Archives aren't
 always the strictly oldest material — the split point is "what's finished
 and stable" as much as "what's oldest" (see `ROADMAP-ARCHIVE-14.md`'s,
 `-15.md`'s, `-16.md`'s, `-17.md`'s, `-18.md`'s, `-19.md`'s, `-20.md`'s,
 `-21.md`'s, `-22.md`'s, `-23.md`'s, `-24.md`'s, `-25.md`'s, `-26.md`'s,
-`-27.md`'s, `-28.md`'s, `-29.md`'s, and `-30.md`'s own header notes for
-same-day examples of this). All archives are reference-only (not
-auto-loaded by CLAUDE.md); check them for full stage-by-stage build
+`-27.md`'s, `-28.md`'s, `-29.md`'s, `-30.md`'s, and `-31.md`'s own header
+notes for same-day examples of this). All archives are reference-only
+(not auto-loaded by CLAUDE.md); check them for full stage-by-stage build
 history, or `git log` on this file for the exact split points. This
-file's active content is the "Design direction confirmed" saga
+file's active content is the bottom-nav/trophy-icon follow-up
 (2026-08-27) plus whatever's added after it. If this file grows too
 large again, split it the same way: move whichever section is most
 clearly finished (not necessarily the chronologically oldest) into a
-numbered `ROADMAP-ARCHIVE-31.md`, leave a pointer note at the top of this
+numbered `ROADMAP-ARCHIVE-32.md`, leave a pointer note at the top of this
 file, and update this paragraph.
-
-## Design direction confirmed: black-and-white brand, not dark-only — 2026-08-27 (same day, later still)
-
-Carl asked whether the app's colour scheme should be consistent (noticed
-Training's tiles split between white `card-light` and dark `card-glass`,
-and the auth pages' white form cards). Checked the actual brand — app
-icon and myfitpod.co.uk are both black-dominant throughout, with white
-used deliberately as small accent cards/buttons, never a full section.
-Carl decided to keep the app's existing mixed light/dark card usage as
-the intended direction, not something to unify to all-dark. Updated
-CLAUDE.md's `Styling` line, which previously said "dark-only theme (no
-light mode)" — inaccurate and now corrected. No code changes needed;
-existing usage already matches.
-
-**Correction, same day, minutes later**: Carl pushed back — "there are
-pages that are STILL BLACK." Went looking properly this time and found
-`globals.css` already documents the actual rule (added 2026-08-10, missed
-in the first pass): page shell/hero/nav stay dark, but inner content
-surfaces — forms, list rows — are supposed to go white (`card-light`).
-Several real content cards were still on the dark `card-glass` style,
-violating that existing rule: Dashboard's Sessions/nutrition/training-
-block tiles, Check-in, Ask-your-coach, Leaderboard and Next-session
-cards; Coach's Check-in card; Health's nutrition-summary and AI-Coach
-upsell cards; Training's Next/Last-session cards; the Leaderboard boards
-and opt-in card; `recovery-status-card.tsx` and `weekly-recommendation-
-card.tsx` (shared across those pages); and the auth-callback "Signing
-you in..." card. All converted to `card-light`, with body text swapped
-to `card-light-muted`/inherited `card-light-foreground` — plain gold
-`text-accent` was swapped out too (found it's genuinely low-contrast on
-white, ~1.5:1) but solid `bg-accent` buttons were left alone since
-they're self-contained and high-contrast regardless of card colour.
-Deliberately left dark: the Coach chat message bubbles — conversational
-UI, not a data card, and needs the dark/gold contrast against the
-accent-coloured user bubble.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean. Not visually verified — no test-account login in
-this session for browser testing, same limitation as elsewhere. Needs
-Carl's own check in the app.
-
-**Correction, same day, immediately after**: Carl sent screenshots
-comparing Home (`/`) against the new Dashboard — Home still looked
-wrong: one continuous white `card-light` sheet below the dark hero, with
-its inner sections just outlined borders (no fill, no shadow, no black
-gaps), instead of Dashboard's now-standard look of separate floating
-white tiles on black. Root cause: `src/app/page.tsx` wraps its whole
-content area in one `card-light` div, and `ai-coach-section.tsx` /
-`upcoming-session-card.tsx` only ever had plain borders because they
-were built to sit inside that shared white wrapper.
-
-Fixed by removing the outer wrapper and converting each section (AI
-Coach status, "Get Your Membership", upcoming/no-session card, Leaderboard
-link) into its own `card-light` tile, matching Dashboard exactly. Also
-found the *same* single-sheet wrapper used identically across ~19 other
-pages (login, signup, access forms, buy-credits, buy-membership, checkin,
-nutrition, workout detail, etc.) — deliberately left those alone: they're
-single-purpose forms/detail pages, not hub pages stacking independent
-status cards, so one continuous white sheet is the right shape there.
-Home was the one page structurally like Dashboard (a hub of independent
-cards) dressed in the form-page pattern instead.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean. Not visually verified — same login limitation.
-Needs Carl's own check.
-
-**Correction, same day, immediately after**: Carl, forcefully — "I WANT
-THE COLOUR SCHEME TO BE THE SAME THROUGHOUT THE ENTIRE APP! USING THE
-MAIN DASHBOARD AS THE EXAMPLE." He was also confused for a round by
-Dashboard vs. Home being two different screens (the main bottom nav's
-"Coach" tab actually links to `/dashboard`, and there's no nav link back
-to Home from inside the Coach/Training/Nutrition/Coach sub-app, plus the
-installed PWA's `start_url` is `/book`, not `/`) — worth fixing at some
-point, not done this pass, purely a navigation-clarity issue.
-
-Explicitly stopped applying my own "forms are different from hubs"
-judgement (which I'd used to justify leaving ~19 pages alone earlier the
-same day) and instead applied Dashboard's exact treatment everywhere.
-Root cause, found properly this time: on every one of those pages the
-`card-light` class sat directly on a `flex-1` div with the page's own
-`px-6`/`pb-*`/`pt-8` padding — meaning the white box's padding was
-*inside* the box (so it touched every screen edge, no visible black
-margin) and `flex-1` stretched it to fill the full remaining viewport
-height even when content was short (the large dead white/black area in
-Carl's very first screenshot). Dashboard's cards, by contrast, get their
-inset from an *outer* plain padding div, with `card-light` only on the
-individually-sized inner card — rounded corners and black margins fully
-visible on all sides.
-
-Fixed by restructuring all 22 remaining offenders the same way: outer
-`flex-1 px-6 pb-* pt-8` div stays plain (no background, so black shows
-through), `card-light` moves onto an inner div sized to its actual
-content. For genuinely single-purpose pages (login, signup, forgot/
-reset-password, the three access-flow steps, coach-onboarding, checkin,
-coach/profile edit, buy-membership, gift-voucher x2, waitlist offer,
-workout detail, nutrition) that's one card wrapping the whole form/view,
-matching how a single Dashboard tile can hold one cohesive block. For
-pages built from genuinely distinct sections — Shop's three nav links,
-buy-credits' package-list-plus-voucher-form, and Profile's avatar/
-membership/Account-list/Booking-list/Your-details blocks — each section
-got split into its own separate floating tile, matching Dashboard's
-actual multi-card structure rather than one shared sheet. Also found and
-fixed the exact same bug in `booking-grid.tsx` (the Book tab) and
-`profile-view.tsx` (Profile tab), neither of which had turned up in the
-earlier page-level searches since they're components, not `app/*/page.tsx`
-files themselves.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
-`next build` all clean across all 22 files. Not visually verified — same
-login limitation as every other UI change this session. This is the
-widest-reaching styling change of the day; needs Carl's own check across
-several pages, not just one, before calling it done.
 
 ## Bottom-nav "Coach" → "Premium", Leaderboard tiles get a trophy icon — 2026-08-27 (same day, later still)
 
@@ -228,3 +117,53 @@ were compared side by side too.
 
 **Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
 `next build` all clean. Not visually verified — same login limitation.
+
+## Dashboard tile cleanup + "Find a Professional" directory — 2026-08-27 (same day, later still)
+
+**Dashboard tile cleanup**: Carl — "get rid of ask your coach as it's its
+own tab" and "move book your session to training." Both tiles were
+genuine duplicates rather than needing new code: Coach chat already has
+its own tab in the Premium nav (`MemberBottomNav`), and `/training`
+already had its own equivalent "Next session" card. Removed both from
+`dashboard/page.tsx`, along with the now-unused `getNextUpcomingBooking`
+fetch and import.
+
+## "Find a Professional" — personal trainer directory
+
+Carl wants a PT marketplace modelled on Solo60's "Professional" tab (two
+screenshots reviewed): a searchable/filterable directory of trainer
+profile cards (photo, specialties, favourite gyms, price/hour), a profile
+page, and a "More information" inquiry form (goals/budget/availability,
+Send) rather than instant slot booking. Scoped via a short round of
+questions before building — see podHq's `ROADMAP_HISTORY.md` (stage 41)
+for the full cross-repo write-up, since the data model and admin CRUD
+live there; summary of this repo's half here.
+
+**This repo's part**: `src/lib/data/professionals.ts` reads podHq's new
+`professionals` table via `createAdminClient()` (same cross-app read
+pattern as `catalog.ts`/`catalog_items`). `/professionals` — own
+`PageHero` + `BottomNav` (not premium-gated, not `MemberBottomNav`, same
+reasoning `/leaderboard` gives for a Dashboard-linked-but-not-coaching
+feature) — renders `ProfessionalsDirectory`, a client search/gym-filter
+grid. `/professionals/[id]` shows the full profile plus
+`ProfessionalInquiryForm` (same local-state/fetch shape as
+`redeem-voucher-form.tsx`), posting to a new
+`/api/member/professional-inquiries` route that inserts the inquiry then
+notifies staff — reusing the exact `unanswered_chat_question` pattern
+(`getStaffRecipients` + a new `professional_inquiry` event type +
+template, member text through `escapeHtml()`). New `UsersIcon` added to
+`icons.tsx` (no two-person icon existed); Dashboard got a matching "Find
+a professional" tile next to Leaderboard, same trophy-tile precedent
+(icon + centred text).
+
+No photo-upload infrastructure exists anywhere in either app — `photoUrl`
+is a plain nullable URL field, falling back to an initials avatar (same
+pattern `profile-view.tsx` uses) when empty. Real trainer data and any
+upload flow are both explicitly deferred; this ships with placeholder
+profiles only, per Carl's own scoping answer.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean in both repos. **Not yet applied live** — migration
+`0066_professionals.sql` (podHq) needs Carl to paste the full SQL into
+Supabase's SQL Editor himself; nothing in either app's new code has been
+exercised against a real database or a real browser session yet.

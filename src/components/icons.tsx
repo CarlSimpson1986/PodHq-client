@@ -69,6 +69,17 @@ export function UserIcon({ className }: IconProps) {
   );
 }
 
+export function UsersIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <circle cx="8.5" cy="8" r="3" />
+      <path d="M2.5 20c0-3.6 2.7-6 6-6s6 2.4 6 6" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M15 14c2.5 0 4.5 1.9 4.5 5" />
+    </svg>
+  );
+}
+
 export function HomeIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
