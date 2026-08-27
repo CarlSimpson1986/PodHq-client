@@ -17,6 +17,7 @@ import { WeekCalendarStrip } from "@/components/week-calendar-strip";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { TrialBanner } from "@/components/trial-banner";
 import { MoreMenu } from "@/components/more-menu";
+import { TrophyIcon } from "@/components/icons";
 
 const BLOCK_TYPE_LABEL: Record<string, string> = {
   hypertrophy: "Hypertrophy",
@@ -202,8 +203,9 @@ export default async function DashboardPage() {
                 <p className="mt-1 text-sm text-card-light-muted">Training, nutrition, recovery — grounded in your own data.</p>
               </Link>
 
-              <Link href="/leaderboard" prefetch={false} className="card-light block p-5">
-                <p className="text-sm font-semibold">Leaderboard →</p>
+              <Link href="/leaderboard" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
+                <TrophyIcon className="h-6 w-6 text-card-light-foreground" />
+                <p className="mt-2 text-sm font-semibold">Leaderboard →</p>
                 <p className="mt-1 text-sm text-card-light-muted">Sessions, streaks and steps — every gym, one board.</p>
               </Link>
 
