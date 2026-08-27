@@ -1,10 +1,14 @@
 import { londonDateParts } from "@/lib/london-time";
 
-// Presentational-only week strip (7 circles, Mon-Sun, today filled gold) —
-// no such component existed anywhere in the app before (confirmed by
-// search). Purely a "here's where you are in the week" visual, matching
+// Presentational-only week strip (7 circles, Mon-Sun, today filled white/
+// black) — no such component existed anywhere in the app before (confirmed
+// by search). Purely a "here's where you are in the week" visual, matching
 // the brief's Dashboard header; it doesn't drive any date selection —
-// the Dashboard is always "today" per the brief's own spec.
+// the Dashboard is always "today" per the brief's own spec. Today's
+// highlight was gold until 2026-08-27, when it was switched to match
+// Book's own date-strip (bg-foreground/text-background) — Carl wanted one
+// consistent highlight language for "this is the relevant day" rather than
+// two different ones (gold circle here, white square there).
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 
 export function WeekCalendarStrip() {
@@ -24,7 +28,7 @@ export function WeekCalendarStrip() {
           <div
             key={i}
             className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ${
-              isToday ? "bg-accent text-accent-foreground" : "border border-card-border text-muted-foreground"
+              isToday ? "bg-foreground text-background" : "border border-card-border text-muted-foreground"
             }`}
           >
             {label}
