@@ -103,9 +103,9 @@ function AuthCallbackInner() {
 function CallbackCard({ error, children }: { error?: boolean; children: React.ReactNode }) {
   return (
     <main className="flex min-h-full flex-1 items-center justify-center p-4">
-      <div className="card-glass w-full max-w-sm p-6">
+      <div className="card-light w-full max-w-sm p-6">
         <h1 className="mb-1 text-lg font-semibold">{error ? "Link expired" : "Signing you in..."}</h1>
-        <p className={`text-sm ${error ? "text-danger" : "text-muted-foreground"}`}>{children}</p>
+        <p className={`text-sm ${error ? "text-danger" : "text-card-light-muted"}`}>{children}</p>
       </div>
     </main>
   );

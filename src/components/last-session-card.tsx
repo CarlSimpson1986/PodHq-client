@@ -15,7 +15,7 @@ const RPE_LABEL: Record<number, string> = {
 // this mirrors.
 function rpeBadgeClass(rpe: number): string {
   if (rpe <= 2) return "bg-success/15 text-success";
-  if (rpe === 3) return "bg-accent/15 text-accent";
+  if (rpe === 3) return "bg-card-light-border text-card-light-foreground";
   return "bg-warning/15 text-warning";
 }
 
@@ -26,15 +26,15 @@ function formatDate(iso: string): string {
 export function LastSessionCard({ session }: { session: LastSessionDetail | null }) {
   if (!session || session.exercises.length === 0) {
     return (
-      <div className="card-glass p-5">
-        <p className="text-sm text-muted-foreground">Complete a session to see it here.</p>
+      <div className="card-light p-5">
+        <p className="text-sm text-card-light-muted">Complete a session to see it here.</p>
       </div>
     );
   }
 
   return (
-    <div className="card-glass space-y-4 p-5">
-      <p className="text-sm font-semibold text-foreground">{formatDate(session.createdAt)}</p>
+    <div className="card-light space-y-4 p-5">
+      <p className="text-sm font-semibold">{formatDate(session.createdAt)}</p>
       <div className="space-y-3">
         {session.exercises.map((exercise) => {
           const ratedSets = exercise.sets.filter((s) => s.rpe !== null);
@@ -42,12 +42,12 @@ export function LastSessionCard({ session }: { session: LastSessionDetail | null
           return (
             <div key={exercise.exerciseKey} className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm text-foreground">{exercise.name}</p>
-                {topWeight > 0 && <p className="text-xs text-muted-foreground">{topWeight}kg</p>}
+                <p className="text-sm">{exercise.name}</p>
+                {topWeight > 0 && <p className="text-xs text-card-light-muted">{topWeight}kg</p>}
               </div>
               <div className="flex gap-1">
                 {ratedSets.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">Not rated</span>
+                  <span className="text-xs text-card-light-muted">Not rated</span>
                 ) : (
                   ratedSets.map((set) => (
                     <span

@@ -203,3 +203,29 @@ the intended direction, not something to unify to all-dark. Updated
 CLAUDE.md's `Styling` line, which previously said "dark-only theme (no
 light mode)" — inaccurate and now corrected. No code changes needed;
 existing usage already matches.
+
+**Correction, same day, minutes later**: Carl pushed back — "there are
+pages that are STILL BLACK." Went looking properly this time and found
+`globals.css` already documents the actual rule (added 2026-08-10, missed
+in the first pass): page shell/hero/nav stay dark, but inner content
+surfaces — forms, list rows — are supposed to go white (`card-light`).
+Several real content cards were still on the dark `card-glass` style,
+violating that existing rule: Dashboard's Sessions/nutrition/training-
+block tiles, Check-in, Ask-your-coach, Leaderboard and Next-session
+cards; Coach's Check-in card; Health's nutrition-summary and AI-Coach
+upsell cards; Training's Next/Last-session cards; the Leaderboard boards
+and opt-in card; `recovery-status-card.tsx` and `weekly-recommendation-
+card.tsx` (shared across those pages); and the auth-callback "Signing
+you in..." card. All converted to `card-light`, with body text swapped
+to `card-light-muted`/inherited `card-light-foreground` — plain gold
+`text-accent` was swapped out too (found it's genuinely low-contrast on
+white, ~1.5:1) but solid `bg-accent` buttons were left alone since
+they're self-contained and high-contrast regardless of card colour.
+Deliberately left dark: the Coach chat message bubbles — conversational
+UI, not a data card, and needs the dark/gold contrast against the
+accent-coloured user bubble.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (98/98), and
+`next build` all clean. Not visually verified — no test-account login in
+this session for browser testing, same limitation as elsewhere. Needs
+Carl's own check in the app.

@@ -96,9 +96,9 @@ export default async function DashboardPage() {
           {state.kind === "no_trial" && <TrialBanner />}
 
           {state.kind === "trial_pending" && (
-            <div className="card-glass p-5">
-              <p className="text-sm font-semibold text-foreground">AI Coach trial ready</p>
-              <p className="mt-1 text-sm text-muted-foreground">Book your next session and your 7-day trial starts automatically.</p>
+            <div className="card-light p-5">
+              <p className="text-sm font-semibold">AI Coach trial ready</p>
+              <p className="mt-1 text-sm text-card-light-muted">Book your next session and your 7-day trial starts automatically.</p>
               <Link href="/book" prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
                 Book a session
               </Link>
@@ -106,9 +106,9 @@ export default async function DashboardPage() {
           )}
 
           {state.kind === "trial_expired" && (
-            <div className="card-glass p-5">
-              <p className="text-sm font-semibold text-foreground">Your trial has ended.</p>
-              <p className="mt-1 text-sm text-muted-foreground">Upgrade to keep your AI Coach ready every session.</p>
+            <div className="card-light p-5">
+              <p className="text-sm font-semibold">Your trial has ended.</p>
+              <p className="mt-1 text-sm text-card-light-muted">Upgrade to keep your AI Coach ready every session.</p>
               <Link href="/buy-membership" className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
                 Upgrade
               </Link>
@@ -123,9 +123,9 @@ export default async function DashboardPage() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">This week</p>
                 <div className="space-y-3">
                   {consistency && coachProfile && (
-                    <div className="card-glass p-5">
-                      <p className="text-sm font-semibold text-foreground">Sessions</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
+                    <div className="card-light p-5">
+                      <p className="text-sm font-semibold">Sessions</p>
+                      <p className="mt-1 text-sm text-card-light-muted">
                         {consistency.sessionsCompleted} / {coachProfile.sessions_per_week}{" "}
                         {consistency.sessionsCompleted >= coachProfile.sessions_per_week ? (
                           <span className="text-success">on track</span>
@@ -137,14 +137,14 @@ export default async function DashboardPage() {
                   )}
 
                   {weeklyReview && (
-                    <div className="card-glass p-5">
-                      <p className="text-sm font-semibold text-foreground">Avg. nutrition</p>
+                    <div className="card-light p-5">
+                      <p className="text-sm font-semibold">Avg. nutrition</p>
                       {weeklyReview.avgDailyCalories === null ? (
-                        <p className="mt-1 text-sm text-muted-foreground">No meals logged this week yet.</p>
+                        <p className="mt-1 text-sm text-card-light-muted">No meals logged this week yet.</p>
                       ) : (
                         <>
-                          <p className="mt-1 text-sm text-foreground">{weeklyReview.avgDailyCalories} kcal</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-1 text-sm">{weeklyReview.avgDailyCalories} kcal</p>
+                          <p className="mt-1 text-xs text-card-light-muted">
                             P: {weeklyReview.avgDailyProteinG}g | C: {weeklyReview.avgDailyCarbsG}g | F: {weeklyReview.avgDailyFatG}g
                           </p>
                         </>
@@ -153,37 +153,37 @@ export default async function DashboardPage() {
                   )}
 
                   {blockState && blockState.kind === "in_block" && (
-                    <div className="card-glass p-5">
-                      <p className="text-sm font-semibold text-foreground">Training block</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
+                    <div className="card-light p-5">
+                      <p className="text-sm font-semibold">Training block</p>
+                      <p className="mt-1 text-sm text-card-light-muted">
                         {BLOCK_TYPE_LABEL[blockState.blockType] ?? blockState.blockType} · {blockState.daysRemaining} days left
                       </p>
                     </div>
                   )}
                   {blockState && blockState.kind === "transition_due" && (
-                    <Link href="/training" prefetch={false} className="block rounded-2xl border border-card-border p-5">
-                      <p className="text-sm font-semibold text-foreground">Training block ready to move on</p>
-                      <p className="mt-1 text-sm text-muted-foreground">View training →</p>
+                    <Link href="/training" prefetch={false} className="card-light block p-5">
+                      <p className="text-sm font-semibold">Training block ready to move on</p>
+                      <p className="mt-1 text-sm text-card-light-muted">View training →</p>
                     </Link>
                   )}
                 </div>
               </div>
 
               {coachProfile && (
-                <Link href="/coach/checkin" prefetch={false} className="card-glass block p-5">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Check-in</p>
+                <Link href="/coach/checkin" prefetch={false} className="card-light block p-5">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Check-in</p>
                   {checkInState.kind === "not_due" && (
                     <>
-                      <p className="text-sm font-semibold text-foreground">
+                      <p className="text-sm font-semibold">
                         {checkInState.daysRemaining} {checkInState.daysRemaining === 1 ? "day" : "days"} to your next check-in
                       </p>
-                      <p className="mt-1 text-sm text-muted-foreground">Due {checkInState.nextDueDate}.</p>
+                      <p className="mt-1 text-sm text-card-light-muted">Due {checkInState.nextDueDate}.</p>
                     </>
                   )}
                   {checkInState.kind === "due" && (
                     <>
                       <p className="text-sm font-semibold text-warning">Check-in ready</p>
-                      <p className="mt-1 text-sm text-muted-foreground">See how your week went →</p>
+                      <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
                     </>
                   )}
                   {checkInState.kind === "overdue" && (
@@ -191,34 +191,34 @@ export default async function DashboardPage() {
                       <p className="text-sm font-semibold text-danger">
                         Check-in overdue by {checkInState.daysOverdue} {checkInState.daysOverdue === 1 ? "day" : "days"}
                       </p>
-                      <p className="mt-1 text-sm text-muted-foreground">See how your week went →</p>
+                      <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
                     </>
                   )}
                 </Link>
               )}
 
-              <Link href="/coach" prefetch={false} className="card-glass block p-5">
-                <p className="text-sm font-semibold text-accent">Ask your coach →</p>
-                <p className="mt-1 text-sm text-muted-foreground">Training, nutrition, recovery — grounded in your own data.</p>
+              <Link href="/coach" prefetch={false} className="card-light block p-5">
+                <p className="text-sm font-semibold">Ask your coach →</p>
+                <p className="mt-1 text-sm text-card-light-muted">Training, nutrition, recovery — grounded in your own data.</p>
               </Link>
 
-              <Link href="/leaderboard" prefetch={false} className="card-glass block p-5">
-                <p className="text-sm font-semibold text-accent">Leaderboard →</p>
-                <p className="mt-1 text-sm text-muted-foreground">Sessions, streaks and steps — every gym, one board.</p>
+              <Link href="/leaderboard" prefetch={false} className="card-light block p-5">
+                <p className="text-sm font-semibold">Leaderboard →</p>
+                <p className="mt-1 text-sm text-card-light-muted">Sessions, streaks and steps — every gym, one board.</p>
               </Link>
 
-              <div className="card-glass p-5">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next session</p>
+              <div className="card-light p-5">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Next session</p>
                 {upcomingBooking ? (
                   <>
-                    <p className="text-sm text-foreground">Your personalised workout is ready.</p>
+                    <p className="text-sm">Your personalised workout is ready.</p>
                     <Link href={`/workout/${upcomingBooking.id}`} prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
                       View my workout
                     </Link>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-muted-foreground">Book a session to get your next personalised workout.</p>
+                    <p className="text-sm text-card-light-muted">Book a session to get your next personalised workout.</p>
                     <Link href="/book" prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
                       Book a session
                     </Link>
@@ -227,9 +227,9 @@ export default async function DashboardPage() {
               </div>
 
               {!coachProfile && (
-                <div className="card-glass p-5">
-                  <p className="text-sm font-semibold text-foreground">Set up your AI Coach</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Answer a few quick questions to unlock your personalised plan.</p>
+                <div className="card-light p-5">
+                  <p className="text-sm font-semibold">Set up your AI Coach</p>
+                  <p className="mt-1 text-sm text-card-light-muted">Answer a few quick questions to unlock your personalised plan.</p>
                   <Link href="/coach-onboarding" prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
                     Set up my AI Coach
                   </Link>

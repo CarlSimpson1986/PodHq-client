@@ -76,20 +76,20 @@ export default async function CoachPage() {
         <div className="mx-auto w-full max-w-md space-y-4">
           <WeeklyRecommendationCard recommendation={recommendation} />
 
-          <Link href="/coach/checkin" prefetch={false} className="card-glass block p-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Check-in</p>
+          <Link href="/coach/checkin" prefetch={false} className="card-light block p-5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Check-in</p>
             {checkInState.kind === "not_due" && (
               <>
-                <p className="text-sm font-semibold text-foreground">
+                <p className="text-sm font-semibold">
                   {checkInState.daysRemaining} {checkInState.daysRemaining === 1 ? "day" : "days"} to your next check-in
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">Due {checkInState.nextDueDate}.</p>
+                <p className="mt-1 text-sm text-card-light-muted">Due {checkInState.nextDueDate}.</p>
               </>
             )}
             {checkInState.kind === "due" && (
               <>
                 <p className="text-sm font-semibold text-warning">Check-in ready</p>
-                <p className="mt-1 text-sm text-muted-foreground">See how your week went →</p>
+                <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
               </>
             )}
             {checkInState.kind === "overdue" && (
@@ -97,7 +97,7 @@ export default async function CoachPage() {
                 <p className="text-sm font-semibold text-danger">
                   Check-in overdue by {checkInState.daysOverdue} {checkInState.daysOverdue === 1 ? "day" : "days"}
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">See how your week went →</p>
+                <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
               </>
             )}
           </Link>
