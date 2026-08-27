@@ -1,20 +1,17 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
-import { getCoachProfile } from "@/lib/coach/coach-profile";
-import { getWearableConnection, getLatestWearableSnapshot } from "@/lib/data/wearables";
+import { getWearableConnection, getLatestWearableSnapshot, getRecentWearableSnapshots } from "@/lib/data/wearables";
 import { getRecoveryStatus } from "@/lib/coach/recovery-status";
-import { currentCheckInPeriod } from "@/lib/coach/checkin-state";
-import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
 import { MoreMenu } from "@/components/more-menu";
 import { WearableConnectionCard } from "@/components/wearable-connection-card";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
-import { TrainingBlockView } from "@/components/training-block-view";
+import { StepGauge } from "@/components/step-gauge";
+import { HealthMetricCard } from "@/components/health-metric-card";
 
 // Moved from /coach/health, then (same day, later) stopped being a
 // primary tab at all — Carl felt it "seemed a bit pointless" as a
@@ -29,9 +26,20 @@ import { TrainingBlockView } from "@/components/training-block-view";
 // (Carl: "open it up" — feeds a universal step-count leaderboard, and
 // the wearable connect/callback/refresh/disconnect API routes never
 // actually checked premium status anyway, only this page's own redirect
-// did). Nutrition/Training sections still need a coach profile to mean
-// anything — no food log or workout data exists without one — so a
-// single upsell card replaces both rather than showing two empty states.
+// did).
+//
+// Nutrition/Training summary sections removed 2026-08-27 — both are
+// already their own top-level tabs, so summarising them here again was a
+// duplicate, same reasoning as removing Dashboard's "Ask your coach" and
+// "Next session" tiles the same day. Replaced with real wearable metrics:
+// a steps-vs-target gauge plus expandable resting-heart-rate/HRV trends,
+// using getRecentWearableSnapshots (already existed, just never
+// surfaced beyond the flat current-value grid in WearableConnectionCard).
+// Sleep is deliberately left out of the trend widgets — Google Health's
+// dailyRollUp has no sleep field at all yet (see
+// wearable-connection-card.tsx's own comment), so there's no real data
+// to trend; building that needs separate work first, not a chart with
+// nothing in it.
 //
 // Renders the main app's BottomNav, not MemberBottomNav — same fix as
 // /leaderboard, same day: a universal, not Coach-specific, page landing
@@ -51,27 +59,30 @@ export default async function HealthPage() {
     return <NoMemberProfile />;
   }
 
-  const coachProfile = await getCoachProfile(member.id);
-
   const wearableConnection = await getWearableConnection(member.id);
-  const [wearableSnapshot, recoveryStatus] = await Promise.all([
+  const [wearableSnapshot, recentSnapshots, recoveryStatus] = await Promise.all([
     wearableConnection ? getLatestWearableSnapshot(member.id) : Promise.resolve(null),
+    wearableConnection ? getRecentWearableSnapshots(member.id) : Promise.resolve([]),
     getRecoveryStatus(member.id),
   ]);
 
-  let weeklyReview = null;
-  if (coachProfile) {
-    const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-    weeklyReview = await getWeeklyReview(member.id, periodStart, periodEnd, member.gender);
-  }
+  // getRecentWearableSnapshots excludes today by construction (see its
+  // own comment); getLatestWearableSnapshot is the only source for
+  // today's row, if synced. Merged via a Map keyed on date so the two
+  // never produce a duplicate point if the "latest" row happens to fall
+  // inside the recent window too, then sorted oldest-first for a
+  // left-to-right trend line.
+  const byDate = new Map(recentSnapshots.map((s) => [s.recordedDate, s]));
+  if (wearableSnapshot) byDate.set(wearableSnapshot.recordedDate, wearableSnapshot);
+  const trend = Array.from(byDate.values()).sort((a, b) => a.recordedDate.localeCompare(b.recordedDate));
+
+  const stepPoints = trend.filter((s) => s.steps !== null).map((s) => ({ date: s.recordedDate, value: s.steps! }));
+  const restingHrPoints = trend.filter((s) => s.restingHeartRate !== null).map((s) => ({ date: s.recordedDate, value: s.restingHeartRate! }));
+  const hrvPoints = trend.filter((s) => s.hrvMs !== null).map((s) => ({ date: s.recordedDate, value: s.hrvMs! }));
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero
-        title="Health"
-        subtitle={weeklyReview ? "Recovery, nutrition and training in one place" : "Your recovery data, connected"}
-        rightSlot={<MoreMenu />}
-      />
+      <PageHero title="Health" subtitle="Your recovery data, connected" rightSlot={<MoreMenu />} />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <section>
@@ -84,58 +95,19 @@ export default async function HealthPage() {
             </div>
           </section>
 
-          {weeklyReview ? (
-            <>
-              <section>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nutrition this week</p>
-                <div className="card-light p-5">
-                  {weeklyReview.nutritionDaysLogged === 0 ? (
-                    <p className="text-sm text-card-light-muted">No meals logged this week yet.</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3 text-center">
-                      <div>
-                        <p className="text-lg font-semibold">{weeklyReview.avgDailyCalories}</p>
-                        <p className="text-xs text-card-light-muted">
-                          Avg. daily kcal{weeklyReview.targets ? ` / ${weeklyReview.targets.calories}` : ""}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold">{weeklyReview.avgDailyProteinG}g</p>
-                        <p className="text-xs text-card-light-muted">
-                          Avg. daily protein{weeklyReview.targets ? ` / ${weeklyReview.targets.proteinG}g` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  <Link href="/nutrition" prefetch={false} className="mt-4 inline-block text-xs font-semibold underline">
-                    View nutrition →
-                  </Link>
-                </div>
-              </section>
-
-              <section>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Training</p>
-                <div className="card-light">
-                  <TrainingBlockView />
-                </div>
-                <Link href="/training" prefetch={false} className="mt-3 inline-block text-xs font-semibold text-accent underline">
-                  View training progress →
-                </Link>
-              </section>
-            </>
-          ) : (
-            <div className="card-light p-5">
-              <p className="text-sm font-semibold">Want AI-personalised training and nutrition?</p>
-              <p className="mt-1 text-sm text-card-light-muted">
-                Set up your AI Coach to unlock programmed workouts, progress tracking, and a daily nutrition diary alongside your recovery data.
-              </p>
-              <Link
-                href="/coach-onboarding"
-                className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
-              >
-                Set up my AI Coach
-              </Link>
-            </div>
+          {wearableConnection && (
+            <section className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trends</p>
+              <StepGauge current={wearableSnapshot?.steps ?? null} points={stepPoints} />
+              <HealthMetricCard label="Resting heart rate" unit=" bpm" current={wearableSnapshot?.restingHeartRate ?? null} points={restingHrPoints} />
+              <HealthMetricCard label="HRV" unit="ms" current={wearableSnapshot?.hrvMs ?? null} points={hrvPoints} />
+              <div className="card-light p-5">
+                <p className="text-sm font-semibold">Sleep</p>
+                <p className="mt-1 text-sm text-card-light-muted">
+                  Not yet available — Google Health doesn&apos;t provide sleep data through the connection this app uses today.
+                </p>
+              </div>
+            </section>
           )}
         </div>
       </div>

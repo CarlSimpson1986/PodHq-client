@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateWorkout, getInjuryExcludedKeys, getEquipmentExcludedKeys } from "./generate-workout";
+import { generateWorkout, getInjuryExcludedKeys, getEquipmentExcludedKeys, generateWorkoutTemplateSet, instantiateTemplate } from "./generate-workout";
 import type { CoachProfile } from "./coach-profile";
 
 function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
@@ -146,7 +146,14 @@ describe("generateWorkout — equipment awareness", () => {
     // Only dumbbell exercises and bodyweight (Plank, no equipment) can
     // appear — nothing needing a barbell rack, cable machine, or leg
     // extension/curl machine.
-    const allowedKeys = ["dumbbell_shoulder_press", "dumbbell_bicep_curl", "plank"];
+    const allowedKeys = [
+      "dumbbell_shoulder_press",
+      "dumbbell_bicep_curl",
+      "incline_dumbbell_press",
+      "dumbbell_lateral_raise",
+      "dumbbell_russian_twist",
+      "plank",
+    ];
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((e) => allowedKeys.includes(e.key))).toBe(true);
   });
@@ -158,11 +165,14 @@ describe("generateWorkout — equipment awareness", () => {
       lastSession: null,
       availableEquipment: ["dumbbells"],
     });
-    // dumbbell_shoulder_press is excluded by the shoulder injury —
-    // dumbbell_bicep_curl and plank are the only exercises left safe
-    // under both filters combined.
+    // dumbbell_shoulder_press, incline_dumbbell_press and
+    // dumbbell_lateral_raise are all excluded by the shoulder injury —
+    // dumbbell_bicep_curl, dumbbell_russian_twist (avoidIfInjury: back,
+    // not shoulders) and plank are the only exercises left safe under
+    // both filters combined.
+    const safeKeys = ["dumbbell_bicep_curl", "dumbbell_russian_twist", "plank"];
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((e) => e.key === "dumbbell_bicep_curl" || e.key === "plank")).toBe(true);
+    expect(result.every((e) => safeKeys.includes(e.key))).toBe(true);
   });
 });
 
@@ -320,5 +330,76 @@ describe("generateWorkout — rep-range phases within a block (2026-08-25)", () 
       now: new Date("2026-03-02T00:00:00.000Z"),
     });
     expect(result[0].repsTarget).toBe(10);
+  });
+});
+
+describe("generateWorkoutTemplateSet — persistent A/B/C rotation", () => {
+  it("generates exactly 3 templates, letters A/B/C", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile() });
+    expect(result.map((t) => t.letter)).toEqual(["A", "B", "C"]);
+  });
+
+  it("every template includes legs — the one group present in all three", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile() });
+    for (const template of result) {
+      expect(template.exercises.some((e) => e.muscleGroup === "legs")).toBe(true);
+    }
+  });
+
+  it("prefers a different exercise per muscle group across templates where the catalog has more than one option", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile() });
+    const chestPicks = result.flatMap((t) => t.exercises.filter((e) => e.muscleGroup === "chest").map((e) => e.key));
+    // Chest has 3 catalog options after the 2026-08-27 expansion — A and C
+    // both include a chest slot (see TEMPLATE_MUSCLE_GROUP_PLAN), and with
+    // more than one candidate available they must pick different ones.
+    expect(new Set(chestPicks).size).toBe(chestPicks.length);
+  });
+
+  it("respects injury exclusions the same way generateWorkout does", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile({ injuries: "shoulders" }) });
+    const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
+    expect(allKeys).not.toContain("dumbbell_shoulder_press");
+    expect(allKeys).not.toContain("incline_dumbbell_press");
+    expect(allKeys).not.toContain("dumbbell_lateral_raise");
+  });
+
+  it("respects equipment exclusions the same way generateWorkout does", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile(), availableEquipment: ["dumbbells"] });
+    const allowedKeys = [
+      "dumbbell_shoulder_press",
+      "dumbbell_bicep_curl",
+      "incline_dumbbell_press",
+      "dumbbell_lateral_raise",
+      "dumbbell_russian_twist",
+      "plank",
+    ];
+    const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
+    expect(allKeys.every((key) => allowedKeys.includes(key))).toBe(true);
+  });
+});
+
+describe("instantiateTemplate — turns a fixed template into a live plan", () => {
+  it("computes weight/reps fresh from current RPE history, not from anything stored on the template", () => {
+    const template = [{ key: "barbell_bench_press", name: "Barbell Bench Press", muscleGroup: "chest" }];
+    const result = instantiateTemplate(
+      template,
+      profile(),
+      [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
+      undefined,
+      new Date("2026-01-15T00:00:00.000Z")
+    );
+    // Same 40 * 1.05 -> 42.5kg rounding as generateWorkout's own RPE test —
+    // the template only fixed *which* exercise, weight is still live.
+    expect(result[0].weightTargetKg).toBe(42.5);
+  });
+
+  it("skips a template exercise key no longer in the catalog rather than crashing", () => {
+    const template = [
+      { key: "not_a_real_exercise", name: "Ghost Exercise", muscleGroup: "chest" },
+      { key: "plank", name: "Plank", muscleGroup: "core" },
+    ];
+    const result = instantiateTemplate(template, profile(), [], undefined);
+    expect(result).toHaveLength(1);
+    expect(result[0].key).toBe("plank");
   });
 });

@@ -108,6 +108,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [reps, setReps] = useState(0);
   const [weight, setWeight] = useState(0);
   const [imageFrame, setImageFrame] = useState<0 | 1>(0);
+  const [imageMissing, setImageMissing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [summary, setSummary] = useState<{ totalVolumeKg: number; changes: WeightChange[]; narration: string | null } | null>(null);
   const [warmupEnabled, setWarmupEnabled] = useState(false);
@@ -345,6 +346,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             setReps(resumeSet?.repsTarget ?? 0);
             setWeight(resumeSet?.weightTargetKg ?? 0);
             setImageFrame(0);
+            setImageMissing(false);
             setCheckedIndices(new Set());
             setPhase(warmupEnabled && !hasProgress ? "warmup" : "active");
           }}
@@ -432,6 +434,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       setReps(nextExercise.sets[0].repsTarget);
       setWeight(nextExercise.sets[0].weightTargetKg);
       setImageFrame(0);
+      setImageMissing(false);
       setPhase("active");
     } else {
       const nextSet = exercise.sets[setIndex + 1];
@@ -561,6 +564,14 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             allowFullScreen
           />
         </div>
+      ) : imageMissing ? (
+        // A handful of exercises added 2026-08-27 for the A/B/C rotation
+        // don't have real position photos sourced yet (see
+        // exercise-catalog.ts's own comment) — this reads as an honest
+        // "no photo yet" placeholder instead of a broken image icon.
+        <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-card-light-border">
+          <p className="px-6 text-center text-sm text-card-light-muted">No photo yet for {exercise.name} — follow the safety tip below.</p>
+        </div>
       ) : (
         <button
           type="button"
@@ -569,7 +580,12 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           aria-label="Tap to switch position now"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- small local static asset, no next/image usage elsewhere in this codebase */}
-          <img src={images[imageFrame]} alt={`${exercise.name} — position ${imageFrame + 1} of 2`} className="w-full" />
+          <img
+            src={images[imageFrame]}
+            alt={`${exercise.name} — position ${imageFrame + 1} of 2`}
+            className="w-full"
+            onError={() => setImageMissing(true)}
+          />
         </button>
       )}
 
