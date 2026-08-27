@@ -53,13 +53,22 @@ working across both apps in the same session.
 - Middleware lives in `src/proxy.ts`, not `middleware.ts` — Next 16's
   renamed convention; `middleware.ts` still works but is deprecated
 - Styling: Tailwind only, black-and-white brand — matches the marketing
-  site (myfitpod.co.uk) and app icon: black-dominant throughout, with
-  white `.card-light` tiles/cards used deliberately alongside dark
-  `.card-glass` ones (confirmed 2026-08-27; this line previously said
-  "dark-only theme (no light mode)", which was inaccurate — the app's
-  existing mix of light and dark cards, e.g. Training's tiles and the
-  auth pages, is the intended direction, not an inconsistency to fix).
-  Tokens in podHq's `globals.css`.
+  site (myfitpod.co.uk) and app icon: black-dominant page chrome/hero/nav,
+  with content rendered as white `.card-light` tiles floating on that
+  black background. **Dashboard (`/dashboard`) is the canonical
+  reference** (confirmed 2026-08-27, Carl: "I WANT THE COLOUR SCHEME TO
+  BE THE SAME THROUGHOUT THE ENTIRE APP! USING THE MAIN DASHBOARD AS THE
+  EXAMPLE") — every page should match its look: an outer plain padding
+  div (no background, so black shows through) with `card-light` only on
+  an inner div sized to its actual content, never `card-light` combined
+  with `flex-1`/full-bleed padding on the same element (that produces a
+  wall-to-wall white sheet with no visible black margin — the exact bug
+  fixed across 22 files this session). Distinct content sections on one
+  page (e.g. Profile's avatar/membership/Account-list/Booking-list/
+  details blocks) get their own separate `card-light` tiles, not one
+  shared sheet. Dark `.card-glass` is reserved for genuinely
+  conversational UI (the Coach chat bubbles) — not a second general-
+  purpose content-card style. Tokens in podHq's `globals.css`.
 - Currency: GBP (£), 2 decimal places, thousands separator
 - British English in all UI copy
 

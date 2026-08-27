@@ -9,15 +9,19 @@ import { useInstallPrompt } from "@/lib/use-install-prompt";
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: HomeIcon, tourId: undefined },
   { href: "/book", label: "Book", icon: DumbbellIcon, tourId: "tour-nav-book" },
-  { href: "/dashboard", label: "Coach", icon: SparkleIcon, tourId: "tour-nav-coach" },
+  { href: "/dashboard", label: "Premium", icon: SparkleIcon, tourId: "tour-nav-coach" },
   { href: "/shop", label: "Shop", icon: ShopIcon, tourId: "tour-nav-shop" },
   { href: "/profile", label: "Profile", icon: UserIcon, tourId: "tour-nav-profile" },
 ];
 
-// Fixed at the bottom of every member-facing page (Home/Book/Coach/Shop/
-// Profile), matching GymFlow's own tab bar (Coach added Stage 5 — the
+// Fixed at the bottom of every member-facing page (Home/Book/Premium/Shop/
+// Profile), matching GymFlow's own tab bar (this tab added Stage 5 — the
 // brief's original nav spec always had 5 tabs; Stages 1-4 used a card on
-// Home since there was nothing to link a whole tab to yet). Not shown on
+// Home since there was nothing to link a whole tab to yet. Labelled
+// "Premium" not "Coach" as of 2026-08-27 — Carl: it's the entry point to
+// the whole premium tier/trial, not just the AI Coach chat feature, and
+// "Premium" matches the existing "7 Day Premium Trial" copy in
+// trial-banner.tsx). Not shown on
 // the auth pages (login/signup/forgot-password), the buy-credits/
 // buy-membership/gift-voucher sub-pages reached *through* Shop (those keep
 // a "Back"-style link instead), or anywhere under /coach — the whole
