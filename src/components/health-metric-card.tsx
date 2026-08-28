@@ -3,12 +3,21 @@
 import { useState } from "react";
 import { HealthTrendLine } from "@/components/health-trend-line";
 
+function formatDuration(minutes: number): string {
+  return `${Math.floor(minutes / 60)}h ${Math.round(minutes % 60)}m`;
+}
+
 // Expandable "current value + trend on demand" card — resting heart
 // rate, HRV and sleep all use this as-is; collapsed by default so Health
-// isn't a wall of charts on first load. `format` overrides the plain
-// "${value}${unit}" rendering for a value that isn't a bare number
-// (sleep's "7h 7m" via formatDuration) — optional so steps/RHR/HRV
-// (still using the number+unit shape) don't need to pass one.
+// isn't a wall of charts on first load. `formatAs` selects a rendering
+// mode other than the plain "${value}${unit}" shape (sleep's "7h 7m").
+// A string flag, not a function prop — this is a Client Component
+// ("use client" above) invoked from health/page.tsx, a Server Component;
+// Next.js can't serialize a function across that boundary (it throws a
+// generic, unhelpful production error — minified React #441 — rather
+// than a clear message, found live 2026-08-28), so the formatter itself
+// has to live in this file, picked by a plain string the server side can
+// safely pass.
 export function HealthMetricCard({
   label,
   unit,
@@ -16,7 +25,7 @@ export function HealthMetricCard({
   points,
   weeklyAvg,
   monthlyAvg,
-  format,
+  formatAs,
 }: {
   label: string;
   unit: string;
@@ -24,10 +33,10 @@ export function HealthMetricCard({
   points: { date: string; value: number }[];
   weeklyAvg?: number | null;
   monthlyAvg?: number | null;
-  format?: (value: number) => string;
+  formatAs?: "duration";
 }) {
   const [expanded, setExpanded] = useState(false);
-  const render = (value: number) => (format ? format(value) : `${Math.round(value)}${unit}`);
+  const render = (value: number) => (formatAs === "duration" ? formatDuration(value) : `${Math.round(value)}${unit}`);
 
   return (
     <div className="card-light">

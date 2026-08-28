@@ -21,10 +21,6 @@ const MONTHLY_WINDOW_DAYS = 30;
 // is what actually enforces the real cutoff.
 const TREND_FETCH_DAYS = MONTHLY_WINDOW_DAYS + 5;
 
-function formatSleepDuration(minutes: number): string {
-  return `${Math.floor(minutes / 60)}h ${Math.round(minutes % 60)}m`;
-}
-
 // Moved from /coach/health, then (same day, later) stopped being a
 // primary tab at all — Carl felt it "seemed a bit pointless" as a
 // standalone destination once Coach absorbed check-in/recommendations/
@@ -133,7 +129,7 @@ export default async function HealthPage() {
                 points={sleepPoints}
                 weeklyAvg={weeklyAvgSleep}
                 monthlyAvg={monthlyAvgSleep}
-                format={formatSleepDuration}
+                formatAs="duration"
               />
               <HealthMetricCard
                 label="Resting heart rate"
