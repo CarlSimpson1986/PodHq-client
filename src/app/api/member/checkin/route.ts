@@ -6,6 +6,7 @@ import { getLastCheckIn } from "@/lib/coach/check-ins";
 import { getCheckInDueState, currentCheckInPeriod } from "@/lib/coach/checkin-state";
 import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { narrateWeeklyReview } from "@/lib/coach-bot";
+import { getWearableWeeklyReflection } from "@/lib/coach/weekly-wearable-reflection";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET() {
@@ -41,6 +42,7 @@ export async function GET() {
     // every dashboard-adjacent page load for a preview nobody asked for
     // would be pure cost with no member-facing benefit.
     let narrative: string | null = null;
+    let wearableReflection: Awaited<ReturnType<typeof getWearableWeeklyReflection>> = [];
     if (review && (state.kind === "due" || state.kind === "overdue")) {
       try {
         narrative = await narrateWeeklyReview(member.name, review);
@@ -49,9 +51,16 @@ export async function GET() {
         // block the member from seeing their (already-computed) stats.
         console.error("[checkin] narration failed", { error: (error as Error).message });
       }
+      // No LLM/network cost, but kept gated the same as narrative above —
+      // it's part of the same check-in ritual, no reason to compute it
+      // for a preview the member isn't actually acting on.
+      wearableReflection = await getWearableWeeklyReflection(member.id, periodStart, {
+        avgSleepMinutes: review.avgSleepMinutes,
+        avgRestingHeartRate: review.avgRestingHeartRate,
+      });
     }
 
-    return NextResponse.json({ status: "ok", state, review, narrative });
+    return NextResponse.json({ status: "ok", state, review, narrative, wearableReflection });
   } catch (error) {
     console.error("[checkin] failed", { error: (error as Error).message });
     return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });

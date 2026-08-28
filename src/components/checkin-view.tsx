@@ -10,6 +10,12 @@ interface CheckInState {
   daysOverdue?: number;
 }
 
+interface WearableReflectionItem {
+  metric: "sleep" | "resting_hr";
+  direction: "up" | "down";
+  text: string;
+}
+
 interface WeeklyReview {
   periodStart: string;
   periodEnd: string;
@@ -116,6 +122,7 @@ export function CheckInView() {
   const [state, setState] = useState<CheckInState | null>(null);
   const [review, setReview] = useState<WeeklyReview | null>(null);
   const [narrative, setNarrative] = useState<string | null>(null);
+  const [wearableReflection, setWearableReflection] = useState<WearableReflectionItem[]>([]);
   const [loading, setLoading] = useState(true);
   // Ceremonial "reviewing your data" beat before revealing the due/overdue
   // check-in — the data's already back from the fetch below by the time
@@ -140,6 +147,7 @@ export function CheckInView() {
           setState(body.state);
           setReview(body.review);
           setNarrative(body.narrative ?? null);
+          setWearableReflection(body.wearableReflection ?? []);
         }
       } finally {
         setLoading(false);
@@ -236,6 +244,19 @@ export function CheckInView() {
       </div>
 
       {review && <ReviewStats review={review} />}
+
+      {wearableReflection.length > 0 && (
+        <div className="space-y-3">
+          {wearableReflection.map((item) => (
+            <div key={item.metric} className="rounded-xl border border-card-light-border p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
+                {item.metric === "sleep" ? "Sleep" : "Resting heart rate"}
+              </p>
+              <p className="mt-1 text-sm">{item.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {narrative && (
         <div className="rounded-xl bg-card-light-foreground p-5">
