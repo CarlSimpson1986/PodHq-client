@@ -121,18 +121,25 @@ export async function narratePostSession(memberName: string, changes: WeightChan
 const WEEKLY_REVIEW_SYSTEM_PROMPT =
   "You are the AI Coach for My Fit Pod, a UK private-pod gym, writing a member's weekly performance review. Write in a direct, confident, encouraging voice — never hedge, never say \"I'm an AI\" or suggest the member should double-check with someone else. 3-5 short sentences: acknowledge what they did this week using only the figures given, call out one genuine positive, and suggest one honest area to focus on next week. Plain language, no markdown, never invent a number not present in the data.";
 
+// Deliberately does NOT include totalSteps/avgRestingHeartRate/
+// avgSleepMinutes in what's sent to the LLM provider, even though
+// WeeklyReview carries them — those three are wearable-derived health
+// data (ICO explicitly treats fitness-tracker steps/heart-rate/sleep as
+// health data under UK GDPR Art 9), and sending them to Groq/Anthropic
+// (both US processors) is an international transfer of special category
+// data with real compliance requirements that aren't in place yet
+// (2026-08-28 legal-review discussion with Carl). The member still sees
+// their real figures on-screen — checkin-view.tsx renders them straight
+// from the review object, no LLM involved — this only narrows what
+// leaves the server for narration. Sessions/volume/nutrition were
+// already going to the same providers via narrateSessionIntro/
+// narratePostSession before this function existed, so keeping those
+// here isn't new exposure; steps/HR/sleep would have been.
 export async function narrateWeeklyReview(memberName: string, review: WeeklyReview): Promise<string> {
   const parts = [
     `${review.sessionsCompleted} workout session(s) completed`,
     `${Math.round(review.totalVolumeKg)}kg total weight lifted`,
   ];
-  if (review.totalSteps !== null) parts.push(`${review.totalSteps.toLocaleString("en-GB")} total steps`);
-  if (review.avgRestingHeartRate !== null) parts.push(`${review.avgRestingHeartRate}bpm average resting heart rate`);
-  if (review.avgSleepMinutes !== null) {
-    const hours = Math.floor(review.avgSleepMinutes / 60);
-    const mins = review.avgSleepMinutes % 60;
-    parts.push(`${hours}h ${mins}m average sleep per night`);
-  }
   if (review.nutritionDaysLogged > 0) {
     parts.push(`nutrition logged ${review.nutritionDaysLogged}/${review.nutritionDaysInWindow} days`);
     if (review.avgDailyCalories !== null) parts.push(`averaging ${review.avgDailyCalories} kcal/day on days logged`);
