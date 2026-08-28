@@ -10,16 +10,18 @@ import { checkRateLimit } from "@/lib/rate-limit";
 // Matches the reflection-question set in checkin-view.tsx. Kept loose
 // (no server-side "required" enforcement on the free-text fields) since
 // check_ins.answers is deliberately schemaless jsonb — see 0054's own
-// comment on why a fixed answers table wasn't built. weekFeel/hadPain are
-// the two the UI actually requires before enabling submit; validated here
-// too since the client-side requirement is only ever a UX nicety, never
-// the real boundary.
+// comment on why a fixed answers table wasn't built. weekFeel/hadPain/
+// habit are the three the UI actually requires before enabling submit
+// (habit added 2026-08-28 — it's read back by weekly-recommendation.ts/
+// habit-streak.ts, so an empty habit would silently break both), all
+// validated here too since the client-side requirement is only ever a
+// UX nicety, never the real boundary.
 const answersSchema = z.object({
   weekFeel: z.number().int().min(1).max(5),
   hadPain: z.boolean(),
   painDetail: z.string().max(500).optional(),
   barriers: z.string().max(500).optional(),
-  nextWeekFocus: z.string().max(500).optional(),
+  habit: z.string().trim().min(1).max(200),
 });
 
 export async function POST(request: Request) {

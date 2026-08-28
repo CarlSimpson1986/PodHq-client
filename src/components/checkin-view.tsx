@@ -136,7 +136,7 @@ export function CheckInView() {
   const [hadPain, setHadPain] = useState<boolean | null>(null);
   const [painDetail, setPainDetail] = useState("");
   const [barriers, setBarriers] = useState("");
-  const [nextWeekFocus, setNextWeekFocus] = useState("");
+  const [habit, setHabit] = useState("");
 
   useEffect(() => {
     queueMicrotask(async () => {
@@ -162,7 +162,7 @@ export function CheckInView() {
   }, [loading, state]);
 
   async function handleComplete() {
-    if (weekFeel === null || hadPain === null) return;
+    if (weekFeel === null || hadPain === null || habit.trim().length === 0) return;
     setCompleting(true);
     setErrorMessage(null);
     try {
@@ -174,7 +174,7 @@ export function CheckInView() {
           hadPain,
           painDetail: hadPain ? painDetail.trim() || undefined : undefined,
           barriers: barriers.trim() || undefined,
-          nextWeekFocus: nextWeekFocus.trim() || undefined,
+          habit: habit.trim(),
         }),
       });
       const body = await res.json();
@@ -311,10 +311,12 @@ export function CheckInView() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold">One thing to focus on next week? <span className="font-normal text-card-light-muted">(optional)</span></p>
+            <p className="text-sm font-semibold">What&apos;s one habit that&apos;s going to push you forwards this week?</p>
+            <p className="mt-1 text-xs text-card-light-muted">This becomes your coach&apos;s focus for the week ahead.</p>
             <textarea
-              value={nextWeekFocus}
-              onChange={(e) => setNextWeekFocus(e.target.value)}
+              value={habit}
+              onChange={(e) => setHabit(e.target.value)}
+              placeholder="e.g. Lights out by 10:30pm on weeknights"
               rows={2}
               className={`${textAreaClass} mt-2`}
             />
@@ -325,7 +327,7 @@ export function CheckInView() {
           <button
             type="button"
             onClick={handleComplete}
-            disabled={completing || weekFeel === null || hadPain === null}
+            disabled={completing || weekFeel === null || hadPain === null || habit.trim().length === 0}
             className={buttonClass}
           >
             {completing ? "Saving..." : "Mark check-in complete"}
