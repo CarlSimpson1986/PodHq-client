@@ -14,85 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-36.md`, covering the pilot
-mechanism proof (2026-08-05) through "Blank first-time exercise weight"
-(2026-08-27) — all split out to keep this file within Claude Code's
-~15,000-character `@`-import limit. Archives aren't always the strictly
-oldest material — the split point is "what's finished and stable" as
-much as "what's oldest" (see each archive's own header note for
-examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
-full build history, or `git log` on this file for exact split points.
-Active content here starts at "Exercise photos filled in + 18 more
-free-weight exercises" (2026-08-28). If this file grows too large again,
-split it the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-37.md`, update this paragraph.
-
-## Exercise photos filled in + 18 more free-weight exercises — 2026-08-28
-
-Migrations `0066`/`0067`/`0068` confirmed live this session (Carl pasted
-them; podHq's `ROADMAP_HISTORY.md` has the verification detail, including
-`0067` needing a second paste attempt after a schema-cache miss on the
-first). Live-tested the A/B/C rotation and blank-first-weight together in
-one real session: exercise 1 (Barbell Squat, has prior history) correctly
-pre-filled from RPE progression, exercise 2 (Barbell Bench Press, no
-history) correctly rendered a blank input with the "first time" hint,
-`Log Set` disabled until entered — confirmed via direct DB read of
-`workout_sessions`/`workout_templates`/`workout_sets`, not just the
-screenshot.
-
-**Photos**: the 7 exercises added 08-27 shipped with no images (no
-fetch capability that session — see that entry above). Matched all 7
-against `yuhonas/free-exercise-db`'s real index (fetched directly and
-searched with a script, not trusted to a WebFetch summary — an early
-attempt at that gave an unreliable partial/wrong match) and downloaded
-the matching start/end JPG pairs into `public/exercises/<key>/`, same
-convention as the original 11. Two calls flagged to Carl rather than
-guessed: Cable Chest Fly matched to the flat-bench variant over incline
-(both exist in the dataset), and Dumbbell Russian Twist has no
-dumbbell-in-hand photo available — used the closest match (bodyweight
-version, same movement pattern) rather than leave it blank.
-
-**18 more free-weight exercises added**, Carl's own request ("as many
-as you can think of using free weights") rather than tied to a specific
-generation gap: Barbell Deadlift, Barbell Front Squat, Barbell Walking
-Lunge, Barbell Hip Thrust, Barbell Step-Up (legs); Dumbbell Bench Press,
-Dumbbell Flyes (chest); One-Arm Dumbbell Row, Barbell Shrug, Dumbbell
-Pullover (back); Barbell Overhead Press, Dumbbell Front Raise, Dumbbell
-Rear Delt Fly, Arnold Press (shoulders); Barbell Curl, Hammer Curl,
-Standing Dumbbell Triceps Extension (arms); Dumbbell Side Bend (core).
-Every one matched to a real `free-exercise-db` entry and verified
-downloadable before adding — same draft-safety-tip convention as 08-27
-(written in the existing voice, explicitly not yet Carl-reviewed),
-`requiredEquipment` stays within Hove's existing `dumbbells`/
-`barbell_rack` categories, no new `EQUIPMENT_TYPES` entry needed.
-
-**AI-generated demo images considered and declined**: Carl asked about
-generating on-brand (black-and-white, unbranded) demo visuals instead
-of the stock photos. Flagged a real concern before building anything —
-this app's own rule is that safety-critical content (technique cues)
-is written by a person, never LLM-generated, specifically because bad
-form guidance risks real injury; an AI-generated *photo* of "correct
-squat form" is arguably higher-risk than a wrong sentence since it's
-more directly copyable, and image models are unreliable at consistent
-human anatomy/joint angles. Offered a black-and-white icon/pictogram
-style as a lower-risk on-brand alternative instead of photoreal
-generation — that path needs a `GEMINI_API_KEY` this environment
-doesn't have, and Carl chose to leave the current stock photos as-is
-for now rather than set one up mid-session.
-
-**Test fix, not a regression**: two `generate-workout.test.ts` cases had
-hardcoded exercise lists from before this expansion (e.g. "only
-`dumbbell_bicep_curl` is safe under a shoulder+knee+back injury
-exclusion") — now false since several of the 18 new exercises also
-qualify under those same filters. Updated the assertions to the correct
-broader safe-set, not weakened.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (105/105,
-all passing after the two test updates above), and `next build` all
-clean. New photos confirmed rendering via local dev server, not just
-present on disk. Not yet exercised live for the 18 new exercises
-specifically (no template has generated one yet — the two live-tested
-today, Barbell Squat and Barbell Bench Press, both predate this batch).
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-37.md`, covering the pilot
+mechanism proof (2026-08-05) through "Exercise photos filled in + 18
+more free-weight exercises" (2026-08-28) — all split out to keep this
+file within Claude Code's ~15,000-character `@`-import limit. Archives
+aren't always the strictly oldest material — the split point is "what's
+finished and stable" as much as "what's oldest" (see each archive's own
+header note for examples). Reference-only, not auto-loaded by CLAUDE.md;
+check them for full build history, or `git log` on this file for exact
+split points. Active content here starts at "Weekly check-in: data
+review + AI narrative + reflection questions" (2026-08-28). If this file
+grows too large again, split it the same way: move the most clearly
+finished section into `ROADMAP-ARCHIVE-38.md`, update this paragraph.
 
 ## Weekly check-in: data review + AI narrative + reflection questions — 2026-08-28
 
@@ -235,3 +168,47 @@ read (`sleep_minutes: 427`).
 **Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (114/114,
 9 new), and `next build` all clean throughout. Sleep sync confirmed
 against a real live Google Health response, not just build-clean.
+
+## Health page redesign: one card per metric + weekly/monthly averages — 2026-08-28
+
+Carl: the Connection card's flat 2x2 grid (steps/sleep/RHR/HRV) and each
+metric's own expandable trend card below it were showing the same four
+numbers twice — wanted the top grid gone, one card per metric, each with
+a weekly and monthly average. Connection card (`wearable-connection-card.tsx`)
+is status-only now: connect/refresh/disconnect plus a "last synced"
+line, no more duplicate stats. Every metric — Steps, Sleep, Resting
+heart rate, HRV — gets exactly one card. Sleep got a real trend card for
+the first time (`formatAs="duration"` on `HealthMetricCard`), replacing
+what had been a static "not available" placeholder until the sleep-sync
+fix earlier the same session.
+
+`averageInWindow` (`wearable-averages.ts`) — a pure, tested function
+computing a 7-day/30-day average over already-fetched trend points,
+London-calendar-dated (`londonDateString`/`addLondonDays`) same as every
+other day-window calc in this app rather than a naive UTC subtraction.
+`getRecentWearableSnapshots`'s fetch window widened from 14 to 35 days
+so the 30-day average has real range to compute from. 6 new tests.
+
+**Shipped a real production crash, caught and fixed live**: the first
+version passed `format={formatSleepDuration}` — a plain function — from
+`health/page.tsx` (a Server Component) into `HealthMetricCard`
+("use client"). Next.js can't serialize a function across that
+boundary; the failure surfaces in production as an unhelpful generic
+error (minified React #441, "error occurred in the Server Components
+render"), not a clear message. Neither `tsc` nor `next build` catch this
+at all — it's a Next.js RSC runtime constraint, not a TypeScript type
+error, so the first deploy looked completely clean by every automated
+check and then crashed the live page. Caught only by actually loading
+the deployed page rather than trusting green checks. Fixed by replacing
+the function prop with a string flag (`formatAs: "duration"`) that
+`HealthMetricCard` resolves to its own local formatter — safely
+serializable, same visual result.
+
+**Verified live** (both the redesign and the fix): all four cards
+render correctly against the real connected account with real averages
+(steps 7-day/30-day both 21,438 given only 3 real days of history;
+sleep "7h 7m" for both windows; RHR 61bpm; HRV correctly showing "—",
+no data at all yet), the Steps card's trend expand/collapse still
+works, and the browser console is clean. `npx tsc --noEmit`, `eslint`,
+`npx vitest run` (120/120, 6 new), and `next build` all clean throughout
+(worth noting again: none of those caught the actual bug that shipped).
