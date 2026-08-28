@@ -10,7 +10,17 @@ const DEFAULT_STEP_TARGET = 10000;
 const RADIUS = 50;
 const ARC_LENGTH = Math.PI * RADIUS; // half the circle's circumference
 
-export function StepGauge({ current, points }: { current: number | null; points: { date: string; value: number }[] }) {
+export function StepGauge({
+  current,
+  points,
+  weeklyAvg,
+  monthlyAvg,
+}: {
+  current: number | null;
+  points: { date: string; value: number }[];
+  weeklyAvg?: number | null;
+  monthlyAvg?: number | null;
+}) {
   const [expanded, setExpanded] = useState(false);
   const pct = current !== null ? Math.min(100, (current / DEFAULT_STEP_TARGET) * 100) : 0;
   const offset = ARC_LENGTH - (pct / 100) * ARC_LENGTH;
@@ -37,6 +47,13 @@ export function StepGauge({ current, points }: { current: number | null; points:
             <p className="text-xs text-card-light-muted">of {DEFAULT_STEP_TARGET.toLocaleString("en-GB")}</p>
           </div>
         </div>
+        {(weeklyAvg !== null && weeklyAvg !== undefined) || (monthlyAvg !== null && monthlyAvg !== undefined) ? (
+          <p className="mt-2 text-xs text-card-light-muted">
+            {weeklyAvg !== null && weeklyAvg !== undefined ? `7-day avg ${Math.round(weeklyAvg).toLocaleString("en-GB")}` : null}
+            {weeklyAvg !== null && weeklyAvg !== undefined && monthlyAvg !== null && monthlyAvg !== undefined ? " · " : null}
+            {monthlyAvg !== null && monthlyAvg !== undefined ? `30-day avg ${Math.round(monthlyAvg).toLocaleString("en-GB")}` : null}
+          </p>
+        ) : null}
         <p className="mt-1 text-xs text-card-light-muted">{expanded ? "Hide trend −" : "Show trend +"}</p>
       </button>
       {expanded && (
