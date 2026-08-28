@@ -13,8 +13,10 @@ import { checkRateLimit } from "@/lib/rate-limit";
 // function that actually drives the rep target, so this never drifts
 // out of sync with what a member is really training that week.
 const PHASE_LABELS = ["Weeks 1-4", "Weeks 5-8", "Weeks 9-12"] as const;
+// Exact, not a "~" range — REP_TARGET_BY_BLOCK_PHASE (types.ts) moved off
+// averaged ranges to clean, deliberately-chosen numbers 2026-08-28.
 const PHASE_REP_DESCRIPTION: Record<"hypertrophy" | "strength", [string, string, string]> = {
-  hypertrophy: ["~6-8 reps", "~10-12 reps", "~15-20 reps"],
+  hypertrophy: ["12 reps", "6 reps", "15 reps"],
   strength: ["6 reps", "4 reps", "3 reps"],
 };
 
