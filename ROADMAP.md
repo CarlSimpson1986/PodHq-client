@@ -128,3 +128,46 @@ confirmed "This week's focus" correctly still showed the higher-priority
 priority chain works as designed) — then cleaned up both the backdated
 timestamp and the test check-in row. `npx tsc --noEmit`, `eslint`,
 `npx vitest run` (134/134, 14 new), and `next build` all clean throughout.
+
+## Daily-habit-system scoping session + two concrete fixes — 2026-08-28
+
+Carl floated a much bigger idea mid-build on the weekly habit: a daily
+habit checklist (water/steps/fruit etc., check-off plus counted
+targets), member-set and/or goal-recommended habits, and a Dashboard/
+Coach layout rework. Scoped via questions rather than guessed:
+check-off+counted mix confirmed, coexists with (doesn't replace) the
+weekly "Your habit" card, lands as a Dashboard card near the top. The
+full recommended-habit catalog and exact daily-tracking data model are
+still open — this was scoping, not yet a build.
+
+Two concrete, already-clear items got built and shipped in the same
+pass rather than waiting:
+
+**Hypertrophy rep-target correction**: Carl — "when I said between
+10-12 reps I didn't mean 11 reps." `REP_TARGET_BY_BLOCK_PHASE.hypertrophy`
+was literally the midpoint of each stated range (`[7, 11, 17]`) — not a
+number anyone programs. Confirmed the new values aren't a smooth curve
+before changing anything (12 → 6 → 15, a heavier/lower-rep *middle*
+phase, deliberately not ascending) and confirmed weight computation has
+no hidden coupling to rep target (purely RPE-history-driven) before
+shipping. Also fixed stale `~10-12 reps`-style copy in the training-block
+API route that would have drifted from the real generated numbers.
+
+**Dashboard training-block card removed**: turned out `/training`'s own
+"Current training block" section already showed the full phase/rep
+detail — Dashboard's small summary was a pure duplicate, not a
+different view, so "move it to Training" was really "delete the
+Dashboard copy."
+
+**Still open, not built**: showing upcoming workout content before a
+member books a session ("Next session" on `/training` currently only
+shows anything once a booking exists) — real mechanism choice between
+eagerly generating the A/B/C template set at phase start vs. a read-only
+preview computed on demand, not decided yet. And the full daily-habit
+checklist itself.
+
+**Verified live** (not just build-clean, per the Health-page crash
+lesson): both fixes confirmed on the real deployed site — Dashboard's
+training-block card gone, `/training` showing "Phase 2 of 3 · Weeks 5-8
+— 6 reps" (the corrected value). `npx tsc --noEmit`, `eslint`,
+`npx vitest run` (134/134), and `next build` all clean throughout.
