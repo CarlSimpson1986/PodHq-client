@@ -8,30 +8,18 @@ const buttonClass =
 const dangerButtonClass =
   "w-full rounded-lg border border-danger/50 px-4 py-3 text-center text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50";
 
-export interface WearableSnapshotProps {
-  recordedDate: string;
-  steps: number | null;
-  sleepMinutes: number | null;
-  restingHeartRate: number | null;
-  hrvMs: number | null;
-}
-
-// Null here now means genuinely "no sleep session synced for this day
-// yet" (google-health.ts's fetchSleepMinutes implemented 2026-08-28) —
-// still worth its own copy rather than a bare "—", since a member
-// checking right after waking up may not have a synced session yet even
-// though steps/HR already have today's data.
-function formatSleep(minutes: number | null): string {
-  if (minutes === null) return "Not yet available";
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
+// Redesigned 2026-08-28: per-metric current-value+trend now lives in its
+// own card each (StepGauge, and HealthMetricCard for sleep/RHR/HRV) on
+// the Health page below this one — showing the same four numbers again
+// here was a flat, non-expandable duplicate of what those cards already
+// do better. This card is connection status only now: connect/refresh/
+// disconnect, plus when it last synced.
 export function WearableConnectionCard({
   connected,
-  snapshot,
+  lastSyncedDate,
 }: {
   connected: boolean;
-  snapshot: WearableSnapshotProps | null;
+  lastSyncedDate: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -98,31 +86,9 @@ export function WearableConnectionCard({
       ) : (
         <>
           <p className="mt-1 text-sm text-card-light-muted">Connected via Fitbit (Google Health).</p>
-          {snapshot ? (
-            <>
-              <div className="mt-4 grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <p className="text-lg font-semibold">{snapshot.steps ?? "—"}</p>
-                  <p className="text-xs text-card-light-muted">Steps</p>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">{formatSleep(snapshot.sleepMinutes)}</p>
-                  <p className="text-xs text-card-light-muted">Sleep</p>
-                </div>
-                <div>
-                  <p className="text-lg font-semibold">{snapshot.restingHeartRate ?? "—"}</p>
-                  <p className="text-xs text-card-light-muted">Resting HR</p>
-                </div>
-                <div>
-                  <p className="text-lg font-semibold">{snapshot.hrvMs ?? "—"}</p>
-                  <p className="text-xs text-card-light-muted">HRV (ms)</p>
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-card-light-muted">As of {snapshot.recordedDate}.</p>
-            </>
-          ) : (
-            <p className="mt-3 text-sm text-card-light-muted">No data synced yet — refresh below to pull it in now.</p>
-          )}
+          <p className="mt-3 text-sm text-card-light-muted">
+            {lastSyncedDate ? `Last synced ${lastSyncedDate}.` : "No data synced yet — refresh below to pull it in now."}
+          </p>
           {error && <p className="mt-2 text-sm text-danger">{error}</p>}
           <button type="button" onClick={handleRefresh} disabled={refreshing} className={`${buttonClass} mt-4`}>
             {refreshing ? "Refreshing..." : "Refresh"}
