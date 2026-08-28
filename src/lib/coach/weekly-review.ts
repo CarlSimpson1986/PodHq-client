@@ -16,6 +16,16 @@ export interface WeeklyReview {
   avgDailyCarbsG: number | null;
   avgDailyFatG: number | null;
   targets: NutritionTargets | null;
+  // Wearable aggregates — null (not 0) when the member has no
+  // member_wearable_data rows in the window at all, same "honest gap,
+  // not a fabricated zero" convention nutrition uses above. wearableDaysSynced
+  // is a separate count (rather than reusing nutritionDaysInWindow) because
+  // steps/heart rate/sleep are independently nullable per day — a member
+  // could have a step count but no heart-rate reading on the same day.
+  totalSteps: number | null;
+  avgRestingHeartRate: number | null;
+  avgSleepMinutes: number | null;
+  wearableDaysSynced: number;
 }
 
 function parseDateParts(dateStr: string): [number, number, number] {
@@ -52,7 +62,7 @@ export async function getWeeklyReview(
   const admin = createAdminClient();
   const { start, end } = londonWindowBounds(periodStart, periodEnd);
 
-  const [sessionsResult, foodResult, coachProfile] = await Promise.all([
+  const [sessionsResult, foodResult, wearableResult, coachProfile] = await Promise.all([
     admin
       .from("workout_sessions")
       .select("id")
@@ -66,11 +76,21 @@ export async function getWeeklyReview(
       .eq("member_id", memberId)
       .gte("logged_date", periodStart)
       .lte("logged_date", periodEnd),
+    // recorded_date is a plain date column (not timestamptz) — a direct
+    // string comparison against the London calendar-date bounds is exact,
+    // no UTC-window conversion needed the way sessions/created_at required.
+    admin
+      .from("member_wearable_data")
+      .select("recorded_date, steps, resting_heart_rate, sleep_minutes")
+      .eq("member_id", memberId)
+      .gte("recorded_date", periodStart)
+      .lte("recorded_date", periodEnd),
     getCoachProfile(memberId),
   ]);
 
   if (sessionsResult.error) throw new Error(sessionsResult.error.message);
   if (foodResult.error) throw new Error(foodResult.error.message);
+  if (wearableResult.error) throw new Error(wearableResult.error.message);
 
   const sessions = sessionsResult.data ?? [];
   let totalVolumeKg = 0;
@@ -115,6 +135,19 @@ export async function getWeeklyReview(
 
   const targets = coachProfile ? computeNutritionTargets(coachProfile, gender) : null;
 
+  const wearableDays = wearableResult.data ?? [];
+  const wearableDaysSynced = wearableDays.length;
+  const stepsRows = wearableDays.filter((d) => d.steps !== null);
+  const totalSteps = stepsRows.length > 0 ? stepsRows.reduce((sum, d) => sum + d.steps!, 0) : null;
+  const heartRateRows = wearableDays.filter((d) => d.resting_heart_rate !== null);
+  const avgRestingHeartRate =
+    heartRateRows.length > 0
+      ? Math.round(heartRateRows.reduce((sum, d) => sum + d.resting_heart_rate!, 0) / heartRateRows.length)
+      : null;
+  const sleepRows = wearableDays.filter((d) => d.sleep_minutes !== null);
+  const avgSleepMinutes =
+    sleepRows.length > 0 ? Math.round(sleepRows.reduce((sum, d) => sum + d.sleep_minutes!, 0) / sleepRows.length) : null;
+
   return {
     periodStart,
     periodEnd,
@@ -127,5 +160,9 @@ export async function getWeeklyReview(
     avgDailyCarbsG,
     avgDailyFatG,
     targets,
+    totalSteps,
+    avgRestingHeartRate,
+    avgSleepMinutes,
+    wearableDaysSynced,
   };
 }
