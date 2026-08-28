@@ -6,6 +6,7 @@ export type WeeklyRecommendation =
   | { kind: "complete_checkin"; habit: string; reason: string }
   | { kind: "hit_sessions"; habit: string; reason: string }
   | { kind: "prioritise_sleep"; habit: string; reason: string }
+  | { kind: "member_habit"; habit: string; reason: string }
   | { kind: "log_nutrition"; habit: string; reason: string }
   | { kind: "hit_protein"; habit: string; reason: string }
   | { kind: "on_track"; habit: string; reason: string };
@@ -20,12 +21,24 @@ export type WeeklyRecommendation =
 // the meal catalog. Checked in priority order and returns the first
 // thing that applies; "on_track" is the honest default when nothing
 // else is flagged, not a fabricated congratulation.
+//
+// member_habit (2026-08-28, Carl's own "push you forwards this week"
+// check-in question) deliberately sits below prioritise_sleep, not
+// above it: a live recovery signal from this week's real data must
+// never be silently replaced by a self-statement the member made when
+// they checked in, possibly several days ago — same "a real safety
+// signal is never suppressed by anything else" principle checkin-state
+// and the exercise catalog's injury filtering already hold elsewhere.
+// It does outrank the generic log_nutrition/hit_protein nudges below,
+// though — a specific thing the member actually committed to is more
+// motivating than a generic system-derived reminder.
 export function getWeeklyRecommendation(
   checkInState: CheckInState,
   sessionsCompleted: number,
   sessionsTarget: number,
   recoveryStatus: RecoveryStatus,
-  weeklyReview: WeeklyReview
+  weeklyReview: WeeklyReview,
+  memberHabit: string | null
 ): WeeklyRecommendation {
   if (checkInState.kind === "overdue" || checkInState.kind === "due") {
     return {
@@ -52,6 +65,14 @@ export function getWeeklyRecommendation(
       kind: "prioritise_sleep",
       habit: "Prioritise sleep this week",
       reason: `${reasonDetail} — recovery is when the training actually pays off.`,
+    };
+  }
+
+  if (memberHabit !== null) {
+    return {
+      kind: "member_habit",
+      habit: memberHabit,
+      reason: "The habit you committed to at your last check-in.",
     };
   }
 

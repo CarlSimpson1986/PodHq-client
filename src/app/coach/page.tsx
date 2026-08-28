@@ -4,17 +4,19 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getCoachConversation } from "@/lib/coach/coach-conversations";
-import { getLastCheckIn } from "@/lib/coach/check-ins";
+import { getLastCheckIn, getRecentCheckIns } from "@/lib/coach/check-ins";
 import { getCheckInDueState, currentCheckInPeriod } from "@/lib/coach/checkin-state";
 import { getRecoveryStatus } from "@/lib/coach/recovery-status";
 import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { getWeeklyConsistency } from "@/lib/coach/consistency";
 import { getWeeklyRecommendation } from "@/lib/coach/weekly-recommendation";
+import { computeHabitStreak } from "@/lib/coach/habit-streak";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { MoreMenu } from "@/components/more-menu";
 import { WeeklyRecommendationCard } from "@/components/weekly-recommendation-card";
+import { MemberHabitCard } from "@/components/member-habit-card";
 import { CoachChatView } from "@/components/coach-chat-view";
 
 // The Coach tab (2026-08-25 redesign, replacing the standalone Health
@@ -51,8 +53,9 @@ export default async function CoachPage() {
   }
 
   const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-  const [lastCheckIn, recoveryStatus, weeklyReview, consistencyWeeks, conversation] = await Promise.all([
+  const [lastCheckIn, recentCheckIns, recoveryStatus, weeklyReview, consistencyWeeks, conversation] = await Promise.all([
     getLastCheckIn(member.id),
+    getRecentCheckIns(member.id),
     getRecoveryStatus(member.id),
     getWeeklyReview(member.id, periodStart, periodEnd, member.gender),
     getWeeklyConsistency(member.id),
@@ -61,12 +64,15 @@ export default async function CoachPage() {
 
   const checkInState = getCheckInDueState(coachProfile, lastCheckIn, new Date());
   const sessionsCompleted = consistencyWeeks.find((w) => w.weeksAgo === 0)?.sessionsCompleted ?? 0;
+  const currentHabit = recentCheckIns[0]?.habit ?? null;
+  const habitStreak = computeHabitStreak(recentCheckIns);
   const recommendation = getWeeklyRecommendation(
     checkInState,
     sessionsCompleted,
     coachProfile.sessions_per_week,
     recoveryStatus,
-    weeklyReview
+    weeklyReview,
+    currentHabit
   );
 
   return (
@@ -75,6 +81,8 @@ export default async function CoachPage() {
       <div className="flex-1 space-y-4 px-6 pb-6 pt-6">
         <div className="mx-auto w-full max-w-md space-y-4">
           <WeeklyRecommendationCard recommendation={recommendation} />
+
+          <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} />
 
           <Link href="/coach/checkin" prefetch={false} className="card-light block p-5">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Check-in</p>
