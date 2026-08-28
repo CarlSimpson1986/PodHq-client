@@ -108,16 +108,20 @@ describe("generateWorkout — injury avoidance", () => {
   });
 
   it("never includes an unsafe exercise, even when heavy injury filtering leaves very few options", () => {
-    // "knee, back, shoulders" excludes all but one catalog entry — safety
-    // (never surface an excluded exercise) wins over always filling a
-    // full 4-exercise session.
+    // "knee, back, shoulders" excludes all but a few catalog entries —
+    // safety (never surface an excluded exercise) wins over always filling
+    // a full 4-exercise session. Three isolation arm exercises have an
+    // empty avoidIfInjury list (dumbbell_bicep_curl, and since the
+    // 2026-08-28 free-weight expansion, barbell_bicep_curl and
+    // dumbbell_hammer_curl too) — any of the three is a valid safe result.
     const result = generateWorkout({
       profile: profile({ injuries: "knee, back, shoulders" }),
       history: [],
       lastSession: null,
     });
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((e) => e.key === "dumbbell_bicep_curl")).toBe(true);
+    const safeArmIsolationKeys = ["dumbbell_bicep_curl", "barbell_bicep_curl", "dumbbell_hammer_curl"];
+    expect(result.every((e) => safeArmIsolationKeys.includes(e.key))).toBe(true);
   });
 });
 
@@ -170,12 +174,14 @@ describe("generateWorkout — equipment awareness", () => {
       lastSession: null,
       availableEquipment: ["dumbbells"],
     });
-    // dumbbell_shoulder_press, incline_dumbbell_press and
-    // dumbbell_lateral_raise are all excluded by the shoulder injury —
-    // dumbbell_bicep_curl, dumbbell_russian_twist (avoidIfInjury: back,
-    // not shoulders) and plank are the only exercises left safe under
-    // both filters combined.
-    const safeKeys = ["dumbbell_bicep_curl", "dumbbell_russian_twist", "plank"];
+    // dumbbell_shoulder_press, incline_dumbbell_press, dumbbell_lateral_raise,
+    // dumbbell_bench_press, dumbbell_chest_fly, dumbbell_single_arm_row,
+    // dumbbell_pullover, dumbbell_front_raise, dumbbell_rear_delt_fly,
+    // dumbbell_arnold_press and dumbbell_overhead_tricep_extension are all
+    // excluded by the shoulder injury — the exercises below (none listing
+    // "shoulders" in avoidIfInjury) are what's left safe under both
+    // filters combined.
+    const safeKeys = ["dumbbell_bicep_curl", "dumbbell_russian_twist", "plank", "dumbbell_hammer_curl", "dumbbell_side_bend"];
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((e) => safeKeys.includes(e.key))).toBe(true);
   });
@@ -261,9 +267,9 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
 
   it("still never includes an unsafe exercise under a strength block, even though the compound pool is exhausted by injury filtering", () => {
     // Same "knee, back, shoulders" case as the goal-based test above — the
-    // compound preference must fall back to the full safe set (just the
-    // one isolation exercise left) exactly like the muscle-group rotation
-    // already does, never re-including something injury-excluded.
+    // compound preference must fall back to the full safe isolation set
+    // exactly like the muscle-group rotation already does, never
+    // re-including something injury-excluded.
     const result = generateWorkout({
       profile: profile({ injuries: "knee, back, shoulders" }),
       history: [],
@@ -271,7 +277,8 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
       activeBlock: { blockType: "strength", startedAt: BLOCK_START },
     });
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((e) => e.key === "dumbbell_bicep_curl")).toBe(true);
+    const safeArmIsolationKeys = ["dumbbell_bicep_curl", "barbell_bicep_curl", "dumbbell_hammer_curl"];
+    expect(result.every((e) => safeArmIsolationKeys.includes(e.key))).toBe(true);
   });
 });
 
@@ -370,6 +377,12 @@ describe("generateWorkoutTemplateSet — persistent A/B/C rotation", () => {
 
   it("respects equipment exclusions the same way generateWorkout does", () => {
     const result = generateWorkoutTemplateSet({ profile: profile(), availableEquipment: ["dumbbells"] });
+    // Every dumbbell-equipment catalog entry, plus plank (requiredEquipment
+    // null — always available regardless of the equipment filter, same
+    // hard-exclusion tier as avoidIfInjury). Kept as an explicit list
+    // rather than deriving it from EXERCISE_CATALOG so this test actually
+    // catches a real regression instead of trivially passing against
+    // whatever the catalog happens to contain.
     const allowedKeys = [
       "dumbbell_shoulder_press",
       "dumbbell_bicep_curl",
@@ -377,6 +390,16 @@ describe("generateWorkoutTemplateSet — persistent A/B/C rotation", () => {
       "dumbbell_lateral_raise",
       "dumbbell_russian_twist",
       "plank",
+      "dumbbell_bench_press",
+      "dumbbell_chest_fly",
+      "dumbbell_single_arm_row",
+      "dumbbell_pullover",
+      "dumbbell_front_raise",
+      "dumbbell_rear_delt_fly",
+      "dumbbell_arnold_press",
+      "dumbbell_hammer_curl",
+      "dumbbell_overhead_tricep_extension",
+      "dumbbell_side_bend",
     ];
     const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
     expect(allKeys.every((key) => allowedKeys.includes(key))).toBe(true);
