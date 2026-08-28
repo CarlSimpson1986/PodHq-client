@@ -16,10 +16,11 @@ export interface WearableSnapshotProps {
   hrvMs: number | null;
 }
 
-// Sleep is always null right now — Google Health's dailyRollUp has no
-// sleep field at all (session-based, needs separate work, tracked but not
-// built). Shown distinctly from "—" so it reads as a real product gap,
-// not a sync glitch.
+// Null here now means genuinely "no sleep session synced for this day
+// yet" (google-health.ts's fetchSleepMinutes implemented 2026-08-28) —
+// still worth its own copy rather than a bare "—", since a member
+// checking right after waking up may not have a synced session yet even
+// though steps/HR already have today's data.
 function formatSleep(minutes: number | null): string {
   if (minutes === null) return "Not yet available";
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
