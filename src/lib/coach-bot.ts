@@ -1,5 +1,6 @@
 import "server-only";
 import type { GeneratedExercise } from "@/lib/coach/generate-workout";
+import type { WeeklyReview } from "@/lib/coach/weekly-review";
 
 // AI Coach narration — turns the deterministic plan (generate-workout.ts)
 // into Coach-voiced copy. Deliberately NOT where the numbers come from:
@@ -109,4 +110,35 @@ export async function narratePostSession(memberName: string, changes: WeightChan
     .join(", ");
   const userPrompt = `Write a short next-session preview for ${memberName} explaining why their weights are changing, based on: ${summary}`;
   return askProvider(NARRATION_SYSTEM_PROMPT, userPrompt);
+}
+
+// Longer-form than NARRATION_SYSTEM_PROMPT's "1-2 short sentences" — this
+// is the one narration the member reads deliberately (the weekly
+// check-in), not a passing intro line, so it earns a genuine paragraph.
+// Still the same non-hedging voice and the same "narrate numbers already
+// computed by plain code, never invent or recompute them" boundary as
+// every other coach-bot function.
+const WEEKLY_REVIEW_SYSTEM_PROMPT =
+  "You are the AI Coach for My Fit Pod, a UK private-pod gym, writing a member's weekly performance review. Write in a direct, confident, encouraging voice — never hedge, never say \"I'm an AI\" or suggest the member should double-check with someone else. 3-5 short sentences: acknowledge what they did this week using only the figures given, call out one genuine positive, and suggest one honest area to focus on next week. Plain language, no markdown, never invent a number not present in the data.";
+
+export async function narrateWeeklyReview(memberName: string, review: WeeklyReview): Promise<string> {
+  const parts = [
+    `${review.sessionsCompleted} workout session(s) completed`,
+    `${Math.round(review.totalVolumeKg)}kg total weight lifted`,
+  ];
+  if (review.totalSteps !== null) parts.push(`${review.totalSteps.toLocaleString("en-GB")} total steps`);
+  if (review.avgRestingHeartRate !== null) parts.push(`${review.avgRestingHeartRate}bpm average resting heart rate`);
+  if (review.avgSleepMinutes !== null) {
+    const hours = Math.floor(review.avgSleepMinutes / 60);
+    const mins = review.avgSleepMinutes % 60;
+    parts.push(`${hours}h ${mins}m average sleep per night`);
+  }
+  if (review.nutritionDaysLogged > 0) {
+    parts.push(`nutrition logged ${review.nutritionDaysLogged}/${review.nutritionDaysInWindow} days`);
+    if (review.avgDailyCalories !== null) parts.push(`averaging ${review.avgDailyCalories} kcal/day on days logged`);
+  } else {
+    parts.push("no nutrition logged this week");
+  }
+  const userPrompt = `Write ${memberName}'s weekly performance review based on this week's actual figures: ${parts.join(", ")}.`;
+  return askProvider(WEEKLY_REVIEW_SYSTEM_PROMPT, userPrompt);
 }
