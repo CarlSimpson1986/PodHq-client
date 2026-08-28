@@ -95,15 +95,22 @@ const DATA_TYPES = {
 } as const;
 
 // Sleep is modeled as session records (Sleep/SleepSummary/SleepStage —
-// start/end times, not a single daily number) — confirmed by reading
-// the discovery document's DailyRollupDataPoint schema, whose value
-// union has no "sleep" property at all alongside "steps"/"heartRate"/
-// etc, so dailyRollUp simply doesn't summarize it the way it does the
-// other two fields. Getting a daily sleep-duration number needs reading
-// Sleep session records directly and summing durations client-side —
-// real, separate work, not a parsing fix. Tracked as its own follow-up;
-// this file no longer even attempts the doomed dailyRollUp call for it.
-const SLEEP_NOT_YET_SUPPORTED = true;
+// start/end times, not a single daily number), confirmed by reading the
+// discovery document's DailyRollupDataPoint schema, whose value union has
+// no "sleep" property alongside "steps"/"heartRate" — dailyRollUp simply
+// doesn't summarize it. Implemented 2026-08-28 against the real discovery
+// document (not guessed): `sleep` is a `dataTypes.dataPoints.list` query
+// like restingHeartRate's, but filtered on `sleep.interval.civil_end_time`
+// specifically — Google's own documented reasoning is that a sleep
+// session commonly starts one calendar day and ends the next, so sleep
+// is the one data type filtered by when it *ended* (the day you woke up),
+// not when the interval started, unlike every other session type. Each
+// returned DataPoint's `sleep.summary.minutesAsleep` is already computed
+// server-side by Google (stage segments summed for you) — no manual
+// SleepStage-summing needed after all. Summed across every data point
+// returned for the day (a nap plus a main sleep both count), rather than
+// trying to single out `main_sleep` via SleepMetadata — safer default
+// than guessing which metadata field reliably identifies "the" sleep.
 
 interface CivilDate {
   year: number;
@@ -219,6 +226,48 @@ async function fetchRestingHeartRate(client: OAuth2Client, dateIso: string): Pro
   return Math.round(value);
 }
 
+// Filtered on civil_end_time, not civil_start_time — see this file's
+// SLEEP_NOT_YET_SUPPORTED-turned-implementation comment above for why
+// sleep specifically is the one data type Google documents as filterable
+// by interval end. Summed across every dataPoint returned (a day can
+// return more than one sleep session — a nap plus a main sleep both
+// count towards total minutes asleep that day).
+async function fetchSleepMinutes(client: OAuth2Client, dateIso: string): Promise<number | null> {
+  const accessToken = await client.getAccessToken();
+  const { end } = dailyCivilRange(dateIso);
+  const endIso = `${end.date.year}-${String(end.date.month).padStart(2, "0")}-${String(end.date.day).padStart(2, "0")}`;
+  const filter = `sleep.interval.civil_end_time >= "${dateIso}" AND sleep.interval.civil_end_time < "${endIso}"`;
+
+  const res = await fetch(`${API_BASE}/users/me/dataTypes/sleep/dataPoints?filter=${encodeURIComponent(filter)}`, {
+    headers: { Authorization: `Bearer ${accessToken.token}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Google Health API sleep list failed: ${res.status} ${await res.text()}`);
+  }
+  const body = (await res.json()) as { dataPoints?: { sleep?: { summary?: { minutesAsleep?: string | number } } }[] };
+  const points = body.dataPoints ?? [];
+  if (points.length === 0) {
+    // No error — genuinely no sleep session synced for this civil day yet.
+    return null;
+  }
+
+  let total = 0;
+  let sawExtractableValue = false;
+  for (const point of points) {
+    const raw = point.sleep?.summary?.minutesAsleep;
+    const value = typeof raw === "string" ? Number(raw) : raw;
+    if (typeof value === "number" && !Number.isNaN(value)) {
+      total += value;
+      sawExtractableValue = true;
+    }
+  }
+  if (!sawExtractableValue) {
+    console.error("[google-health] sleep list returned data points but no extractable minutesAsleep — logging shape for verification", { body });
+    return null;
+  }
+  return Math.round(total);
+}
+
 // HRV goes straight to `list`, skipping the dailyRollUp detour that RHR
 // needed — the discovery document's own comment on
 // HeartRateVariabilityPersonalRangeRollupValue ("returned by default when
@@ -263,17 +312,13 @@ async function fetchHeartRateVariability(client: OAuth2Client, dateIso: string):
 // whose refresh token has already been decrypted by the caller — see
 // src/lib/data/wearables.ts. A single field's request failing (a data
 // type with no data that day, or a transient error) doesn't fail the
-// other two — each is fetched and parsed independently. Sleep always
-// resolves to null without an API call — see SLEEP_NOT_YET_SUPPORTED.
+// others — each is fetched and parsed independently.
 export async function fetchDailyData(refreshToken: string, dateIso: string): Promise<DailyWearableData> {
   const client = clientWithRefreshToken(refreshToken);
 
-  if (SLEEP_NOT_YET_SUPPORTED) {
-    console.error("[google-health] sleep skipped — dailyRollUp has no sleep field, needs the session-based endpoint instead");
-  }
-
-  const [stepsResult, restingHeartRateResult, hrvResult] = await Promise.allSettled([
+  const [stepsResult, sleepResult, restingHeartRateResult, hrvResult] = await Promise.allSettled([
     fetchDailyRollup(client, DATA_TYPES.steps, dateIso),
+    fetchSleepMinutes(client, dateIso),
     fetchRestingHeartRate(client, dateIso),
     fetchHeartRateVariability(client, dateIso),
   ]);
@@ -283,6 +328,13 @@ export async function fetchDailyData(refreshToken: string, dateIso: string): Pro
     steps = extractStepsRollupValue(stepsResult.value);
   } else {
     console.error("[google-health] steps rollup request failed", { reason: String(stepsResult.reason) });
+  }
+
+  let sleepMinutes: number | null = null;
+  if (sleepResult.status === "fulfilled") {
+    sleepMinutes = sleepResult.value;
+  } else {
+    console.error("[google-health] sleep list request failed", { reason: String(sleepResult.reason) });
   }
 
   let restingHeartRate: number | null = null;
@@ -299,5 +351,5 @@ export async function fetchDailyData(refreshToken: string, dateIso: string): Pro
     console.error("[google-health] heart-rate-variability list request failed", { reason: String(hrvResult.reason) });
   }
 
-  return { steps, sleepMinutes: null, restingHeartRate, hrvMs };
+  return { steps, sleepMinutes, restingHeartRate, hrvMs };
 }
