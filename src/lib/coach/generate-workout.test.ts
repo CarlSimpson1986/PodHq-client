@@ -287,7 +287,7 @@ describe("generateWorkout — rep-range phases within a block (2026-08-25)", () 
   // population 2-3x/week members benefit more from a fresh rep range
   // every 4 weeks than from copying a 3-week-push-then-deload cadence
   // built for far-higher-frequency athletes. See REP_TARGET_BY_BLOCK_PHASE.
-  it("uses hypertrophy's phase 1 (weeks 1-4, ~6-8 reps) target at block start", () => {
+  it("uses hypertrophy's phase 1 (weeks 1-4) target at block start", () => {
     const result = generateWorkout({
       profile: profile(),
       history: [],
@@ -295,10 +295,10 @@ describe("generateWorkout — rep-range phases within a block (2026-08-25)", () 
       activeBlock: { blockType: "hypertrophy", startedAt: BLOCK_START },
       now: new Date(BLOCK_START),
     });
-    expect(result[0].repsTarget).toBe(7);
+    expect(result[0].repsTarget).toBe(12);
   });
 
-  it("uses hypertrophy's phase 2 (weeks 5-8, ~10-12 reps) target 4 weeks in", () => {
+  it("uses hypertrophy's phase 2 (weeks 5-8) target 4 weeks in — a deliberately heavier/lower-rep middle phase, not the midpoint of phases 1 and 3", () => {
     const result = generateWorkout({
       profile: profile(),
       history: [],
@@ -306,10 +306,10 @@ describe("generateWorkout — rep-range phases within a block (2026-08-25)", () 
       activeBlock: { blockType: "hypertrophy", startedAt: BLOCK_START },
       now: new Date("2026-02-02T00:00:00.000Z"), // BLOCK_START + 28 days
     });
-    expect(result[0].repsTarget).toBe(11);
+    expect(result[0].repsTarget).toBe(6);
   });
 
-  it("uses hypertrophy's phase 3 (weeks 9-12, ~15-20 reps) target 8 weeks in", () => {
+  it("uses hypertrophy's phase 3 (weeks 9-12) target 8 weeks in", () => {
     const result = generateWorkout({
       profile: profile(),
       history: [],
@@ -317,7 +317,7 @@ describe("generateWorkout — rep-range phases within a block (2026-08-25)", () 
       activeBlock: { blockType: "hypertrophy", startedAt: BLOCK_START },
       now: new Date("2026-03-02T00:00:00.000Z"), // BLOCK_START + 56 days
     });
-    expect(result[0].repsTarget).toBe(17);
+    expect(result[0].repsTarget).toBe(15);
   });
 
   it("never drops a strength block's reps below 3, even well past the 12-week mark", () => {

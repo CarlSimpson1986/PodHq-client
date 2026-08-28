@@ -153,8 +153,16 @@ export const BLOCK_DURATION_WEEKS: Record<BlockType, number> = {
 // won't create.
 export const PHASE_DURATION_WEEKS = 4;
 
+// hypertrophy's phase 2 deliberately isn't the midpoint of phase 1 and
+// phase 3 — Carl's explicit call (2026-08-28), correcting an earlier
+// average-of-the-range approach ([7, 11, 17], e.g. "10-12 reps" rounded
+// to 11 — not a number anyone actually programs). Clean, round,
+// deliberately-chosen targets instead, including a heavier/lower-rep
+// middle phase rather than a smooth ascending curve. Weight is computed
+// entirely from RPE history (computeWeightKg/adjustForRpe), never from
+// repsTarget, so this phase shape has no hidden interaction with load.
 export const REP_TARGET_BY_BLOCK_PHASE: Record<"hypertrophy" | "strength", [number, number, number]> = {
-  hypertrophy: [7, 11, 17], // weeks 1-4 (~6-8 reps), 5-8 (~10-12), 9-12 (~15-20)
+  hypertrophy: [12, 6, 15], // weeks 1-4, 5-8, 9-12
   strength: [6, 4, 3], // weeks 1-4, 5-8, 9-12 — floor of 3, never a max-effort single/double
 };
 
