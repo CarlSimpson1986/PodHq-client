@@ -136,6 +136,38 @@ export async function getRecentWearableSnapshots(memberId: number, days = 14): P
   }));
 }
 
+// Same shape as getRecentWearableSnapshots, but bounded by an explicit
+// `before` date rather than "today" — used by weekly-wearable-reflection.ts
+// so a check-in's baseline is always strictly before that check-in's own
+// review period, never "as of whenever this happens to run" (a check-in
+// completed a few days into the grace window shouldn't pull days from
+// inside its own period into the baseline it's being compared against).
+export async function getWearableSnapshotsBefore(memberId: number, before: string, days = 42): Promise<WearableSnapshot[]> {
+  const admin = createAdminClient();
+  const beforeDate = new Date(`${before}T00:00:00Z`);
+  const since = new Date(beforeDate);
+  since.setUTCDate(since.getUTCDate() - days);
+  const sinceIso = since.toISOString().slice(0, 10);
+
+  const { data, error } = await admin
+    .from("member_wearable_data")
+    .select("recorded_date, steps, sleep_minutes, resting_heart_rate, hrv_ms")
+    .eq("member_id", memberId)
+    .gte("recorded_date", sinceIso)
+    .lt("recorded_date", before)
+    .order("recorded_date", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    recordedDate: row.recorded_date,
+    steps: row.steps,
+    sleepMinutes: row.sleep_minutes,
+    restingHeartRate: row.resting_heart_rate,
+    hrvMs: row.hrv_ms,
+  }));
+}
+
 export async function getLatestWearableSnapshot(memberId: number): Promise<WearableSnapshot | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
