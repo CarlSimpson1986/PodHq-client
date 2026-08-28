@@ -9,8 +9,6 @@ import { getCheckInDueState, currentCheckInPeriod } from "@/lib/coach/checkin-st
 import { getRecoveryStatus } from "@/lib/coach/recovery-status";
 import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { getWeeklyConsistency } from "@/lib/coach/consistency";
-import { getTrainingBlockState } from "@/lib/coach/training-block-state";
-import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { WeekCalendarStrip } from "@/components/week-calendar-strip";
@@ -19,18 +17,17 @@ import { TrialBanner } from "@/components/trial-banner";
 import { MoreMenu } from "@/components/more-menu";
 import { TrophyIcon } from "@/components/icons";
 
-const BLOCK_TYPE_LABEL: Record<string, string> = {
-  hypertrophy: "Hypertrophy",
-  strength: "Strength",
-  deload: "Deload",
-};
-
 // The new Dashboard — replaces /coach's old hub content (2026-08-25
 // redesign, see ROADMAP.md). Same trial/subscriber gating as before
 // (getCoachHomeState): non-premium states still just show their banner,
 // the full card set below is only for trial_active/subscriber. Every card
 // here reuses an existing data function — see the redesign plan for the
 // full inventory of what's real vs. net-new.
+//
+// Training block card removed 2026-08-28 (Carl) — /training's own
+// "Current training block" section (TrainingBlockView) already shows
+// the full phase/rep detail for both in_block and transition_due states;
+// this page's summary was a pure duplicate, not a different view.
 export default async function DashboardPage() {
   const session = await createSessionClient();
   const {
@@ -57,20 +54,17 @@ export default async function DashboardPage() {
   let recoveryStatus = null;
   let weeklyReview = null;
   let consistency = null;
-  let blockState = null;
 
   if (showFullDashboard && coachProfile) {
     const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-    const [recovery, review, weeks, blockHistory] = await Promise.all([
+    const [recovery, review, weeks] = await Promise.all([
       getRecoveryStatus(member.id),
       getWeeklyReview(member.id, periodStart, periodEnd, member.gender),
       getWeeklyConsistency(member.id),
-      getBlockHistory(member.id),
     ]);
     recoveryStatus = recovery;
     weeklyReview = review;
     consistency = weeks.find((w) => w.weeksAgo === 0) ?? { weeksAgo: 0, sessionsCompleted: 0 };
-    blockState = getTrainingBlockState(coachProfile, blockHistory, new Date());
   }
 
   return (
@@ -149,20 +143,6 @@ export default async function DashboardPage() {
                     </div>
                   )}
 
-                  {blockState && blockState.kind === "in_block" && (
-                    <div className="card-light p-5">
-                      <p className="text-sm font-semibold">Training block</p>
-                      <p className="mt-1 text-sm text-card-light-muted">
-                        {BLOCK_TYPE_LABEL[blockState.blockType] ?? blockState.blockType} · {blockState.daysRemaining} days left
-                      </p>
-                    </div>
-                  )}
-                  {blockState && blockState.kind === "transition_due" && (
-                    <Link href="/training" prefetch={false} className="card-light block p-5">
-                      <p className="text-sm font-semibold">Training block ready to move on</p>
-                      <p className="mt-1 text-sm text-card-light-muted">View training →</p>
-                    </Link>
-                  )}
                 </div>
               </div>
 
