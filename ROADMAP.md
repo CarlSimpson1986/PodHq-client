@@ -14,112 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-34.md`, covering the pilot
-mechanism proof (2026-08-05) through the Dashboard tile cleanup /
-"Find a Professional" directory (2026-08-27) — all split out to keep this
-file within Claude Code's ~15,000-character `@`-import limit. Archives
-aren't always the strictly oldest material — the split point is "what's
-finished and stable" as much as "what's oldest" (see
-`ROADMAP-ARCHIVE-14.md`'s through `-34.md`'s own header notes for
-same-day examples of this). All archives are reference-only (not
-auto-loaded by CLAUDE.md); check them for full stage-by-stage build
-history, or `git log` on this file for the exact split points. Active content here starts at Hypertrophy A/B/C rotation
-(2026-08-27). If this file grows too large again, split it the same way:
-move the most clearly finished section into `ROADMAP-ARCHIVE-35.md`,
-update this paragraph.
-
-## Nav/tile fixes + Health redesign + Hypertrophy A/B/C rotation (Stages 1-2) — 2026-08-27 (same day, later still)
-
-Several follow-ups after Carl tried the app live, plus a big new
-feature — checkpointed here (Carl applying the new migration himself)
-before continuing into that feature's Stage 3.
-
-**Quick fixes**: "Find a professional" moved from `/dashboard` to Home
-(`/`) — Carl's "main dashboard of the home screen" meant Home, not the
-Premium hub, a mix-up from the same nav-naming confusion flagged
-earlier today. `/coach/profile`'s corner icon (a person silhouette
-linking to the *other* `/profile`) swapped for `MoreMenu`, matching
-every other Premium page.
-
-**Training**: `exercise-trend-chart.tsx` converted from an 8-week bar
-chart to a connected line — Carl wanted "where they started vs where
-they are now," which the existing data already supported, just not as
-a line.
-
-**Health redesign**: removed the Nutrition/Training summary sections
-(both already have their own tabs, same duplication Dashboard's tile
-cleanup addressed) and replaced with real wearable widgets:
-`step-gauge.tsx` (a half-moon gauge, current vs a 10,000/day default —
-no per-member step target exists, flag if that should be configurable)
-and `health-metric-card.tsx` (expandable resting-HR/HRV trend charts),
-both backed by `getRecentWearableSnapshots` (already existed, just
-never surfaced beyond `WearableConnectionCard`'s flat current-value
-grid). **Sleep has no real data at all** — Google Health's API
-integration this app uses has no sleep field (confirmed in
-`wearable-connection-card.tsx`'s own existing comment) — shown as an
-honest "not yet available" note rather than an empty chart.
-
-**Hypertrophy A/B/C workout rotation** — the big one, spanning both
-repos, entered Plan mode twice for (once to scope, once after Carl's
-own framing changed it: "realistically people won't be training 5 days
-a week... probably 3 max, so full body workouts... if they want a
-specific chest/leg day or build their own they can"). Full detail,
-including the real architecture investigation this was based on, in
-podHq's `ROADMAP_HISTORY.md`; summary of this repo's half here.
-
-**Stage 1 — catalog expansion**: `exercise-catalog.ts` had only 11
-exercises, with chest/shoulders/core at exactly one option each —
-found via Explore-agent research before building anything, and flagged
-to Carl (he chose to expand the catalog rather than ship with the
-overlap). Added 7 exercises across those three groups plus one more
-back option, all within Hove's existing 4 equipment categories. Two
-honest gaps: `safetyTip`s are drafts in the existing voice, explicitly
-**not** final — this app's own convention is real safety guidance
-"written by a person, deliberately never LLM-generated," so these need
-Carl's actual review. Photos aren't sourced (no image-fetch capability
-this session) — `workout-view.tsx` gained a graceful "no photo yet"
-placeholder (`onError` on the exercise `<img>`) instead of shipping a
-broken image icon for the new entries.
-
-**Stage 2 — persistent template rotation**: new `generateWorkoutTemplateSet()`
-(`generate-workout.ts`) picks 3 full-body templates — legs in all
-three (the one group present every time), the other 3 slots rotating
-chest/back/shoulders/arms/core across A/B/C so the *set* balances even
-though no single template hits all 6 groups. New `workout-templates.ts`
-persists/looks these up; `getOrCreateWorkoutSession` (`workout-session.ts`)
-now resolves the active block's phase (`blockPhaseIndex`, unchanged),
-lazily generates the A/B/C set the first time a session lands in a new
-phase (mirroring the idempotent-per-booking pattern `workout_sessions`
-already used), and picks the next letter by rotation
-(`countSessionsForTemplates(...) % 3`). **Weight and reps are always
-recomputed live** via the existing `computeWeightKgForBlock`/
-`repsTargetForBlock` — only exercise *selection* is now fixed per
-phase, RPE-driven progression is untouched. `completeSession`'s
-next-session preview updated to match, so it previews what will
-actually generate next rather than a differently-computed guess.
-`swapExercise` stays session-only, unchanged, by design.
-
-**Real design correction found mid-implementation**: the plan
-originally keyed templates on `training_blocks.id`, but a member's
-"current block" is very often the *implicit* default (no real row
-exists — same `check_ins`-style "row existence = happened" convention)
-— that FK would have failed for the common case. Migration
-`0067_workout_templates.sql` keys on `block_type` + `block_started_at`
-instead, both always available regardless of whether a real row
-exists.
-
-**Stage 3 (split-day / "build your own" workout) not started** — Carl
-chose to build this in the same pass rather than defer it, but it's a
-genuinely separate chunk (pre-generation choice screen, a
-focus-muscle-group generation mode, an exercise-picker UI) — paused
-here as a natural checkpoint while Carl applies the new migration.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (105/105,
-7 new template-generation cases), and `next build` all clean. Not
-visually verified — same login limitation as every UI change this
-session. **Not yet live** — migration `0067` needs Carl's own paste
-into Supabase's SQL Editor before any of Stage 2's code path actually
-runs; nothing in it has touched a real database yet.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-35.md`, covering the pilot
+mechanism proof (2026-08-05) through Nav/tile fixes + Health redesign +
+Hypertrophy A/B/C rotation Stages 1-2 (2026-08-27) — all split out to
+keep this file within Claude Code's ~15,000-character `@`-import limit.
+Archives aren't always the strictly oldest material — the split point is
+"what's finished and stable" as much as "what's oldest" (see each
+archive's own header note for examples). Reference-only, not
+auto-loaded by CLAUDE.md; check them for full build history, or `git log`
+on this file for exact split points. Active content here starts at
+"Blank first-time exercise weight" (2026-08-27). If this file grows too
+large again, split it the same way: move the most clearly finished
+section into `ROADMAP-ARCHIVE-36.md`, update this paragraph.
 
 ## Blank first-time exercise weight — 2026-08-27 (same day, later still)
 
@@ -247,3 +153,71 @@ clean. New photos confirmed rendering via local dev server, not just
 present on disk. Not yet exercised live for the 18 new exercises
 specifically (no template has generated one yet — the two live-tested
 today, Barbell Squat and Barbell Bench Press, both predate this batch).
+
+## Weekly check-in: data review + AI narrative + reflection questions — 2026-08-28
+
+Stage 10b's honest "reflection questions coming soon" stub (2026-08-23)
+became the real thing. Carl asked for a "reviewing your data" ceremony
+ahead of the questions — total steps/workouts/volume lifted, days
+nutrition logged, avg heart rate, avg sleep, then the AI coach gives a
+detailed performance review, before the reflection questions.
+
+**Scoped two real ambiguities before building**: "total amount lifted
+overall" turned out to mean this week's total (matching every other
+stat in the review), not true all-time-ever — confirmed with Carl rather
+than assumed. And the new data-review screen comes *before* the
+reflection questions, not instead of them.
+
+**weekly-review.ts**: added `totalSteps`/`avgRestingHeartRate`/
+`avgSleepMinutes` from `member_wearable_data` (a plain `date` column,
+so a direct string-range comparison, unlike the `workout_sessions`/
+`food_log_entries` queries which need London-midnight UTC-window
+conversion). Null (not 0) when nothing's synced for the window — same
+honest-gap convention nutrition's own averages already use.
+
+**coach-bot.ts**: `narrateWeeklyReview()` — same Groq-then-Claude-Haiku
+provider fallback and narrate-the-numbers-don't-compute-them boundary as
+`narrateSessionIntro`/`narratePostSession`, but its own longer system
+prompt (3-5 sentences, not 1-2) since this is the one narration a member
+actually reads deliberately rather than in passing.
+
+**checkin route**: the AI narrative only generates when the check-in is
+actually due/overdue, not for the "N days to go" preview — no LLM spend
+for a page nobody's checking in on. Best-effort try/catch, matches every
+other coach-bot call site.
+
+**checkin-view.tsx**: due/overdue flow now shows a brief "Reviewing your
+data" spinner beat (the data's already back from the fetch by the time
+it clears — a deliberate held beat, not a real wait), then the expanded
+stats (new wearable cards individually omitted per-metric when unsynced,
+not a blanket hide), the AI review, then 4 reflection questions —
+5-point week-feel scale, pain yes/no with a conditional detail field,
+and two optional free-text prompts (barriers, next-week focus). Answers
+post to `check_ins.answers` — deliberately schemaless jsonb since 0054,
+specifically because "the actual check-in question set isn't decided
+yet" was true until this session, so no migration was needed now that it
+is. `complete` route validates the payload with zod first.
+
+**AI-generated demo photos considered and declined, separately**: Carl
+asked about generating on-brand exercise-demo visuals with AI. Flagged
+that this app's own rule — safety-critical technique guidance is
+human-written, never LLM-generated, because bad form guidance risks real
+injury — applies at least as strongly to a *photo* of "correct form" as
+to a sentence, and image models are unreliable at consistent anatomy.
+Offered black-and-white icon pictograms as a lower-risk on-brand
+alternative; that path needs a `GEMINI_API_KEY` this environment doesn't
+have, so the current stock photos stay for now.
+
+**Verified live**, not just build-clean: backdated the test account's
+`coach_profiles.created_at` by a week (with Carl's go-ahead) to force
+the overdue state, since the account's real due date is 2026-08-30.
+Confirmed live: overdue banner, ceremony spinner, all stat cards
+(sessions/volume/nutrition — steps/HR/sleep cards correctly didn't
+render, since this test account has no wearable connected), a real
+Groq-generated review narrative that stayed honest about zero activity
+rather than inventing praise, the pain-detail field's conditional
+reveal, submit → `check_ins` row confirmed via direct DB read with the
+exact answers entered, and the page correctly flipping back to "2 days
+to go" afterward. Backdated timestamp and the test check-in row were
+both cleaned up immediately after. `npx tsc --noEmit`, `eslint`,
+`npx vitest run` (105/105), and `next build` all clean throughout.
