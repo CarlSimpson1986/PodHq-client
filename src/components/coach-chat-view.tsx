@@ -86,9 +86,6 @@ export function CoachChatView({ initialMessages }: { initialMessages: ChatMessag
             {m.content}
           </div>
         ))}
-        {messages.some((m) => m.role === "assistant") && (
-          <p className="text-xs text-muted-foreground">Based on general sports-science practice — not a live research citation lookup.</p>
-        )}
         {sending && <p className="text-sm text-muted-foreground">Thinking…</p>}
         <div ref={bottomRef} />
       </div>

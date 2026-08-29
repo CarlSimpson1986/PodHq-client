@@ -14,7 +14,10 @@ import { BottomNav } from "@/components/bottom-nav";
 import { UpcomingSessionCard } from "@/components/upcoming-session-card";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { AICoachSection } from "@/components/ai-coach-section";
+import { TodaysMissionCard } from "@/components/todays-mission-card";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
+import { getTodaysMission } from "@/lib/coach/todays-mission";
+import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
 import { TrophyIcon, UsersIcon } from "@/components/icons";
 
 export default async function HomePage() {
@@ -39,6 +42,14 @@ export default async function HomePage() {
     getPodResourcesForGym(member.gym),
   ]);
 
+  const coachState = getCoachHomeState(member, membership);
+  const showTodaysMission = coachState.kind === "trial_active" || coachState.kind === "subscriber";
+
+  const [mission, habits, habitProgress] = showTodaysMission
+    ? await Promise.all([getTodaysMission(member.id, member.gym, member.gender), getActiveHabits(member.id), getTodayProgress(member.id)])
+    : [null, [], new Map<number, number>()];
+  const habitsWithProgress = habits.map((h) => ({ ...h, todayCount: habitProgress.get(h.id) ?? 0 }));
+
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
       <div id="tour-greeting" className="bg-card px-6 pb-8 pt-12 sm:pt-16">
@@ -50,7 +61,9 @@ export default async function HomePage() {
 
       <div className="flex-1 space-y-4 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-4">
-          <AICoachSection state={getCoachHomeState(member, membership)} />
+          <AICoachSection state={coachState} />
+
+          {showTodaysMission && mission && <TodaysMissionCard mission={mission} initialHabits={habitsWithProgress} />}
 
           {!membership && (
             <div className="card-light border-2 border-card-light-foreground p-5">

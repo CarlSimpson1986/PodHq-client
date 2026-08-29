@@ -5,12 +5,14 @@ import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
 import { getExcludedExerciseKeysForBooking } from "@/lib/coach/workout-session";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-// Stage 3 (2026-08-29) — drives the pre-generation "build your own"
-// picker (workout-view.tsx). Read-only, GET rather than reusing the
-// POST /generate route, since this needs to run *before* a session is
-// created or a mode is chosen — the picker has to know what's eligible in
+// Drives the "build your own" picker (workout-view.tsx) — reachable both
+// pre-session (via /generate, no longer exposed in the UI as of
+// 2026-08-29, but the endpoint itself is choice-agnostic) and post-session
+// via the "Change today's workout" flow. Read-only GET rather than reusing
+// the POST /generate or /change-mode routes, since this needs to run
+// *before* a mode is chosen — the picker has to know what's eligible in
 // order to offer it. Same session→rate-limit→member→premium→booking-
-// ownership shape as /generate, just no session-creation side effect.
+// ownership shape as those routes, just no session-creation side effect.
 export async function GET(request: Request) {
   const session = await createSessionClient();
   const {

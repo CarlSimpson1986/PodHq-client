@@ -6,13 +6,16 @@ import {
   PHASE_DURATION_WEEKS,
   DELOAD_WEIGHT_MULTIPLIER,
   DELOAD_SETS_PER_EXERCISE,
+  SECONDS_PER_REP,
+  SESSION_SECONDS,
+  REST_SECONDS_BY_BLOCK,
   type Goal,
   type BlockType,
   type EquipmentType,
 } from "@/lib/coach/types";
 import { londonMidnight } from "@/lib/london-time";
 
-const EXERCISE_COUNT = 4;
+const MIN_EXERCISE_COUNT = 4;
 const SETS_PER_EXERCISE = 3;
 
 // Structured JSON out of this function (brief §9), computed by plain code
@@ -89,9 +92,33 @@ export function repsTargetForBlock(activeBlock: { blockType: BlockType; startedA
   return REP_TARGET_BY_BLOCK_PHASE[activeBlock.blockType][phase];
 }
 
+// How many exercises fit in a 50-minute session for this block/phase's
+// rep target (2026-08-29, Carl's call — see types.ts's SECONDS_PER_REP/
+// SESSION_SECONDS/REST_SECONDS_BY_BLOCK for the full reasoning). Blended
+// 50/50 compound:isolation estimate rather than a real bin-packing
+// algorithm — the actual exercise pool (selectExercises/
+// generateWorkoutTemplateSet) already naturally mixes compound and
+// isolation exercises across its muscle-group rotation, so this only
+// needs to answer "how many slots", not "which type goes where". Floored
+// at MIN_EXERCISE_COUNT (4) — the original fixed count — so this can only
+// ever add exercises, never regress a session below what already shipped
+// and was safety-reviewed.
+export function computeExerciseCount(activeBlock: { blockType: BlockType; startedAt: string } | undefined, goal: Goal, now: Date): number {
+  const blockType = activeBlock?.blockType ?? "hypertrophy";
+  const sets = blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
+  const reps = repsTargetForBlock(activeBlock, goal, now);
+  const setSeconds = reps * SECONDS_PER_REP;
+  const rest = REST_SECONDS_BY_BLOCK[blockType];
+  const compoundSeconds = sets * (setSeconds + rest.compound);
+  const isolationSeconds = sets * (setSeconds + rest.isolation);
+  const blendedSeconds = (compoundSeconds + isolationSeconds) / 2;
+  return Math.max(MIN_EXERCISE_COUNT, Math.floor(SESSION_SECONDS / blendedSeconds));
+}
+
 export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[] {
   const { profile, history, lastSession, activeBlock, availableEquipment, now = new Date() } = input;
-  const eligible = selectExercises(profile, lastSession, activeBlock ?? null, availableEquipment);
+  const exerciseCount = computeExerciseCount(activeBlock, profile.goal, now);
+  const eligible = selectExercises(profile, lastSession, activeBlock ?? null, availableEquipment, exerciseCount);
   const repsTarget = repsTargetForBlock(activeBlock, profile.goal, now);
   const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
@@ -134,7 +161,8 @@ function selectExercises(
   profile: CoachProfile,
   lastSession: RecentSessionSummary | null,
   activeBlock: { blockType: BlockType } | null,
-  availableEquipment: EquipmentType[] | undefined
+  availableEquipment: EquipmentType[] | undefined,
+  exerciseCount: number
 ): CatalogExercise[] {
   const excludedKeys = new Set([
     ...getInjuryExcludedKeys(profile.injuries),
@@ -150,7 +178,7 @@ function selectExercises(
   // ever re-including something injury-excluded or compounding two
   // narrowing filters into an over-constrained pool.
   const blockPreferred = activeBlock?.blockType === "strength" ? safe.filter((exercise) => exercise.isCompound) : safe;
-  const blockPool = blockPreferred.length >= EXERCISE_COUNT ? blockPreferred : safe;
+  const blockPool = blockPreferred.length >= exerciseCount ? blockPreferred : safe;
 
   // Rotate away from muscle groups trained last session where possible —
   // only apply the rotation if it still leaves enough exercises to fill a
@@ -160,8 +188,8 @@ function selectExercises(
     ? blockPool.filter((exercise) => !lastSession.muscleGroups.includes(exercise.muscleGroup))
     : blockPool;
 
-  const pool = rotated.length >= EXERCISE_COUNT ? rotated : blockPool;
-  return pool.slice(0, EXERCISE_COUNT);
+  const pool = rotated.length >= exerciseCount ? rotated : blockPool;
+  return pool.slice(0, exerciseCount);
 }
 
 // null the very first time (see GeneratedExercise's own comment) — no
@@ -226,20 +254,26 @@ function roundToNearestPlate(kg: number, increment = 1.25): number {
 // instantiateTemplate below), since RPE history and the active phase
 // both keep changing for as long as a template stays in rotation.
 //
-// Each template covers 4 muscle groups (matching EXERCISE_COUNT) rather
-// than one-per-group — 6 groups exist but a session is still 4
-// exercises, same as today. Legs appears in all three (the largest
-// muscle group, and every full-body program trains it every session);
-// the other 3 slots rotate through chest/back/shoulders/arms/core so
-// the *set* of three templates collectively balances the week, even
-// though any single template doesn't hit all 6 groups.
+// Each template covers however many exercises computeExerciseCount says
+// fit in 50 minutes for the active phase (2026-08-29 — previously a flat
+// 4, matching EXERCISE_COUNT). Legs leads every letter (the largest
+// muscle group, and every full-body program trains it every session,
+// 2026-08-27's original reasoning) and reappears once more near the end
+// of a longer session rather than a fixed slot count; the middle slots
+// are the original 3-group picks per letter so the *set* of three
+// templates still collectively balances the week the same way it always
+// has, just with more depth per letter when the time budget allows it.
+// 8 entries covers computeExerciseCount's realistic range (4-9); a count
+// past that just gets what the list has (see the .slice below). Same
+// "invented but defensible, not literature-perfect" category as this
+// file's other program-design constants — order is Carl's to refine.
 const TEMPLATE_LETTERS = ["A", "B", "C"] as const;
 export type TemplateLetter = (typeof TEMPLATE_LETTERS)[number];
 
-const TEMPLATE_MUSCLE_GROUP_PLAN: Record<TemplateLetter, MuscleGroup[]> = {
-  A: ["legs", "chest", "back", "core"],
-  B: ["legs", "shoulders", "back", "arms"],
-  C: ["legs", "chest", "shoulders", "core"],
+const TEMPLATE_MUSCLE_GROUP_PRIORITY: Record<TemplateLetter, MuscleGroup[]> = {
+  A: ["legs", "chest", "back", "core", "shoulders", "arms", "legs", "core"],
+  B: ["legs", "shoulders", "back", "arms", "chest", "core", "legs", "shoulders"],
+  C: ["legs", "chest", "shoulders", "core", "back", "arms", "legs", "chest"],
 };
 
 export interface TemplateExercisePick {
@@ -254,39 +288,52 @@ export interface GeneratedTemplate {
 }
 
 // Only the injury/equipment exclusions apply here — no lastSession
-// rotation (there's no single "last session" once exercises repeat
-// across weeks) and no Strength-block compound preference (a template
-// spans every phase of a block, including ones with different rep
-// targets, so biasing on today's phase wouldn't make sense for a set
-// that outlives it).
+// rotation (there's no single "last session" once exercises repeat across
+// weeks) and no Strength-block compound preference (that's selectExercises'
+// per-session bias for the goal-based fallback path; a template's own
+// muscle-group priority list already leads with legs/compounds). Exercise
+// count IS phase-specific (2026-08-29) — templates are already generated
+// fresh per phase (see getTemplateSet's phase_index key), so there's no
+// staleness risk in sizing a template to the phase active when it's built.
 export function generateWorkoutTemplateSet(input: {
   profile: CoachProfile;
   availableEquipment?: EquipmentType[];
+  activeBlock?: { blockType: BlockType; startedAt: string };
+  now?: Date;
 }): GeneratedTemplate[] {
-  const { profile, availableEquipment } = input;
+  const { profile, availableEquipment, activeBlock, now = new Date() } = input;
   const excludedKeys = new Set([...getInjuryExcludedKeys(profile.injuries), ...getEquipmentExcludedKeys(availableEquipment)]);
   const safe = EXERCISE_CATALOG.filter((exercise) => !excludedKeys.has(exercise.key));
   const usedKeys = new Set<string>();
+  const exerciseCount = computeExerciseCount(activeBlock, profile.goal, now);
 
   return TEMPLATE_LETTERS.map((letter) => {
-    const groups = TEMPLATE_MUSCLE_GROUP_PLAN[letter];
-    const exercises = groups
-      .map((muscleGroup) => {
-        const candidates = safe.filter((e) => e.muscleGroup === muscleGroup);
-        // Prefer an option no earlier template in this set has used yet,
-        // so A/B/C differ as much as the catalog allows — falls back to
-        // reuse only when a muscle group has no fresh candidate left
-        // (e.g. shoulders/core before the 2026-08-27 catalog expansion,
-        // which had exactly one option each).
-        const fresh = candidates.filter((e) => !usedKeys.has(e.key));
-        return (fresh.length > 0 ? fresh : candidates)[0];
-      })
-      // A muscle group with zero eligible exercises (heavy injury/
-      // equipment exclusion) is skipped rather than crashing — same
-      // "never guess, degrade honestly" posture as generateWorkout's own
-      // fallback chain, just meaning a template can end up with fewer
-      // than 4 exercises in an extreme exclusion case.
-      .filter((e): e is CatalogExercise => e !== undefined);
+    const groups = TEMPLATE_MUSCLE_GROUP_PRIORITY[letter].slice(0, Math.min(exerciseCount, TEMPLATE_MUSCLE_GROUP_PRIORITY[letter].length));
+    // Plain loop rather than .map(), unlike before — usedInLetter has to
+    // update mid-loop now that a muscle group (e.g. legs) can appear twice
+    // in the same letter's groups list; a .map() only reading usedKeys
+    // (updated once, after the whole letter finishes) would pick the exact
+    // same exercise for both occurrences instead of two different ones.
+    const usedInLetter = new Set<string>();
+    const exercises: CatalogExercise[] = [];
+    for (const muscleGroup of groups) {
+      const candidates = safe.filter((e) => e.muscleGroup === muscleGroup && !usedInLetter.has(e.key));
+      if (candidates.length === 0) continue;
+      // Prefer an option no earlier template in this set has used yet, so
+      // A/B/C differ as much as the catalog allows — falls back to reuse
+      // only when a muscle group has no fresh candidate left (e.g.
+      // shoulders/core before the 2026-08-27 catalog expansion, which had
+      // exactly one option each).
+      const fresh = candidates.filter((e) => !usedKeys.has(e.key));
+      const chosen = (fresh.length > 0 ? fresh : candidates)[0];
+      exercises.push(chosen);
+      usedInLetter.add(chosen.key);
+    }
+    // A muscle group with zero eligible exercises left (heavy injury/
+    // equipment exclusion, or the catalog exhausted for it) just means
+    // fewer exercises than exerciseCount for this letter — same "never
+    // guess, degrade honestly" posture as generateWorkout's own fallback
+    // chain.
 
     for (const e of exercises) usedKeys.add(e.key);
     return { letter, exercises: exercises.map((e) => ({ key: e.key, name: e.name, muscleGroup: e.muscleGroup })) };

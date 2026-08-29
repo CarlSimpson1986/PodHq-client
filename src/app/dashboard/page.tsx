@@ -28,6 +28,11 @@ import { TrophyIcon } from "@/components/icons";
 // "Current training block" section (TrainingBlockView) already shows
 // the full phase/rep detail for both in_block and transition_due states;
 // this page's summary was a pure duplicate, not a different view.
+//
+// Daily habits card moved to Home 2026-08-29 (Carl) — it's part of the
+// new "Today's Mission" card there (workout/steps/habits/nutrition, all
+// "today" signals); this weekly-focused hub kept its existing "This week"
+// cards instead of duplicating it.
 export default async function DashboardPage() {
   const session = await createSessionClient();
   const {
