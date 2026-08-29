@@ -111,7 +111,7 @@ type GenerateChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
   | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> }
-  | { mode: "custom-amrap"; timeCapSeconds: number; exercises: { key: string; reps?: number; durationSeconds?: number; weightKg?: number }[] };
+  | { mode: "custom-amrap"; timeCapSeconds: number; amrapExercises: { key: string; reps?: number; durationSeconds?: number; weightKg?: number }[] };
 
 // Rest defaults offered in the custom builder (Stage 1, 2026-08-29) — same
 // two values Carl set for Hypertrophy's assumed rest (see
@@ -654,7 +654,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                 : {
                     mode: "custom-amrap",
                     timeCapSeconds: amrapTimeCapMinutes * 60,
-                    exercises: customSelection.map((key) => {
+                    amrapExercises: customSelection.map((key) => {
                       const cfg = amrapConfigFor(key);
                       return {
                         key,

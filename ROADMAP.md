@@ -176,3 +176,25 @@ verified only, not live-clicked — same playground-member 0-credits
 blocker as Stage 1's rest timer and the earlier "Change today's workout"
 feature; the builder, overview, timer, tally, and summary screens all
 need a real booking to reach at all.
+
+**Live-verified end to end same day**, once Carl granted the playground
+member real credits (`insert into credits ... 'manual_grant'`) and
+booked a real session through `/book` — the actual flow, not a DB
+shortcut. Also needed migrations `0071`/`0072` actually pasted into
+Supabase (built and committed earlier, but never applied — should have
+flagged that explicitly at the time, not left it implicit). Caught and
+fixed a real bug this surfaced: the client sent the AMRAP exercise list
+as `exercises`, the server schema expected `amrapExercises` — silent
+field-name mismatch, `generateWorkoutSchema`'s cross-field refine
+correctly rejected it as "Invalid request." but the two names never
+matched to begin with. Full click-through afterwards confirmed: choose
+screen correctly shows only Focus day/Build your own (no stale "Today's
+session" option), format picker, per-exercise Reps/Duration toggle,
+live countdown timer (5:00 → 4:54, confirmed ticking), tally screen's
+conditional partial-reps field, and a correct final summary ("3 rounds,
+then 6 reps of Lat Pulldown"). One testing-tool gotcha worth remembering
+for next time, not an app bug: setting a controlled React input's
+`.value` directly and dispatching a plain `input` event doesn't reliably
+trigger its `onChange` — go through the native `HTMLInputElement`
+value-setter descriptor first, same trick used for React Testing
+Library's `fireEvent`.
