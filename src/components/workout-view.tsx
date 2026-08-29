@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { RPE_SCALE } from "@/lib/coach/types";
 import {
@@ -63,9 +63,28 @@ interface WeightChange {
   lastRpe: number | null;
 }
 
-// Stage 3 (2026-08-29) — "choose"/"focus-pick"/"custom-pick" are the new
-// pre-generation phases; every phase after "loading" is unchanged.
-type Phase = "choose" | "focus-pick" | "custom-pick" | "loading" | "error" | "intro" | "overview" | "warmup" | "active" | "rpe" | "cooldown" | "summary";
+// "choose"/"focus-pick"/"custom-pick" started as a pre-generation picker
+// (Stage 3, 2026-08-29) and were repurposed the same day into the
+// post-generation "Change today's workout" flow instead (see
+// changeWorkoutMode's own comment in workout-session.ts for why) —
+// "change-warning" is the new program-hopping confirmation in front of
+// them. Every session now generates its default plan automatically on
+// load; "choose" only ever offers focus/custom from here on, reached
+// exclusively via "change-warning".
+type Phase =
+  | "loading"
+  | "change-warning"
+  | "choose"
+  | "focus-pick"
+  | "custom-pick"
+  | "error"
+  | "intro"
+  | "overview"
+  | "warmup"
+  | "active"
+  | "rpe"
+  | "cooldown"
+  | "summary";
 
 type GenerateChoice =
   | { mode: "default" }
@@ -117,7 +136,7 @@ function getSwapCandidates(exercise: WorkoutExercise, detail: WorkoutSessionDeta
 }
 
 export function WorkoutView({ bookingId }: { bookingId: number }) {
-  const [phase, setPhase] = useState<Phase>("choose");
+  const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusSelection, setFocusSelection] = useState<MuscleGroup[]>([]);
   const [customSelection, setCustomSelection] = useState<string[]>([]);
@@ -149,12 +168,8 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [applyingRecovery, setApplyingRecovery] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
-  // Fires from the "choose"/"focus-pick"/"custom-pick" phases below, not
-  // on mount (2026-08-29 — previously this ran automatically in a mount
-  // effect, so a member never got a real choice at all). No cancellation
-  // guard, unlike the old mount effect — this fires from a click, same
-  // convention as every other button-triggered fetch in this file
-  // (handleComplete, logCurrentSet, the swap flow).
+  const generateStarted = useRef(false);
+
   async function generate(choice: GenerateChoice) {
     setPhase("loading");
     setErrorMessage(null);
@@ -187,6 +202,57 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       setPhase("error");
     }
   }
+
+  // "Change today's workout" (2026-08-29) — only ever called from
+  // focus-pick/custom-pick when they were reached via the change-warning
+  // flow (a session already exists at that point), hitting the
+  // replace-in-place endpoint instead of the first-time generate one.
+  async function changeMode(choice: GenerateChoice) {
+    setPhase("loading");
+    setErrorMessage(null);
+    try {
+      const res = await fetch("/api/member/workout/change-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId, ...choice }),
+      });
+      const body = await res.json();
+      if (body.status !== "ok") {
+        setErrorMessage(
+          body.message === "session_already_started"
+            ? "You've already started this session — finish or exit it before changing today's workout."
+            : body.message === "no_eligible_exercises"
+              ? "Not enough exercises available for that choice — try a different focus or picks."
+              : (body.message ?? "Something went wrong.")
+        );
+        setPhase("error");
+        return;
+      }
+      setDetail(body.session);
+      setIntroNarration(body.introNarration);
+      const firstSet = body.session.exercises[0]?.sets[0];
+      setReps(firstSet?.repsTarget ?? 0);
+      setWeight(firstSet?.weightTargetKg ?? "");
+      setPhase(body.introNarration ? "intro" : "overview");
+    } catch {
+      setErrorMessage("Something went wrong. Try again.");
+      setPhase("error");
+    }
+  }
+
+  // Generates the default plan automatically on mount (2026-08-29) — the
+  // pre-generation choose screen this used to require is gone; every
+  // booking's session is ready the moment the member opens it. The ref
+  // guard exists purely for React Strict Mode's dev-only double-effect
+  // fire — a genuine double POST would still resolve safely via
+  // getOrCreateWorkoutSession's own race recovery, this just avoids a
+  // redundant request in dev.
+  useEffect(() => {
+    if (generateStarted.current) return;
+    generateStarted.current = true;
+    generate({ mode: "default" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Lazily loads eligible exercises the first time "Build your own" is
   // opened — needs to know what's excluded (injury/equipment) *before* a
@@ -226,15 +292,34 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return () => clearInterval(interval);
   }, [phase, exerciseIndex, detail]);
 
+  if (phase === "change-warning") {
+    return (
+      <div className="space-y-5">
+        <ExitLink />
+        <p className="text-lg font-semibold">Change today&apos;s workout?</p>
+        <div className="rounded-lg border border-warning/50 p-4">
+          <p className="text-sm font-medium">Program-hopping may reduce your progress.</p>
+          <p className="mt-1 text-sm text-card-light-muted">
+            Your Hypertrophy/Strength rotation is built to progress week over week — switching off it for today is fine
+            occasionally, but doing it often can slow your results.
+          </p>
+        </div>
+        <button type="button" className={buttonClass} onClick={() => setPhase("choose")}>
+          Continue anyway →
+        </button>
+        <button type="button" onClick={() => setPhase("overview")} className="block w-full text-center text-xs font-medium text-card-light-muted underline">
+          ← Never mind, keep today&apos;s plan
+        </button>
+      </div>
+    );
+  }
+
   if (phase === "choose") {
     return (
       <div className="space-y-5">
         <ExitLink />
-        <p className="text-lg font-semibold">Choose today&apos;s session</p>
+        <p className="text-lg font-semibold">Change today&apos;s session</p>
         <div className="space-y-2">
-          <button type="button" className={buttonClass} onClick={() => generate({ mode: "default" })}>
-            Today&apos;s session
-          </button>
           <button
             type="button"
             onClick={() => setPhase("focus-pick")}
@@ -250,6 +335,9 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             Build your own
           </button>
         </div>
+        <button type="button" onClick={() => setPhase("overview")} className="block w-full text-center text-xs font-medium text-card-light-muted underline">
+          ← Back
+        </button>
       </div>
     );
   }
@@ -284,7 +372,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           type="button"
           disabled={focusSelection.length === 0}
           className={buttonClass}
-          onClick={() => generate({ mode: "focus", focusMuscleGroups: focusSelection })}
+          onClick={() => changeMode({ mode: "focus", focusMuscleGroups: focusSelection })}
         >
           Generate workout →
         </button>
@@ -352,7 +440,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           type="button"
           disabled={customSelection.length === 0}
           className={buttonClass}
-          onClick={() => generate({ mode: "custom", customExerciseKeys: customSelection })}
+          onClick={() => changeMode({ mode: "custom", customExerciseKeys: customSelection })}
         >
           Generate workout ({customSelection.length}/6) →
         </button>
@@ -415,7 +503,14 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return (
       <div className="space-y-5">
         <ExitLink />
-        <p className="text-lg font-semibold">{hasProgress ? "Continue today's session" : "Today's session"}</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-lg font-semibold">{hasProgress ? "Continue today's session" : "Today's session"}</p>
+          {!hasProgress && (
+            <button type="button" onClick={() => setPhase("change-warning")} className="text-xs font-medium text-card-light-muted underline">
+              Change today&apos;s workout
+            </button>
+          )}
+        </div>
 
         {!hasProgress && !recoveryDismissed && detail.recoveryAdvice.kind === "low_recovery" && (
           <div className="rounded-lg border border-card-light-border bg-card-light-foreground/5 p-4">

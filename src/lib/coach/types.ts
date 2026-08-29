@@ -21,6 +21,14 @@ export type FoodPreference = (typeof FOOD_PREFERENCES)[number];
 export const NUTRITION_TRACKING_MODES = ["calorie_counting", "hand_portions"] as const;
 export type NutritionTrackingMode = (typeof NUTRITION_TRACKING_MODES)[number];
 
+// Daily habit checklist (2026-08-29, `member_habits.habit_type`) — a
+// checkbox habit is done/not-done for the day (habit_logs row existence);
+// a counted habit has a numeric daily target (e.g. "8 glasses of water")
+// and the day's progress is however many habit_logs rows exist for it
+// today. See daily-habits.ts.
+export const HABIT_TYPES = ["checkbox", "counted"] as const;
+export type HabitType = (typeof HABIT_TYPES)[number];
+
 // Portion-size approximations (brief's own numbers, 2026-08-25) — a
 // simple, invented-but-documented conversion from grams, same category as
 // PROTEIN_TARGET_G_PER_KG above: Carl can retune these.
@@ -184,6 +192,30 @@ export const DELOAD_REP_TARGET = 10;
 // in this file.
 export const DELOAD_WEIGHT_MULTIPLIER = 0.85;
 export const DELOAD_SETS_PER_EXERCISE = 2;
+
+// Exercise-count budget (2026-08-29, Carl's call) — replaces a flat
+// "always 4 exercises" with "however many actually fit in a 50-minute
+// session", computed from rep target (drives set duration) and rest time
+// (compound vs. isolation, hypertrophy vs. strength). All four numbers
+// here are invented-but-defensible, same category as this file's other
+// non-literature-cited constants — flagged for Carl to tune:
+// - SECONDS_PER_REP: ~3s per rep (concentric + eccentric), a common
+//   general estimate, not exercise-specific.
+// - SESSION_SECONDS: the 50-minute pod slot, used in full (warm-up/
+//   cool-down are separate member-toggled steps in workout-view.tsx, not
+//   part of this budget).
+// - REST_SECONDS_BY_BLOCK: hypertrophy is Carl's own numbers (2min
+//   compound/multi-joint, 90s isolation/single-joint); strength is longer
+//   for heavier, lower-rep work (standard strength-training convention);
+//   deload reuses hypertrophy's numbers — lighter load, not necessarily
+//   shorter rest, revisit if that's wrong.
+export const SECONDS_PER_REP = 3;
+export const SESSION_SECONDS = 50 * 60;
+export const REST_SECONDS_BY_BLOCK: Record<BlockType, { compound: number; isolation: number }> = {
+  hypertrophy: { compound: 120, isolation: 90 },
+  strength: { compound: 180, isolation: 120 },
+  deload: { compound: 120, isolation: 90 },
+};
 
 // Suggestion-gating thresholds for "is it time to shift blocks" —
 // deliberately invented heuristics, not literature-cited (same category

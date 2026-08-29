@@ -14,118 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-39.md`, covering the pilot
-mechanism proof (2026-08-05) through "Health page redesign" (2026-08-28)
-— all split out to keep this file within Claude Code's ~15,000-character
-`@`-import limit. Archives aren't always the strictly oldest material —
-the split point is "what's finished and stable" as much as "what's
-oldest" (see each archive's own header note for examples). Reference-only,
-not auto-loaded by CLAUDE.md; check them for full build history, or `git
-log` on this file for exact split points. Active content here starts at
-"Persistent weekly habit + streak" (2026-08-28). If this file grows too
-large again, split it the same way: move the most clearly finished
-section into `ROADMAP-ARCHIVE-40.md`, update this paragraph.
-
-## Persistent weekly habit + streak, feeding the Coach recommendation — 2026-08-28
-
-Carl asked for a 5th check-in question ("What's one habit that's going
-to push you forwards this week?") and then, mid-build, whether it
-should feed "the member's main effort" — the existing `getWeeklyRecommendation`
-"This week's focus" card on the Coach tab (2026-08-25), previously
-100% system-derived, never member input.
-
-**Scoped the priority placement before building**: confirmed with Carl
-that the member's stated habit sits below the existing `prioritise_sleep`
-recovery/safety flag (a live signal from this week's real data must
-never be silently replaced by a self-statement made possibly days
-earlier — same principle checkin-state.ts and the exercise catalog's
-injury filtering already hold) but above the generic nutrition/protein
-nudges. `hit_sessions`/`prioritise_sleep`'s own existing relative order
-was left untouched — only the new `member_habit` tier was inserted, no
-unrelated reordering.
-
-Replaced the vague, optional "one thing to focus on next week?" (low
-real usage, and now redundant) with the new required habit question —
-required because an empty habit would silently break both the
-recommendation feed and the new streak.
-
-**New "Your habit" card** (`member-habit-card.tsx`) on the Coach tab,
-always visible, showing the current commitment plus a streak.
-`habit-streak.ts`'s `computeHabitStreak` — pure, tested — counts
-consecutive weeks (no skipped period, non-empty habit) back from the
-most recent check-in. Deliberately "weeks running you've SET a habit",
-not "weeks you actually kept it up" — no self-report mechanism exists
-to verify the latter, and this app doesn't claim what it can't back
-(same principle as recovery-signal.ts never inventing a number).
-
-**Carl then floated a much bigger, different feature** mid-build — a
-daily habit checklist (water/steps/fruit etc.), member-set and/or
-goal-based recommended habits, a Coach-tab layout with nutrition/workout
-surfaced directly and check-in/leaderboard below, and questioned whether
-training blocks are still needed. Correctly identified as a separate,
-substantially larger project (new data model, new daily-tracking UI, a
-real IA redesign, an actual architecture question) rather than an
-extension of the single weekly habit — finished the smaller, already-
-scoped piece first; the daily-habit-system idea is unstarted, needs its
-own proper scoping pass.
-
-**Verified live**, not just build-clean — and this time double-checked
-after the Health-page deploy's crash lesson: confirmed the "Your habit"
-card via `get_page_text` (a screenshot mid-deploy-propagation looked
-like it was missing entirely; the DOM actually had it, just a rendering/
-timing artifact in the screenshot, not a real bug). Full round-trip
-tested on the real connected account: backdated `coach_profiles.created_at`
-to force overdue, submitted a real check-in with a habit answer,
-confirmed the exact row in `check_ins.answers`, confirmed "Your habit"
-updated on the Coach tab with the correct "set this week" copy, and
-confirmed "This week's focus" correctly still showed the higher-priority
-`hit_sessions` nudge rather than the member's habit (proving the
-priority chain works as designed) — then cleaned up both the backdated
-timestamp and the test check-in row. `npx tsc --noEmit`, `eslint`,
-`npx vitest run` (134/134, 14 new), and `next build` all clean throughout.
-
-## Daily-habit-system scoping session + two concrete fixes — 2026-08-28
-
-Carl floated a much bigger idea mid-build on the weekly habit: a daily
-habit checklist (water/steps/fruit etc., check-off plus counted
-targets), member-set and/or goal-recommended habits, and a Dashboard/
-Coach layout rework. Scoped via questions rather than guessed:
-check-off+counted mix confirmed, coexists with (doesn't replace) the
-weekly "Your habit" card, lands as a Dashboard card near the top. The
-full recommended-habit catalog and exact daily-tracking data model are
-still open — this was scoping, not yet a build.
-
-Two concrete, already-clear items got built and shipped in the same
-pass rather than waiting:
-
-**Hypertrophy rep-target correction**: Carl — "when I said between
-10-12 reps I didn't mean 11 reps." `REP_TARGET_BY_BLOCK_PHASE.hypertrophy`
-was literally the midpoint of each stated range (`[7, 11, 17]`) — not a
-number anyone programs. Confirmed the new values aren't a smooth curve
-before changing anything (12 → 6 → 15, a heavier/lower-rep *middle*
-phase, deliberately not ascending) and confirmed weight computation has
-no hidden coupling to rep target (purely RPE-history-driven) before
-shipping. Also fixed stale `~10-12 reps`-style copy in the training-block
-API route that would have drifted from the real generated numbers.
-
-**Dashboard training-block card removed**: turned out `/training`'s own
-"Current training block" section already showed the full phase/rep
-detail — Dashboard's small summary was a pure duplicate, not a
-different view, so "move it to Training" was really "delete the
-Dashboard copy."
-
-**Still open, not built**: showing upcoming workout content before a
-member books a session ("Next session" on `/training` currently only
-shows anything once a booking exists) — real mechanism choice between
-eagerly generating the A/B/C template set at phase start vs. a read-only
-preview computed on demand, not decided yet. And the full daily-habit
-checklist itself.
-
-**Verified live** (not just build-clean, per the Health-page crash
-lesson): both fixes confirmed on the real deployed site — Dashboard's
-training-block card gone, `/training` showing "Phase 2 of 3 · Weeks 5-8
-— 6 reps" (the corrected value). `npx tsc --noEmit`, `eslint`,
-`npx vitest run` (134/134), and `next build` all clean throughout.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-40.md`, covering the pilot
+mechanism proof (2026-08-05) through the daily-habit-system scoping
+session (2026-08-28) — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. Archives aren't always the
+strictly oldest material — the split point is "what's finished and
+stable" as much as "what's oldest" (see each archive's own header note
+for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
+for full build history, or `git log` on this file for exact split
+points. Active content here starts at "Nutrition activity level..."
+(2026-08-29). If this file grows too large again, split it the same
+way: move the most clearly finished section into `ROADMAP-ARCHIVE-41.md`,
+update this paragraph.
 
 ## Nutrition activity level, two live bugs, Stage 3 workout choice, and a ~95-exercise video library — 2026-08-29
 
@@ -242,3 +142,97 @@ throughout, in both repos where touched. Every piece live-tested against
 the playground member (real bookings, real generated sessions, real
 embedded videos with the correct `end` param confirmed via
 `new URL(iframe.src)`), not just build-clean claims.
+## Today's Mission on Home, daily habits, workout mode-swap redesign, always-visible workout preview, 50-min exercise-count budget — 2026-08-29
+
+Picked up the unstarted daily-habit-system idea flagged in the entry
+above. Built the daily habit checklist first: `member_habits`/
+`habit_logs` (podHq migration `0070`, insert-only tick rows, "row
+existence = happened" convention), full CRUD (`daily-habits.ts`,
+`/api/member/habits/*`), `DailyHabitsCard` — recommended-list buttons
+plus custom checkbox/counted-target entry.
+
+Carl then floated a bigger idea mid-build — a "Today's Mission" card on
+Home showing workout/steps/habits/nutrition for premium members,
+reversing the documented "Home stays slim, Coach tab is the premium
+space" policy in `ai-coach-section.tsx`. Confirmed the reversal
+explicitly before building. `getTodaysMission` aggregates all four from
+data that already existed (bookings/`workout_sessions` status, latest
+wearable snapshot, habit tick counts, today's food log vs. nutrition
+target) — no new tables. Shipped as a collapsed-by-default "x/4 today"
+card (Carl's call — Home already stacks several cards) that expands to
+the four status rows plus the habit checklist inline; habits moved from
+`/dashboard` to live here instead, plus a management copy on
+`/coach/profile` so a new premium member has somewhere to set habits up
+before Home ever shows a populated list.
+
+**Real dev-server bug, not a code bug**: `next dev --webpack` (pinned in
+`package.json` since the repo's first commit, never a deliberate fix for
+anything) crashed with "Element type is invalid. Received a promise that
+resolves to: undefined" on this specific new nested-client-component
+pattern (`TodaysMissionCard` rendering `DailyHabitsCard`, now shared
+across two routes) — confirmed via a side-by-side Turbopack dev instance
+on a different port showing zero errors. Fixed by switching `dev` to
+plain `next dev` (Turbopack); `build` stays pinned to `--webpack`, so
+production is unaffected either way. Also hit a real stale-HTTP-cache
+issue after every dev-server restart — a normal refresh can still serve
+an old JS chunk; only a genuine hard reload (Ctrl+Shift+R) reliably
+clears it, confirmed repeatedly this session.
+
+**"Change today's workout" replaces the Stage 3 pre-generation choose
+screen** (Carl's call): every booking now generates the default A/B/C
+plan immediately — no more upfront mode choice. The overview screen
+gets a "Change today's workout" link (top of screen, per Carl's
+feedback) behind a program-hopping warning, into the existing
+focus/build-your-own pickers. New `changeWorkoutMode`/`hasSessionStarted`
+in `workout-session.ts`: locked out once any set is logged, otherwise
+deletes the unstarted session (no cascade delete on these FKs — manual
+child-then-parent delete order) and regenerates in place via a
+`generateAndPersistSession` helper extracted from `getOrCreateWorkoutSession`
+so both callers share one implementation. New `/api/member/workout/
+change-mode` route, same IDOR/validation shape as `/generate`.
+
+**Always-visible workout preview** (`/training`'s new "Your workouts"
+section, `getBlockWorkoutPreview`): the A/B/C template store
+(`workout_templates`) already lived independent of bookings — this just
+exposes it read-only, generating the phase's set eagerly if it doesn't
+exist yet, with a "Today's pick" badge on whichever letter a real
+booking would actually generate right now (same rotation math
+`resolveTemplatedPlan` uses). Confirmed with Carl this stays read-only
+(no logging without a real booking) before building the fully
+interactive version he first asked for. Each workout is its own
+tap-to-expand card; each exercise gets a tap-to-expand technique video
+(no thumbnail image — CSP's `img-src` is locked to `'self' data:`, so a
+live YouTube thumbnail would need a CSP change; a plain "▶ Watch" toggle
+needs none, reusing the same `youtube-nocookie.com` embed the
+active-exercise screen already uses). Home's Workout row now links here
+instead of `/book` when nothing's scheduled.
+
+**Real "how many exercises fit in 50 minutes" instead of a flat 4**
+(Carl's call, worked through together): `computeExerciseCount` in
+`generate-workout.ts` — set duration from rep target × ~3s/rep, rest
+from Carl's own numbers (hypertrophy: 2min compound / 90s isolation;
+strength: 3min / 2min, longer for heavier low-rep work; deload reuses
+hypertrophy's numbers), blended 50/50 compound:isolation estimate
+against a 50-minute (3000s) budget, floored at the original 4 so this
+can only add exercises, never regress below what shipped before.
+Replaces the old fixed `TEMPLATE_MUSCLE_GROUP_PLAN` (exactly 4
+slots/letter) with an 8-entry priority list per letter (legs leads,
+doubles up near the end, keeps the original 3-group-per-letter picks in
+the middle) — real range is 5-11 depending on block/phase, clamped to 8
+by the hand-authored list length for now. Same change flows through the
+default booking path, the template preview, and the goal-based
+fallback. Fixed 2 stale hardcoded equipment-allowlist tests that assumed
+exactly 4 results (same "catalog outgrew the test's literal list"
+pattern as an earlier session) — rewritten to derive the expected set
+from the live catalog instead of a hand-typed list, so this class of
+test doesn't go stale again on the next catalog or budget change.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (142/142, 2
+rewritten), and `npm run build` (respects the `--webpack` pin) all clean
+throughout. Live-verified against the playground member (id 134):
+Today's Mission expand/tick/add, `/coach/profile` habits section,
+`/training`'s workout count 4→8 after clearing that member's stale
+phase templates, "Today's pick" badge, and the video toggle. Could not
+live-click-test the "Change today's workout" swap itself — the
+playground member has 0 booking credits; code-reviewed and
+build/test-verified only.

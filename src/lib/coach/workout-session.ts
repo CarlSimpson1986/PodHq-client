@@ -193,7 +193,7 @@ async function resolveTemplatedPlan(
   let templates = await getTemplateSet(memberId, activeBlock.blockType, activeBlock.startedAt, phaseIndex);
 
   if (templates.length === 0) {
-    const generated = generateWorkoutTemplateSet({ profile, availableEquipment });
+    const generated = generateWorkoutTemplateSet({ profile, availableEquipment, activeBlock });
     templates = await createTemplateSet(memberId, activeBlock.blockType, activeBlock.startedAt, phaseIndex, generated);
     if (templates.length === 0) {
       // Lost a create race to a concurrent request (or generation itself
@@ -210,6 +210,17 @@ async function resolveTemplatedPlan(
   if (plan.length === 0) return null;
 
   return { plan, templateId: chosen.id };
+}
+
+// Lightweight status-only lookup for Home's "Today's Mission" card — avoids
+// pulling the full exercise/set detail loadSessionDetail returns when only
+// "has this booking's workout been started/completed" is needed.
+export async function getSessionStatusForBooking(bookingId: number): Promise<"not_started" | "completed" | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("workout_sessions").select("status").eq("booking_id", bookingId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return data.status === "completed" ? "completed" : "not_started";
 }
 
 // Fetches an existing workout_session (with exercises/sets) for a booking,
@@ -244,6 +255,90 @@ export async function getOrCreateWorkoutSession(
       introNarration: null,
     };
   }
+
+  return generateAndPersistSession(memberId, bookingId, resourceId, memberName, choice, availableEquipment);
+}
+
+// Whether any set in this session has already been logged (completed_at
+// set) — the gate for "Change today's workout" below: once a member has
+// started, swapping the plan would discard real logged data, so the
+// option simply stops being offered rather than needing a keep/discard
+// decision (Carl's call, 2026-08-29).
+export async function hasSessionStarted(sessionId: number): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: exercises, error: exercisesError } = await admin.from("workout_exercises").select("id").eq("session_id", sessionId);
+  if (exercisesError) throw new Error(exercisesError.message);
+  const exerciseIds = (exercises ?? []).map((e) => e.id);
+  if (exerciseIds.length === 0) return false;
+
+  const { count, error } = await admin
+    .from("workout_sets")
+    .select("id", { count: "exact", head: true })
+    .in("exercise_id", exerciseIds)
+    .not("completed_at", "is", null);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
+}
+
+// "Change today's workout" (2026-08-29) — replaces the old pre-generation
+// choose screen: every booking now always generates the default A/B/C
+// plan immediately (see workout-view.tsx), and this is the only remaining
+// way to switch to a focus/custom session, offered on the overview screen
+// behind a program-hopping warning. Throws "session_already_started" if
+// hasSessionStarted is true — the caller (the API route) turns that into a
+// 409, and the client never offers this action past that point anyway.
+export async function changeWorkoutMode(
+  memberId: number,
+  bookingId: number,
+  resourceId: number,
+  memberName: string,
+  choice: WorkoutChoice
+): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
+  const admin = createAdminClient();
+  const availableEquipment = await getResourceEquipment(resourceId);
+
+  const { data: existing, error: existingError } = await admin.from("workout_sessions").select("id").eq("booking_id", bookingId).maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  if (existing) {
+    if (await hasSessionStarted(existing.id)) {
+      throw new Error("session_already_started");
+    }
+
+    // No cascade delete on these FKs (0049_workout_sessions.sql) — delete
+    // children before the session row itself. Safe to discard: the
+    // hasSessionStarted check above already confirmed nothing here has
+    // been logged, so this is target/plan data only, never real history.
+    const { data: exercises, error: exercisesError } = await admin.from("workout_exercises").select("id").eq("session_id", existing.id);
+    if (exercisesError) throw new Error(exercisesError.message);
+    const exerciseIds = (exercises ?? []).map((e) => e.id);
+    if (exerciseIds.length > 0) {
+      const { error: deleteSetsError } = await admin.from("workout_sets").delete().in("exercise_id", exerciseIds);
+      if (deleteSetsError) throw new Error(deleteSetsError.message);
+      const { error: deleteExercisesError } = await admin.from("workout_exercises").delete().eq("session_id", existing.id);
+      if (deleteExercisesError) throw new Error(deleteExercisesError.message);
+    }
+    const { error: deleteSessionError } = await admin.from("workout_sessions").delete().eq("id", existing.id);
+    if (deleteSessionError) throw new Error(deleteSessionError.message);
+  }
+
+  return generateAndPersistSession(memberId, bookingId, resourceId, memberName, choice, availableEquipment);
+}
+
+// Everything getOrCreateWorkoutSession needs once it's established there's
+// no existing session to load — also reused by changeWorkoutMode below
+// (2026-08-29) once it's cleared the old session away, so "generate a fresh
+// plan for this booking" has exactly one implementation regardless of which
+// caller triggers it.
+async function generateAndPersistSession(
+  memberId: number,
+  bookingId: number,
+  resourceId: number,
+  memberName: string,
+  choice: WorkoutChoice,
+  availableEquipment: EquipmentType[]
+): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
+  const admin = createAdminClient();
 
   const profile = await getCoachProfile(memberId);
   if (!profile) {

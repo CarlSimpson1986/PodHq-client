@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { londonMidnight, addLondonDays } from "@/lib/london-time";
 
 export interface Member {
   id: number;
@@ -185,6 +186,32 @@ export async function getNextUpcomingBooking(memberId: number): Promise<Booking 
     .eq("member_id", memberId)
     .eq("status", "booked")
     .gte("slot_start", new Date(Date.now() - UNLOCK_WINDOW_AFTER_MS).toISOString())
+    .order("slot_start", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// Today's booking for Home's "Today's Mission" card — deliberately
+// narrower than getNextUpcomingBooking above (which can return a booking
+// days away, and never a past one): only a slot that actually falls on
+// today's Europe/London calendar day counts as "today's workout" here,
+// completed or not.
+export async function getTodayBookingForMember(memberId: number, gym: string): Promise<Booking | null> {
+  const admin = createAdminClient();
+  const startOfDay = londonMidnight(new Date());
+  const endOfDay = addLondonDays(startOfDay, 1);
+
+  const { data, error } = await admin
+    .from("bookings")
+    .select("*")
+    .eq("member_id", memberId)
+    .eq("gym", gym)
+    .in("status", ["booked", "completed"])
+    .gte("slot_start", startOfDay.toISOString())
+    .lt("slot_start", endOfDay.toISOString())
     .order("slot_start", { ascending: true })
     .limit(1)
     .maybeSingle();

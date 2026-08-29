@@ -6,7 +6,9 @@ import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getExercisePerformanceHistory } from "@/lib/coach/exercise-performance";
 import { getWeeklyConsistency } from "@/lib/coach/consistency";
 import { getLastCompletedSessionDetail } from "@/lib/coach/exercise-performance";
+import { getBlockWorkoutPreview } from "@/lib/coach/training-block-preview";
 import { NoMemberProfile } from "@/components/no-member-profile";
+import { BlockWorkoutPreview } from "@/components/block-workout-preview";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { MoreMenu } from "@/components/more-menu";
@@ -45,11 +47,12 @@ export default async function TrainingPage() {
     redirect("/coach-onboarding");
   }
 
-  const [upcomingBooking, performanceHistory, consistency, lastSession] = await Promise.all([
+  const [upcomingBooking, performanceHistory, consistency, lastSession, blockPreview] = await Promise.all([
     getNextUpcomingBooking(member.id),
     getExercisePerformanceHistory(member.id),
     getWeeklyConsistency(member.id),
     getLastCompletedSessionDetail(member.id),
+    getBlockWorkoutPreview(member.id, member.gym),
   ]);
 
   return (
@@ -92,6 +95,21 @@ export default async function TrainingPage() {
               <TrainingBlockView />
             </div>
           </section>
+
+          {blockPreview && (
+            <section>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your workouts</p>
+              {blockPreview.templates.length === 0 ? (
+                <div className="card-light p-5">
+                  <p className="text-sm text-card-light-muted">
+                    Not enough exercises available to build a preview right now — this will fill in once you book a session.
+                  </p>
+                </div>
+              ) : (
+                <BlockWorkoutPreview templates={blockPreview.templates} repsTarget={blockPreview.repsTarget} nextLetter={blockPreview.nextLetter} />
+              )}
+            </section>
+          )}
 
           <section>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Consistency</p>

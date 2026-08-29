@@ -8,6 +8,7 @@ import {
   pickFocusExercises,
 } from "./generate-workout";
 import type { CoachProfile } from "./coach-profile";
+import { EXERCISE_CATALOG } from "./exercise-catalog";
 
 function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
   return {
@@ -169,17 +170,14 @@ describe("generateWorkout — equipment awareness", () => {
       lastSession: null,
       availableEquipment: ["dumbbells"],
     });
-    // Only dumbbell exercises and bodyweight (Plank, no equipment) can
-    // appear — nothing needing a barbell rack, cable machine, or leg
-    // extension/curl machine.
-    const allowedKeys = [
-      "dumbbell_shoulder_press",
-      "dumbbell_bicep_curl",
-      "incline_dumbbell_press",
-      "dumbbell_lateral_raise",
-      "dumbbell_russian_twist",
-      "plank",
-    ];
+    // Only dumbbell exercises and bodyweight (no equipment) can appear —
+    // nothing needing a barbell rack, cable machine, or leg extension/curl
+    // machine. Derived from the live catalog rather than a hand-typed list
+    // — exerciseCount now varies with the session-length budget
+    // (computeExerciseCount), so a fixed short list goes stale the moment
+    // either the catalog grows or that budget changes; this checks the
+    // actual invariant instead of a fixed slice of it.
+    const allowedKeys = EXERCISE_CATALOG.filter((e) => e.requiredEquipment === null || e.requiredEquipment === "dumbbells").map((e) => e.key);
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((e) => allowedKeys.includes(e.key))).toBe(true);
   });
@@ -191,14 +189,13 @@ describe("generateWorkout — equipment awareness", () => {
       lastSession: null,
       availableEquipment: ["dumbbells"],
     });
-    // dumbbell_shoulder_press, incline_dumbbell_press, dumbbell_lateral_raise,
-    // dumbbell_bench_press, dumbbell_chest_fly, dumbbell_single_arm_row,
-    // dumbbell_pullover, dumbbell_front_raise, dumbbell_rear_delt_fly,
-    // dumbbell_arnold_press and dumbbell_overhead_tricep_extension are all
-    // excluded by the shoulder injury — the exercises below (none listing
-    // "shoulders" in avoidIfInjury) are what's left safe under both
-    // filters combined.
-    const safeKeys = ["dumbbell_bicep_curl", "dumbbell_russian_twist", "plank", "dumbbell_hammer_curl", "dumbbell_side_bend"];
+    // Safe under both filters combined: dumbbell/bodyweight equipment AND
+    // no "shoulders" keyword in avoidIfInjury. Derived from the live
+    // catalog rather than a hand-typed list, same reasoning as the
+    // equipment-only test above.
+    const safeKeys = EXERCISE_CATALOG.filter(
+      (e) => (e.requiredEquipment === null || e.requiredEquipment === "dumbbells") && !e.avoidIfInjury.some((kw) => "shoulders".includes(kw))
+    ).map((e) => e.key);
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((e) => safeKeys.includes(e.key))).toBe(true);
   });
