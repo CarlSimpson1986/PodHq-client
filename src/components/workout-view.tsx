@@ -469,7 +469,16 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   }
 
   if (phase === "custom-pick") {
-    const eligible = customExcludedKeys === null ? null : EXERCISE_CATALOG.filter((e) => !customExcludedKeys.includes(e.key));
+    // Weights vs Cardio (2026-08-29, Carl's call) — the top-level choice,
+    // not a format picker buried below the exercise list. Weights =
+    // straight sets, picking from the resistance-training catalog (what
+    // "Build your own" always offered). Cardio = AMRAP, picking only from
+    // isConditioning-tagged real HIIT/CrossFit movements — a genuinely
+    // different exercise pool, not the same catalog relabeled.
+    const eligible =
+      customExcludedKeys === null
+        ? null
+        : EXERCISE_CATALOG.filter((e) => !customExcludedKeys.includes(e.key) && e.isConditioning === (customFormat === "amrap"));
     const byGroup = (eligible ?? [])
       .reduce<{ group: MuscleGroup; exercises: CatalogExercise[] }[]>((groups, exercise) => {
         const existing = groups.find((g) => g.group === exercise.muscleGroup);
@@ -480,10 +489,12 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       .sort((a, b) => MUSCLE_GROUPS.indexOf(a.group as (typeof MUSCLE_GROUPS)[number]) - MUSCLE_GROUPS.indexOf(b.group as (typeof MUSCLE_GROUPS)[number]));
 
     // AMRAP-config helper — seeds a sensible default the first time an
-    // exercise is selected under this format, otherwise reads back
-    // whatever the member already set.
+    // exercise is selected under Cardio, otherwise reads back whatever
+    // the member already set. Duration (not reps) as the default unit —
+    // HIIT/circuit work is naturally time-based ("30 seconds of X"), reps
+    // is the exception here, not the rule.
     function amrapConfigFor(key: string) {
-      return customAmrapConfig[key] ?? { unit: "reps" as const, value: 10, weightKg: "" as const };
+      return customAmrapConfig[key] ?? { unit: "duration" as const, value: 30, weightKg: "" as const };
     }
 
     return (
@@ -494,21 +505,33 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setCustomFormat("straight_sets")}
+            onClick={() => {
+              if (customFormat === "amrap") {
+                setCustomSelection([]);
+                setCustomAmrapConfig({});
+              }
+              setCustomFormat("straight_sets");
+            }}
             className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
               customFormat === "straight_sets" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
             }`}
           >
-            Straight sets
+            Weights
           </button>
           <button
             type="button"
-            onClick={() => setCustomFormat("amrap")}
+            onClick={() => {
+              if (customFormat === "straight_sets") {
+                setCustomSelection([]);
+                setCustomRests({});
+              }
+              setCustomFormat("amrap");
+            }}
             className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
               customFormat === "amrap" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
             }`}
           >
-            AMRAP
+            Cardio
           </button>
         </div>
 
@@ -535,7 +558,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         {eligible === null && !customLoadError && <p className="text-sm text-card-light-muted">Loading exercises...</p>}
         {byGroup.map(({ group, exercises }) => (
           <div key={group}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted capitalize">{group}</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">{group.replace("_", " ")}</p>
             <div className="space-y-2">
               {exercises.map((ex) => {
                 const selected = customSelection.includes(ex.key);
@@ -560,7 +583,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                         } else if (customSelection.length < 6) {
                           setCustomSelection((prev) => [...prev, ex.key]);
                           setCustomRests((prev) => ({ ...prev, [ex.key]: DEFAULT_REST_SECONDS }));
-                          setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: { unit: "reps", value: 10, weightKg: "" } }));
+                          setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: { unit: "duration", value: 30, weightKg: "" } }));
                         }
                       }}
                       className={`block w-full rounded-lg border px-4 py-3 text-left text-sm font-medium disabled:opacity-50 ${
