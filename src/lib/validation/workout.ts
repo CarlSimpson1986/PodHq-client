@@ -8,12 +8,18 @@ import { MUSCLE_GROUPS } from "@/lib/coach/exercise-catalog";
 // generator's headroom, min 1 so a session is never empty) — both are
 // only ever read by getOrCreateWorkoutSession when mode actually matches,
 // and re-validated server-side regardless of what's sent here.
+// customExerciseRests (2026-08-29, Stage 1 of the CrossFit-style
+// custom-format work) — optional per-key rest-between-sets override,
+// custom mode only. Capped at 10 minutes (600s); a key not present, or
+// the field omitted entirely, means "use the app's default rest" (no
+// rest-timer screen), same as before this existed.
 export const generateWorkoutSchema = z
   .object({
     bookingId: z.number().int().positive(),
     mode: z.enum(["default", "focus", "custom"]).default("default"),
     focusMuscleGroups: z.array(z.enum(MUSCLE_GROUPS)).min(1).max(2).optional(),
     customExerciseKeys: z.array(z.string().min(1).max(100)).min(1).max(6).optional(),
+    customExerciseRests: z.record(z.string().min(1).max(100), z.number().int().min(0).max(600)).optional(),
   })
   // A chosen mode must actually carry its own picks — without this, a
   // request could claim mode "focus" with no focusMuscleGroups and the

@@ -14,134 +14,19 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-40.md`, covering the pilot
-mechanism proof (2026-08-05) through the daily-habit-system scoping
-session (2026-08-28) — all split out to keep this file within Claude
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-41.md`, covering the pilot
+mechanism proof (2026-08-05) through the ~95-exercise video library
+session (2026-08-29) — all split out to keep this file within Claude
 Code's ~15,000-character `@`-import limit. Archives aren't always the
 strictly oldest material — the split point is "what's finished and
 stable" as much as "what's oldest" (see each archive's own header note
 for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
 for full build history, or `git log` on this file for exact split
-points. Active content here starts at "Nutrition activity level..."
+points. Active content here starts at "Today's Mission on Home..."
 (2026-08-29). If this file grows too large again, split it the same
-way: move the most clearly finished section into `ROADMAP-ARCHIVE-41.md`,
+way: move the most clearly finished section into `ROADMAP-ARCHIVE-42.md`,
 update this paragraph.
 
-## Nutrition activity level, two live bugs, Stage 3 workout choice, and a ~95-exercise video library — 2026-08-29
-
-Long session, several distinct pieces, all live-verified via the
-playground member (dev server + real Supabase, not just build-clean).
-
-**Two live bugs found and fixed by clicking around**: `MemberHabitCard`
-was a plain `<div>` sitting directly above the real `<Link>`-wrapped
-Check-in card, same `card-light` styling — looked identically tappable,
-had no `onClick`/`Link` at all. Now links to `/coach/checkin`, same
-destination as Check-in (habit has no separate edit screen). Separately,
-`CoachChatView`'s message list had no bounded height (`min-h-[60vh]`, no
-`max-h`, missing `min-h-0` on the flex child overflow needs) — every
-message ever sent pushed the whole `/coach` page taller instead of
-scrolling. Fixed with `max-h-[70vh]` + `min-h-0`; confirmed live with a
-real 3-exchange conversation showing a proper internal scrollbar.
-
-**Nutrition — daily activity level, decoupled from training.** Carl
-wanted an occupational-activity input ("does someone doing heavy manual
-labour need more calories than an office worker") — the gap: TDEE's
-activity multiplier was derived purely from `sessions_per_week`, which
-has no sedentary tier and conflates training frequency with daily-life
-activity. New `daily_activity_level` field (migration `0069`, podHq)
-with 5 occupation-only tiers (no exercise wording, to avoid double-
-counting). First design used `sessions_per_week` as an *additive*
-MET-based exercise-calorie term on top — Carl rejected it: "session per
-week is more for programming... training doesn't burn that much
-energy," and eating-back exercise calories is a known way people
-undermine a deficit. Simplified to the daily-activity multiplier alone;
-`sessions_per_week` now has **zero** calorie contribution, confirmed by
-an explicit regression test. BMR also swapped Harris-Benedict →
-Mifflin-St Jeor (more accurate per current literature, flagged in the
-file's own prior comment). Live-verified: real computed target (3,090
-kcal / 149g protein / 411g carbs / 94g fat) matched hand-calculated
-values exactly for the playground member's actual profile.
-
-**Stage 3 — split-day / build-your-own workout**, the piece paused back
-in the A/B/C rotation session. `WorkoutView` no longer auto-generates on
-mount; a new "choose" phase offers **Today's session** (unchanged),
-**Focus day** (pick 1-2 of the 6 muscle groups, `pickFocusExercises`
-round-robins up to 6 exercises across them), or **Build your own** (new
-`GET /api/member/workout/eligible-exercises` endpoint feeds a picker,
-server re-validates any submitted keys against live injury/equipment
-exclusions same as `swapExercise` already does). Both non-default modes
-leave `template_id` null so an off-plan day never consumes/skips the
-member's A/B/C rotation slot — confirmed directly against
-`workout_sessions` rows, not just code inspection. Live-verified full
-round trip for both modes with real generated sessions.
-
-**Exercise video library — the big one.** Carl found Unbroken Fitness
-Solutions' YouTube channel (real personal-training business, short
-~20-50s demo clips organized into per-equipment "Movement Library"
-playlists) and wanted real technique videos instead of the static photo
-pairs. Built a repeatable workflow rather than picking blind: scrape a
-playlist (paginated `ytLockupMetadataViewModelTitle` DOM extraction,
-scroll-to-load-all, dedupe by exact-title match — each round found 1-3
-genuine re-shoot duplicates), publish a tickable checklist Artifact
-(search/preview/copy-selected-to-clipboard), Carl ticks what he wants,
-pastes the list back. Ran this four times — dumbbell (34 picks),
-barbell (15), cables (20), kettlebell (13) — landing 82 real videos
-across 62 catalog entries (36 attached to existing exercises, 46 new
-ones added, catalog now 95 exercises total). New entries follow the
-established DRAFT-safety-tip convention, not yet Carl-reviewed.
-
-Real decisions made along the way, not just mechanical attachment:
-- **Legal**: embedding via YouTube's own player (not downloading/
-  re-hosting) is the standard low-risk path — the creator's own choice
-  per video whether embedding is even allowed. Carl's first instinct was
-  to download and crop out a brand watermark that appears in each
-  clip's last ~5 seconds — flagged clearly that downloading + stripping
-  a watermark is a real DMCA-CMI/copyright risk (courts read watermark
-  removal as evidence of *intentional* infringement), and that the same
-  visual result is achievable legitimately via the embed's own `start`/
-  `end` playback-window params. New `youtubeStartSeconds`/
-  `youtubeEndSeconds` fields on `CatalogExercise`, threaded through
-  `getYoutubeEmbedTiming()` into the iframe `src`. First cut computed
-  `end` per-video as `(duration - 5)`; Carl's later call simplified to a
-  flat 0-10 seconds for every clip regardless of length — batch-updated
-  all 82 entries.
-- **New equipment type**: kettlebell exercises needed a `kettlebells`
-  `EQUIPMENT_TYPES` entry — the first time this catalog has gone beyond
-  the original 4 categories. Added here and mirrored in podHq's
-  `src/lib/data/types.ts` (+ its equipment-picker label), same
-  cross-repo duplication convention as `GYM_NAMES`. Confirmed via a
-  direct DB check that **every** `pod_resources` row (Aylesbury
-  Berryfields, both Hove rows) was sitting at `equipment: []` — which
-  this app's own filtering logic treats as *unrestricted*, not
-  "unconfigured." Carl confirmed real equipment per gym (all 5
-  categories, both gyms); updated all 3 rows to the explicit full list
-  rather than leaving the accidental unrestricted-by-omission state.
-- **Duplicate-name variants kept deliberately separate**: several
-  exercises got ticked in both a plain and an "alternating"/grip-variant
-  form (e.g. Bicep Curl + Alternating Bicep Curl, three different
-  tricep-pushdown grips) — treated as Carl wanting both represented, not
-  collapsed into one, so each became its own catalog entry rather than
-  overwriting the plain version's video.
-
-**Tooling note**: hit a genuine claude-in-chrome bug this session —
-`computer` click coordinates were offset from screenshot coordinates on
-this machine (screenshots rendered 1425×660, live viewport reported
-1745×808), causing clicks to land one row below the intended target on
-multi-row button grids. Confirmed via direct DOM state checks, not just
-visual guessing. Workaround: drove all further interactions through
-`element.click()` via `javascript_exec` instead of coordinate-based
-dispatch. Also hit the PWA service worker serving a stale cached JS
-bundle after a full dev-server restart + `.next` cache clear — new
-catalog entries didn't show up in the picker until the service worker
-was explicitly unregistered and its cache cleared per tab.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (142/142 —
-3 tests had hardcoded catalog-key allowlists that needed updating for
-the expansion, not real regressions), and `next build` all clean
-throughout, in both repos where touched. Every piece live-tested against
-the playground member (real bookings, real generated sessions, real
-embedded videos with the correct `end` param confirmed via
-`new URL(iframe.src)`), not just build-clean claims.
 ## Today's Mission on Home, daily habits, workout mode-swap redesign, always-visible workout preview, 50-min exercise-count budget — 2026-08-29
 
 Picked up the unstarted daily-habit-system idea flagged in the entry
@@ -236,3 +121,89 @@ phase templates, "Today's pick" badge, and the video toggle. Could not
 live-click-test the "Change today's workout" swap itself — the
 playground member has 0 booking credits; code-reviewed and
 build/test-verified only.
+
+## Squat/Bench/Deadlift split for Strength, custom-workout rest timer (Stage 1 of CrossFit-style formats) — 2026-08-29
+
+**Strength blocks get a real squat/bench/deadlift split**, replacing the
+generic muscle-group A/B/C rotation for Strength specifically (Hypertrophy/
+Deload untouched) — Carl asked whether this matches how Sebastian Oreb
+would actually structure it; researched his real, published coaching
+approach rather than guessing (strengthsystem.com, Melbourne Personal
+Trainers' Wolf's Den interview, Men's Health AU). Confirmed: our existing
+`REP_TARGET_BY_BLOCK_PHASE.strength` ([6, 4, 3] across 3 phases) already
+matches his real base→peak descending-rep shape and ~12-week/3-phase
+cadence — the one deliberate gap is the floor (he goes to 1-2 reps by the
+final phase, we stop at 3, unstaffed-pods-no-spotter reason already
+agreed this session). New `STRENGTH_FOCUS_PLAN` in `generate-workout.ts`:
+Squat/Bench/Deadlift Day, main lift always first, accessories chosen for
+*structural balance* around that lift's actual weak points (his real
+philosophy) rather than generic volume — fixed key lists, not muscle-group
+filters, so an excluded pick is skipped outright, never swapped for
+something unrelated. Carl caught a real gap: the gym's 2-in-1 leg
+extension/curl machine wasn't in the list — added `leg_extension`/
+`lying_leg_curl` to both Squat Day (quad/hamstring weak-point pairing) and
+Deadlift Day (`lying_leg_curl`, direct hamstring contribution). `/training`'s
+preview now shows "Squat Day"/"Bench Day"/"Deadlift Day" instead of
+"Workout A/B/C" for Strength (`getStrengthFocusLabel`, pure lookup, safe
+from a client component). 6 new unit tests (main-lift-first, no duplicate
+exercises even though Romanian Deadlift appears on two days, exclusion
+skips gracefully rather than substituting, Hypertrophy/Deload unaffected,
+label lookup) — live-verified against the playground member (switched
+their test block to Strength via a direct `training_blocks` insert,
+confirmed all three days render correctly with the right main lift and
+accessory order).
+
+**Custom-workout "Your workouts" cards became tap-to-expand** — each
+Workout letter is its own collapsible card (the "today's pick" one opens
+by default) rather than always showing all three expanded, cleaner for
+Strength's now-longer accessory lists too.
+
+**Stage 1 of Carl's CrossFit-style custom-format idea**: eventually wants
+AMRAP ("as many rounds as possible in X minutes") and Rounds-For-Time
+formats for "build your own" workouts, with reps/duration/weight/rest
+configurable per exercise. Scoped in three stages before building anything
+(format picker vs. replacing straight sets; what "rest" actually means for
+a format that's traditionally continuous) — confirmed: straight sets stays
+as a member-pickable format alongside AMRAP/RFT (not built yet, stages 2-3),
+and "rest" only ever applies to straight-sets custom workouts (real
+CrossFit AMRAP/RFT has no prescribed rest, that's the point of the format).
+
+Stage 1 shipped: **member-set rest-between-sets on custom straight-sets
+exercises**, replacing the app's assumed rest values for that one session.
+Migration `0071_workout_exercise_rest.sql` (podHq) — nullable
+`rest_seconds` on `workout_exercises`, null for every default/focus
+exercise and any custom pick left at the builder's default (no behaviour
+change there). `WorkoutChoice`'s custom variant gets an optional
+`customExerciseRests: Record<string, number>`, threaded through
+`generateAndPersistSession`/`changeWorkoutMode`/both API routes/
+`loadSessionDetail`. Builder UI: each selected custom exercise gets an
+inline "Rest between sets" number input (default 90s, 0-600s range).
+Workout-taking UI: a new "resting" phase — countdown from the exercise's
+`restSeconds`, "Skip rest →" to advance early, shows which exercise is
+next. Needed a `useRef`-backed "latest callback" bridge
+(`applyAdvanceRef`) since the rest-timer's `useEffect` has to live in the
+component's early, unconditional hooks block (Rules of Hooks — this file
+has several early returns before `detail`/`exercise` are known), while the
+actual advance logic can only be defined later once those are guaranteed
+non-null.
+
+**Real hydration bug caught, not yet fixed** — a genuine SSR/CSR text
+mismatch on `/training` ("Workout A" server-rendered vs. "Squat Day"
+client-corrected), almost certainly the same stale-cached-JS-after-
+dev-restart problem behind this session's repeated hard-reload
+workaround, just manifesting as a proper hydration error this time
+instead of silently stale content. Self-corrects (React discards and
+re-renders client-side) so nothing's broken, but flagged to Carl — likely
+what he meant by an earlier "hydration issue on local" comment that got
+lost in the conversation before it could be chased down. Suggested Chrome
+DevTools' "Disable cache" (Network tab) as a durable fix for his own
+testing sessions rather than repeated hard-reloads; root cause (why dev
+mode's static chunk URLs don't cache-bust properly across restarts in
+this environment) still unresolved.
+
+**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (148/148),
+and `npm run build` (respects the `--webpack` pin) all clean throughout.
+Squat/Bench/Deadlift split live-verified end-to-end. Rest-timer UI is
+code-reviewed and build/test-verified only — same playground-member
+0-credits blocker as the earlier "Change today's workout" feature
+prevented a live click-through of the actual workout-taking screen.

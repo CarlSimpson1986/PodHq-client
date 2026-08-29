@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     parsed.data.mode === "focus"
       ? { mode: "focus", focusMuscleGroups: parsed.data.focusMuscleGroups! }
       : parsed.data.mode === "custom"
-        ? { mode: "custom", customExerciseKeys: parsed.data.customExerciseKeys! }
+        ? { mode: "custom", customExerciseKeys: parsed.data.customExerciseKeys!, customExerciseRests: parsed.data.customExerciseRests }
         : { mode: "default" };
 
   try {

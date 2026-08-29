@@ -38,6 +38,9 @@ interface WorkoutExercise {
   key: string;
   name: string;
   muscleGroup: string;
+  // Custom-workout member override (Stage 1, 2026-08-29) — null means no
+  // rest-timer screen, same self-paced behaviour as before this existed.
+  restSeconds: number | null;
   sets: WorkoutSet[];
 }
 
@@ -82,6 +85,7 @@ type Phase =
   | "overview"
   | "warmup"
   | "active"
+  | "resting"
   | "rpe"
   | "cooldown"
   | "summary";
@@ -89,7 +93,13 @@ type Phase =
 type GenerateChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
-  | { mode: "custom"; customExerciseKeys: string[] };
+  | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> };
+
+// Rest defaults offered in the custom builder (Stage 1, 2026-08-29) — same
+// two values Carl set for Hypertrophy's assumed rest (see
+// REST_SECONDS_BY_BLOCK in types.ts), offered here as member-adjustable
+// starting points rather than baked in.
+const DEFAULT_REST_SECONDS = 90;
 
 const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
@@ -140,6 +150,14 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusSelection, setFocusSelection] = useState<MuscleGroup[]>([]);
   const [customSelection, setCustomSelection] = useState<string[]>([]);
+  const [customRests, setCustomRests] = useState<Record<string, number>>({});
+  const [restSecondsRemaining, setRestSecondsRemaining] = useState(0);
+  // Holds the latest applyAdvance closure — applyAdvance itself is only
+  // defined later, after `detail` is known non-null, but the rest-timer
+  // effect below has to be declared unconditionally up here alongside
+  // this file's other hooks (Rules of Hooks). Updated every render via
+  // the plain assignment right before applyAdvance's own definition.
+  const applyAdvanceRef = useRef<() => void>(() => {});
   // null = not yet fetched — distinct from an empty array (a real, if
   // unlikely, "nothing eligible" result).
   const [customExcludedKeys, setCustomExcludedKeys] = useState<string[] | null>(null);
@@ -292,6 +310,21 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return () => clearInterval(interval);
   }, [phase, exerciseIndex, detail]);
 
+  // Rest countdown (custom workouts, Stage 1, 2026-08-29) — ticks once a
+  // second while phase is "resting"; hitting zero runs the exact same
+  // advance the member gets by tapping "Skip rest" (applyAdvanceRef.current,
+  // set just before applyAdvance's own definition below), so there's only
+  // one place that decides what "after rest" means.
+  useEffect(() => {
+    if (phase !== "resting") return;
+    if (restSecondsRemaining <= 0) {
+      applyAdvanceRef.current();
+      return;
+    }
+    const timer = setTimeout(() => setRestSecondsRemaining((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [phase, restSecondsRemaining]);
+
   if (phase === "change-warning") {
     return (
       <div className="space-y-5">
@@ -414,23 +447,51 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
               {exercises.map((ex) => {
                 const selected = customSelection.includes(ex.key);
                 return (
-                  <button
-                    key={ex.key}
-                    type="button"
-                    disabled={!selected && customSelection.length >= 6}
-                    onClick={() =>
-                      setCustomSelection((prev) =>
-                        selected ? prev.filter((k) => k !== ex.key) : prev.length < 6 ? [...prev, ex.key] : prev
-                      )
-                    }
-                    className={`block w-full rounded-lg border px-4 py-3 text-left text-sm font-medium disabled:opacity-50 ${
-                      selected
-                        ? "border-card-light-foreground bg-card-light-foreground text-white"
-                        : "border-card-light-border text-card-light-foreground hover:bg-card-border/10"
-                    }`}
-                  >
-                    {ex.name}
-                  </button>
+                  <div key={ex.key}>
+                    <button
+                      type="button"
+                      disabled={!selected && customSelection.length >= 6}
+                      onClick={() => {
+                        if (selected) {
+                          setCustomSelection((prev) => prev.filter((k) => k !== ex.key));
+                          setCustomRests((prev) => {
+                            const next = { ...prev };
+                            delete next[ex.key];
+                            return next;
+                          });
+                        } else if (customSelection.length < 6) {
+                          setCustomSelection((prev) => [...prev, ex.key]);
+                          setCustomRests((prev) => ({ ...prev, [ex.key]: DEFAULT_REST_SECONDS }));
+                        }
+                      }}
+                      className={`block w-full rounded-lg border px-4 py-3 text-left text-sm font-medium disabled:opacity-50 ${
+                        selected
+                          ? "border-card-light-foreground bg-card-light-foreground text-white"
+                          : "border-card-light-border text-card-light-foreground hover:bg-card-border/10"
+                      }`}
+                    >
+                      {ex.name}
+                    </button>
+                    {selected && (
+                      <div className="mt-1.5 flex items-center gap-2 pl-1">
+                        <label htmlFor={`rest-${ex.key}`} className="text-xs text-card-light-muted">
+                          Rest between sets
+                        </label>
+                        <input
+                          id={`rest-${ex.key}`}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={600}
+                          step={15}
+                          value={customRests[ex.key] ?? DEFAULT_REST_SECONDS}
+                          onChange={(e) => setCustomRests((prev) => ({ ...prev, [ex.key]: Math.max(0, Math.min(600, Number(e.target.value))) }))}
+                          className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+                        />
+                        <span className="text-xs text-card-light-muted">sec</span>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -440,7 +501,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           type="button"
           disabled={customSelection.length === 0}
           className={buttonClass}
-          onClick={() => changeMode({ mode: "custom", customExerciseKeys: customSelection })}
+          onClick={() => changeMode({ mode: "custom", customExerciseKeys: customSelection, customExerciseRests: customRests })}
         >
           Generate workout ({customSelection.length}/6) →
         </button>
@@ -448,6 +509,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           type="button"
           onClick={() => {
             setCustomSelection([]);
+            setCustomRests({});
             setPhase("choose");
           }}
           className="block w-full text-center text-xs font-medium text-card-light-muted underline"
@@ -721,7 +783,19 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     }
   }
 
-  function advance() {
+  async function finishSession() {
+    setPhase("summary");
+    try {
+      const res = await fetch(`/api/member/workout/${detail!.sessionId}/complete`, { method: "POST" });
+      const body = await res.json();
+      if (body.status === "ok") setSummary(body.summary);
+    } catch {
+      // Summary narration is a nice-to-have — the session itself is
+      // already fully logged regardless.
+    }
+  }
+
+  function applyAdvance() {
     if (isLastSetOfExercise) {
       if (isLastExercise) {
         if (cooldownEnabled) {
@@ -755,17 +829,49 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       setPhase("active");
     }
   }
+  // "Latest ref" pattern — applyAdvance can only be defined here, after
+  // detail/exercise/etc. are known (this whole block is unreachable on
+  // the `if (!detail) return null` renders above), but the rest-timer
+  // effect that needs to call it lives in the early-hooks block near the
+  // top of this component, which can never conditionally skip a hook
+  // call. A ref is the standard bridge between the two.
+  // eslint-disable-next-line react-hooks/refs -- deliberate latest-ref sync, not a stray render-time mutation
+  applyAdvanceRef.current = applyAdvance;
 
-  async function finishSession() {
-    setPhase("summary");
-    try {
-      const res = await fetch(`/api/member/workout/${detail!.sessionId}/complete`, { method: "POST" });
-      const body = await res.json();
-      if (body.status === "ok") setSummary(body.summary);
-    } catch {
-      // Summary narration is a nice-to-have — the session itself is
-      // already fully logged regardless.
+  // Rests between sets when the current exercise carries a member-set
+  // restSeconds (custom workouts, Stage 1, 2026-08-29) — skipped entirely
+  // for every default/focus exercise and any custom pick left at the
+  // builder's default (same instant-advance as before this existed), and
+  // skipped on the very last set of the whole session (nothing left to
+  // rest before — straight to cooldown/summary). The countdown itself
+  // lives in the early-hooks block above (applyAdvanceRef.current), since
+  // a hook can't be declared this far down past a conditional return.
+  function advance() {
+    const isVeryLastSet = isLastSetOfExercise && isLastExercise;
+    if (exercise.restSeconds && !isVeryLastSet) {
+      setRestSecondsRemaining(exercise.restSeconds);
+      setPhase("resting");
+      return;
     }
+    applyAdvance();
+  }
+
+  if (phase === "resting") {
+    // The upcoming set belongs to the same exercise unless this rest
+    // follows that exercise's last set, in which case the next one starts
+    // a different exercise — mirrors applyAdvance's own branching exactly.
+    const nextExerciseName = isLastSetOfExercise ? detail.exercises[exerciseIndex + 1]?.name : exercise.name;
+    return (
+      <div className="space-y-5 text-center">
+        <ExitLink />
+        <p className="text-lg font-semibold">Rest</p>
+        <p className="text-5xl font-bold tabular-nums">{restSecondsRemaining}s</p>
+        {nextExerciseName && <p className="text-sm text-card-light-muted">Next: {nextExerciseName}</p>}
+        <button type="button" className={buttonClass} onClick={applyAdvance}>
+          Skip rest →
+        </button>
+      </div>
+    );
   }
 
   if (phase === "cooldown") {

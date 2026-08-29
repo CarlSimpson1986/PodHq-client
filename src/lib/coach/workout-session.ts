@@ -40,6 +40,11 @@ export interface WorkoutExercise {
   key: string;
   name: string;
   muscleGroup: string;
+  // Custom-workout member override (Stage 1, 2026-08-29) — null for every
+  // default/focus exercise and for a custom pick left at the builder's
+  // default. Drives the "resting" screen between sets in workout-view.tsx;
+  // null means no rest-timer screen, same self-paced behaviour as before.
+  restSeconds: number | null;
   sets: WorkoutSet[];
 }
 
@@ -117,10 +122,15 @@ export async function getExcludedExerciseKeysForBooking(memberId: number, resour
 // behaviour, byte-identical to before this existed. Both alternatives
 // leave template_id null (see getOrCreateWorkoutSession below) so an
 // off-plan day never consumes or skips the member's A/B/C rotation slot.
+// customExerciseRests (2026-08-29, Stage 1 of the CrossFit-style custom-
+// format work) — optional per-key rest-between-sets override, custom mode
+// only. A key the member left at the builder's default (or that doesn't
+// appear in the map at all) gets rest_seconds: null on its workout_exercises
+// row, same as every non-custom exercise — no rest-timer screen shown.
 export type WorkoutChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
-  | { mode: "custom"; customExerciseKeys: string[] };
+  | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> };
 
 // A session the member already confirmed a recovery adjustment on must
 // never show the banner again or be re-discountable — without this,
@@ -355,6 +365,7 @@ async function generateAndPersistSession(
   // never consumes or skips the member's A/B/C rotation slot.
   let plan: GeneratedExercise[];
   let templateId: number | null = null;
+  let restByKey: Record<string, number> | undefined;
 
   if (choice.mode === "focus") {
     const picks = pickFocusExercises(profile, availableEquipment, choice.focusMuscleGroups);
@@ -377,6 +388,10 @@ async function generateAndPersistSession(
     }
     plan = instantiateTemplate(picks, profile, history, activeBlock);
     if (plan.length === 0) throw new Error("no_eligible_exercises");
+    // Only the picked exercises' own keys matter — an entry in the
+    // client-supplied map for a key that got dropped above (invalid/
+    // excluded/duplicate) is simply never read.
+    restByKey = choice.customExerciseRests;
   } else {
     const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment);
     plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment });
@@ -424,7 +439,7 @@ async function generateAndPersistSession(
     throw new Error(sessionError.message);
   }
 
-  await insertExercisesAndSets(session.id, plan);
+  await insertExercisesAndSets(session.id, plan, restByKey);
 
   let introNarration: string | null = null;
   try {
@@ -446,14 +461,21 @@ async function generateAndPersistSession(
   };
 }
 
-async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise[]): Promise<void> {
+async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise[], restByKey?: Record<string, number>): Promise<void> {
   const admin = createAdminClient();
 
   for (let i = 0; i < plan.length; i++) {
     const exercise = plan[i];
     const { data: exerciseRow, error: exerciseError } = await admin
       .from("workout_exercises")
-      .insert({ session_id: sessionId, exercise_key: exercise.key, name: exercise.name, muscle_group: exercise.muscleGroup, sort_order: i })
+      .insert({
+        session_id: sessionId,
+        exercise_key: exercise.key,
+        name: exercise.name,
+        muscle_group: exercise.muscleGroup,
+        sort_order: i,
+        rest_seconds: restByKey?.[exercise.key] ?? null,
+      })
       .select("id")
       .single();
     if (exerciseError) throw new Error(exerciseError.message);
@@ -480,7 +502,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
 
   const { data: exercises, error: exercisesError } = await admin
     .from("workout_exercises")
-    .select("id, exercise_key, name, muscle_group, sort_order")
+    .select("id, exercise_key, name, muscle_group, sort_order, rest_seconds")
     .eq("session_id", sessionId)
     .order("sort_order");
   if (exercisesError) throw new Error(exercisesError.message);
@@ -500,6 +522,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
       key: e.exercise_key,
       name: e.name,
       muscleGroup: e.muscle_group,
+      restSeconds: e.rest_seconds,
       sets: (sets ?? [])
         .filter((s) => s.exercise_id === e.id)
         .map((s) => ({

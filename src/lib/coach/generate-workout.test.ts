@@ -6,6 +6,7 @@ import {
   generateWorkoutTemplateSet,
   instantiateTemplate,
   pickFocusExercises,
+  getStrengthFocusLabel,
 } from "./generate-workout";
 import type { CoachProfile } from "./coach-profile";
 import { EXERCISE_CATALOG } from "./exercise-catalog";
@@ -451,6 +452,61 @@ describe("generateWorkoutTemplateSet — persistent A/B/C rotation", () => {
     ];
     const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
     expect(allKeys.every((key) => allowedKeys.includes(key))).toBe(true);
+  });
+});
+
+describe("generateWorkoutTemplateSet — Strength squat/bench/deadlift split (2026-08-29)", () => {
+  it("puts the named main lift first for each letter, not a muscle-group pick", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile({ goal: "strength" }), activeBlock: { blockType: "strength", startedAt: BLOCK_START } });
+    const byLetter = Object.fromEntries(result.map((t) => [t.letter, t.exercises]));
+    expect(byLetter.A[0]?.key).toBe("barbell_squat");
+    expect(byLetter.B[0]?.key).toBe("barbell_bench_press");
+    expect(byLetter.C[0]?.key).toBe("barbell_deadlift");
+  });
+
+  it("never returns a duplicate exercise within one letter, even though romanian_deadlift appears in two letters' lists", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile({ goal: "strength" }), activeBlock: { blockType: "strength", startedAt: BLOCK_START } });
+    for (const template of result) {
+      const keys = template.exercises.map((e) => e.key);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
+
+  it("skips an excluded main lift or accessory rather than substituting an unrelated exercise", () => {
+    // "knees" excludes barbell_squat's avoidIfInjury-tagged variants — using
+    // a made-up but realistic exclusion here via equipment instead, since
+    // it's a cleaner way to force a specific known key out: no barbell rack
+    // available removes barbell_squat itself from the safe pool entirely.
+    const result = generateWorkoutTemplateSet({
+      profile: profile({ goal: "strength" }),
+      activeBlock: { blockType: "strength", startedAt: BLOCK_START },
+      availableEquipment: ["dumbbells"],
+    });
+    const squatDay = result.find((t) => t.letter === "A")!;
+    expect(squatDay.exercises.some((e) => e.key === "barbell_squat")).toBe(false);
+    // Falls through to the next available key in A's list rather than
+    // pulling in an unrelated leg exercise never named in the plan.
+    expect(squatDay.exercises.some((e) => e.key === "dumbbell_bulgarian_split_squat")).toBe(true);
+  });
+
+  it("does not affect Hypertrophy/Deload blocks — same muscle-group rotation as before", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile(), activeBlock: { blockType: "hypertrophy", startedAt: BLOCK_START } });
+    const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
+    expect(allKeys).not.toContain("barbell_deadlift");
+  });
+});
+
+describe("getStrengthFocusLabel", () => {
+  it("labels A/B/C as Squat/Bench/Deadlift Day for a strength block", () => {
+    expect(getStrengthFocusLabel("A", "strength")).toBe("Squat Day");
+    expect(getStrengthFocusLabel("B", "strength")).toBe("Bench Day");
+    expect(getStrengthFocusLabel("C", "strength")).toBe("Deadlift Day");
+  });
+
+  it("returns null for any non-strength block, including undefined", () => {
+    expect(getStrengthFocusLabel("A", "hypertrophy")).toBeNull();
+    expect(getStrengthFocusLabel("A", "deload")).toBeNull();
+    expect(getStrengthFocusLabel("A", undefined)).toBeNull();
   });
 });
 

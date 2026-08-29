@@ -106,7 +106,12 @@ export default async function TrainingPage() {
                   </p>
                 </div>
               ) : (
-                <BlockWorkoutPreview templates={blockPreview.templates} repsTarget={blockPreview.repsTarget} nextLetter={blockPreview.nextLetter} />
+                <BlockWorkoutPreview
+                  templates={blockPreview.templates}
+                  repsTarget={blockPreview.repsTarget}
+                  nextLetter={blockPreview.nextLetter}
+                  blockType={blockPreview.blockType}
+                />
               )}
             </section>
           )}
