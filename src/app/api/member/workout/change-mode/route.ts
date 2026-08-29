@@ -70,7 +70,9 @@ export async function POST(request: Request) {
       ? { mode: "focus", focusMuscleGroups: parsed.data.focusMuscleGroups! }
       : parsed.data.mode === "custom"
         ? { mode: "custom", customExerciseKeys: parsed.data.customExerciseKeys!, customExerciseRests: parsed.data.customExerciseRests }
-        : { mode: "default" };
+        : parsed.data.mode === "custom-amrap"
+          ? { mode: "custom-amrap", timeCapSeconds: parsed.data.timeCapSeconds!, exercises: parsed.data.amrapExercises! }
+          : { mode: "default" };
 
   try {
     const { detail, introNarration } = await changeWorkoutMode(member.id, booking.id, booking.resource_id, member.name, choice);

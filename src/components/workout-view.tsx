@@ -23,7 +23,12 @@ const IMAGE_FRAME_MS = 900;
 interface WorkoutSet {
   id: number;
   setNumber: number;
-  repsTarget: number;
+  // Exactly one of these two is ever set — every straight-sets exercise
+  // still gets repsTarget as always; durationSeconds is the AMRAP
+  // alternative (Stage 2, 2026-08-29): a time-based movement (e.g. a 30s
+  // plank hold) prescribed by duration instead of a rep count.
+  repsTarget: number | null;
+  durationSeconds: number | null;
   // null the first time a member does this exercise — genuinely blank,
   // not a guessed default (see generate-workout.ts's GeneratedExercise).
   weightTargetKg: number | null;
@@ -46,9 +51,19 @@ interface WorkoutExercise {
 
 type RecoveryAdvice = { kind: "low_recovery"; reason: "elevated_resting_hr" | "low_sleep" } | { kind: "normal" } | { kind: "insufficient_data" };
 
+// AMRAP fields (Stage 2, 2026-08-29) — timeCapSeconds is the prescription
+// (set at generation), roundsCompleted/partialRoundExerciseIndex/
+// partialRoundReps are the self-reported tally, null until completed.
+// format defaults to "straight_sets" server-side, so every default/focus/
+// straight-sets-custom session reads exactly that, unchanged.
 interface WorkoutSessionDetail {
   sessionId: number;
   status: string;
+  format: "straight_sets" | "amrap";
+  timeCapSeconds: number | null;
+  roundsCompleted: number | null;
+  partialRoundExerciseIndex: number | null;
+  partialRoundReps: number | null;
   exercises: WorkoutExercise[];
   excludedExerciseKeys: string[];
   recoveryAdvice: RecoveryAdvice;
@@ -88,12 +103,15 @@ type Phase =
   | "resting"
   | "rpe"
   | "cooldown"
-  | "summary";
+  | "summary"
+  | "amrap-active"
+  | "amrap-tally";
 
 type GenerateChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
-  | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> };
+  | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> }
+  | { mode: "custom-amrap"; timeCapSeconds: number; exercises: { key: string; reps?: number; durationSeconds?: number; weightKg?: number }[] };
 
 // Rest defaults offered in the custom builder (Stage 1, 2026-08-29) — same
 // two values Carl set for Hypertrophy's assumed rest (see
@@ -152,12 +170,25 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [customSelection, setCustomSelection] = useState<string[]>([]);
   const [customRests, setCustomRests] = useState<Record<string, number>>({});
   const [restSecondsRemaining, setRestSecondsRemaining] = useState(0);
+  // AMRAP builder + taking-the-workout state (Stage 2, 2026-08-29).
+  const [customFormat, setCustomFormat] = useState<"straight_sets" | "amrap">("straight_sets");
+  const [amrapTimeCapMinutes, setAmrapTimeCapMinutes] = useState(12);
+  const [customAmrapConfig, setCustomAmrapConfig] = useState<Record<string, { unit: "reps" | "duration"; value: number; weightKg: number | "" }>>({});
+  const [amrapSecondsRemaining, setAmrapSecondsRemaining] = useState(0);
+  const [amrapRoundsCompleted, setAmrapRoundsCompleted] = useState<number | "">(0);
+  const [amrapPartialIndex, setAmrapPartialIndex] = useState<number | "">("");
+  const [amrapPartialReps, setAmrapPartialReps] = useState<number | "">("");
+  const [amrapSubmitting, setAmrapSubmitting] = useState(false);
   // Holds the latest applyAdvance closure — applyAdvance itself is only
   // defined later, after `detail` is known non-null, but the rest-timer
   // effect below has to be declared unconditionally up here alongside
   // this file's other hooks (Rules of Hooks). Updated every render via
   // the plain assignment right before applyAdvance's own definition.
   const applyAdvanceRef = useRef<() => void>(() => {});
+  // setPhase itself is a stable identity (React guarantees this), so
+  // unlike applyAdvanceRef this only ever needs to be set once — the
+  // AMRAP countdown's target phase never depends on late-computed values.
+  const goToAmrapTallyRef = useRef(() => setPhase("amrap-tally"));
   // null = not yet fetched — distinct from an empty array (a real, if
   // unlikely, "nothing eligible" result).
   const [customExcludedKeys, setCustomExcludedKeys] = useState<string[] | null>(null);
@@ -325,6 +356,20 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return () => clearTimeout(timer);
   }, [phase, restSecondsRemaining]);
 
+  // AMRAP countdown (Stage 2, 2026-08-29) — ticks once a second while
+  // phase is "amrap-active"; hitting zero always goes to the same place
+  // (the tally screen), so unlike the rest-timer above this needs no ref
+  // indirection — the target phase never depends on late-computed values.
+  useEffect(() => {
+    if (phase !== "amrap-active") return;
+    if (amrapSecondsRemaining <= 0) {
+      goToAmrapTallyRef.current();
+      return;
+    }
+    const timer = setTimeout(() => setAmrapSecondsRemaining((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [phase, amrapSecondsRemaining]);
+
   if (phase === "change-warning") {
     return (
       <div className="space-y-5">
@@ -434,10 +479,58 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       }, [])
       .sort((a, b) => MUSCLE_GROUPS.indexOf(a.group as (typeof MUSCLE_GROUPS)[number]) - MUSCLE_GROUPS.indexOf(b.group as (typeof MUSCLE_GROUPS)[number]));
 
+    // AMRAP-config helper — seeds a sensible default the first time an
+    // exercise is selected under this format, otherwise reads back
+    // whatever the member already set.
+    function amrapConfigFor(key: string) {
+      return customAmrapConfig[key] ?? { unit: "reps" as const, value: 10, weightKg: "" as const };
+    }
+
     return (
       <div className="space-y-5">
         <ExitLink />
         <p className="text-lg font-semibold">Build your own — pick up to 6</p>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setCustomFormat("straight_sets")}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
+              customFormat === "straight_sets" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
+            }`}
+          >
+            Straight sets
+          </button>
+          <button
+            type="button"
+            onClick={() => setCustomFormat("amrap")}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
+              customFormat === "amrap" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
+            }`}
+          >
+            AMRAP
+          </button>
+        </div>
+
+        {customFormat === "amrap" && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="amrap-time-cap" className="text-sm text-card-light-muted">
+              As many rounds as possible in
+            </label>
+            <input
+              id="amrap-time-cap"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={60}
+              value={amrapTimeCapMinutes}
+              onChange={(e) => setAmrapTimeCapMinutes(Math.max(1, Math.min(60, Number(e.target.value))))}
+              className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+            />
+            <span className="text-sm text-card-light-muted">minutes</span>
+          </div>
+        )}
+
         {customLoadError && <p className="text-sm text-danger">{customLoadError}</p>}
         {eligible === null && !customLoadError && <p className="text-sm text-card-light-muted">Loading exercises...</p>}
         {byGroup.map(({ group, exercises }) => (
@@ -459,9 +552,15 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                             delete next[ex.key];
                             return next;
                           });
+                          setCustomAmrapConfig((prev) => {
+                            const next = { ...prev };
+                            delete next[ex.key];
+                            return next;
+                          });
                         } else if (customSelection.length < 6) {
                           setCustomSelection((prev) => [...prev, ex.key]);
                           setCustomRests((prev) => ({ ...prev, [ex.key]: DEFAULT_REST_SECONDS }));
+                          setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: { unit: "reps", value: 10, weightKg: "" } }));
                         }
                       }}
                       className={`block w-full rounded-lg border px-4 py-3 text-left text-sm font-medium disabled:opacity-50 ${
@@ -472,7 +571,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                     >
                       {ex.name}
                     </button>
-                    {selected && (
+                    {selected && customFormat === "straight_sets" && (
                       <div className="mt-1.5 flex items-center gap-2 pl-1">
                         <label htmlFor={`rest-${ex.key}`} className="text-xs text-card-light-muted">
                           Rest between sets
@@ -491,6 +590,53 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                         <span className="text-xs text-card-light-muted">sec</span>
                       </div>
                     )}
+                    {selected && customFormat === "amrap" && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-1">
+                        <button
+                          type="button"
+                          onClick={() => setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: { ...amrapConfigFor(ex.key), unit: "reps" } }))}
+                          className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                            amrapConfigFor(ex.key).unit === "reps" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border text-card-light-muted"
+                          }`}
+                        >
+                          Reps
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: { ...amrapConfigFor(ex.key), unit: "duration" } }))}
+                          className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                            amrapConfigFor(ex.key).unit === "duration" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border text-card-light-muted"
+                          }`}
+                        >
+                          Duration
+                        </button>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          value={amrapConfigFor(ex.key).value}
+                          onChange={(e) =>
+                            setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: { ...amrapConfigFor(ex.key), value: Math.max(1, Number(e.target.value)) } }))
+                          }
+                          className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+                        />
+                        <span className="text-xs text-card-light-muted">{amrapConfigFor(ex.key).unit === "reps" ? "reps" : "sec"}</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          placeholder="kg (optional)"
+                          value={amrapConfigFor(ex.key).weightKg}
+                          onChange={(e) =>
+                            setCustomAmrapConfig((prev) => ({
+                              ...prev,
+                              [ex.key]: { ...amrapConfigFor(ex.key), weightKg: e.target.value === "" ? "" : Number(e.target.value) },
+                            }))
+                          }
+                          className="w-24 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -501,7 +647,25 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           type="button"
           disabled={customSelection.length === 0}
           className={buttonClass}
-          onClick={() => changeMode({ mode: "custom", customExerciseKeys: customSelection, customExerciseRests: customRests })}
+          onClick={() =>
+            changeMode(
+              customFormat === "straight_sets"
+                ? { mode: "custom", customExerciseKeys: customSelection, customExerciseRests: customRests }
+                : {
+                    mode: "custom-amrap",
+                    timeCapSeconds: amrapTimeCapMinutes * 60,
+                    exercises: customSelection.map((key) => {
+                      const cfg = amrapConfigFor(key);
+                      return {
+                        key,
+                        reps: cfg.unit === "reps" ? cfg.value : undefined,
+                        durationSeconds: cfg.unit === "duration" ? cfg.value : undefined,
+                        weightKg: cfg.weightKg === "" ? undefined : cfg.weightKg,
+                      };
+                    }),
+                  }
+            )
+          }
         >
           Generate workout ({customSelection.length}/6) →
         </button>
@@ -510,6 +674,8 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           onClick={() => {
             setCustomSelection([]);
             setCustomRests({});
+            setCustomAmrapConfig({});
+            setCustomFormat("straight_sets");
             setPhase("choose");
           }}
           className="block w-full text-center text-xs font-medium text-card-light-muted underline"
@@ -554,6 +720,174 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <p className="text-base font-medium">{introNarration}</p>
         <button type="button" className={buttonClass} onClick={() => setPhase("overview")}>
           Let&apos;s go →
+        </button>
+      </div>
+    );
+  }
+
+  // AMRAP overview (Stage 2, 2026-08-29) — completely different shape
+  // from the straight-sets overview below: no sets to preview, no
+  // warm-up/cool-down toggles, no swap (exercises are fixed once
+  // generated), just the round's exercise list and the time cap, then
+  // straight into the timer. detail.status stays "generated" until
+  // completeAmrapSession runs, so a member re-opening a finished AMRAP
+  // session before that (shouldn't normally happen — summary is the exit
+  // point) would see this again rather than being stuck; not worth a
+  // special-cased "already done" screen for an edge case that thin.
+  if (phase === "overview" && detail.format === "amrap") {
+    return (
+      <div className="space-y-5">
+        <ExitLink />
+        <p className="text-lg font-semibold">AMRAP — {Math.round((detail.timeCapSeconds ?? 0) / 60)} minutes</p>
+        <p className="text-sm text-card-light-muted">As many rounds as possible. Cycle through every exercise below, then repeat.</p>
+        <ul className="space-y-2">
+          {detail.exercises.map((ex, i) => {
+            const set = ex.sets[0];
+            return (
+              <li key={ex.id} className="rounded-lg border border-card-light-border p-3">
+                <p className="text-sm font-semibold">
+                  {i + 1}. {ex.name}
+                </p>
+                <p className="text-xs text-card-light-muted">
+                  {set?.durationSeconds !== null && set?.durationSeconds !== undefined ? `${set.durationSeconds}s` : `${set?.repsTarget ?? "—"} reps`}
+                  {set?.weightTargetKg ? ` @ ${set.weightTargetKg}kg` : ""}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={() => {
+            setAmrapSecondsRemaining(detail.timeCapSeconds ?? 0);
+            setPhase("amrap-active");
+          }}
+        >
+          Start AMRAP →
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === "amrap-active" && detail.format === "amrap") {
+    const minutes = Math.floor(amrapSecondsRemaining / 60);
+    const seconds = amrapSecondsRemaining % 60;
+    return (
+      <div className="space-y-5 text-center">
+        <ExitLink />
+        <p className="text-lg font-semibold">Go!</p>
+        <p className="text-5xl font-bold tabular-nums">
+          {minutes}:{String(seconds).padStart(2, "0")}
+        </p>
+        <ul className="space-y-2 text-left">
+          {detail.exercises.map((ex, i) => {
+            const set = ex.sets[0];
+            return (
+              <li key={ex.id} className="rounded-lg border border-card-light-border p-3">
+                <p className="text-sm font-semibold">
+                  {i + 1}. {ex.name}
+                </p>
+                <p className="text-xs text-card-light-muted">
+                  {set?.durationSeconds !== null && set?.durationSeconds !== undefined ? `${set.durationSeconds}s` : `${set?.repsTarget ?? "—"} reps`}
+                  {set?.weightTargetKg ? ` @ ${set.weightTargetKg}kg` : ""}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+        <button type="button" className={buttonClass} onClick={() => setPhase("amrap-tally")}>
+          Finish now →
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === "amrap-tally" && detail.format === "amrap") {
+    const partialExercise = amrapPartialIndex === "" ? null : detail.exercises[amrapPartialIndex];
+    const partialUnit = partialExercise?.sets[0]?.durationSeconds != null ? "seconds" : "reps";
+
+    async function submitAmrapTally() {
+      if (amrapRoundsCompleted === "") return;
+      setAmrapSubmitting(true);
+      setErrorMessage(null);
+      try {
+        const res = await fetch(`/api/member/workout/${detail!.sessionId}/complete-amrap`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roundsCompleted: amrapRoundsCompleted,
+            partialRoundExerciseIndex: amrapPartialIndex === "" ? undefined : amrapPartialIndex,
+            partialRoundReps: amrapPartialIndex === "" ? undefined : (amrapPartialReps === "" ? 0 : amrapPartialReps),
+          }),
+        });
+        const body = await res.json();
+        if (body.status !== "ok") {
+          setErrorMessage(body.message ?? "Couldn't save that. Try again.");
+          return;
+        }
+        setPhase("summary");
+      } catch {
+        setErrorMessage("Couldn't save that. Try again.");
+      } finally {
+        setAmrapSubmitting(false);
+      }
+    }
+
+    return (
+      <div className="space-y-5">
+        <p className="text-lg font-semibold">Time&apos;s up — how far did you get?</p>
+        <div>
+          <label htmlFor="rounds-completed" className="mb-1.5 block text-xs text-card-light-muted">
+            Full rounds completed
+          </label>
+          <input
+            id="rounds-completed"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            className={inputClass}
+            value={amrapRoundsCompleted}
+            onChange={(e) => setAmrapRoundsCompleted(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+          />
+        </div>
+        <div>
+          <label htmlFor="partial-exercise" className="mb-1.5 block text-xs text-card-light-muted">
+            Then got through to (optional — leave blank if you finished exactly on a round)
+          </label>
+          <select
+            id="partial-exercise"
+            value={amrapPartialIndex}
+            onChange={(e) => setAmrapPartialIndex(e.target.value === "" ? "" : Number(e.target.value))}
+            className="w-full rounded-lg border border-card-light-border bg-white px-4 py-3 text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+          >
+            <option value="">— Finished exactly on a round —</option>
+            {detail.exercises.map((ex, i) => (
+              <option key={ex.id} value={i}>
+                {ex.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {amrapPartialIndex !== "" && (
+          <div>
+            <label htmlFor="partial-reps" className="mb-1.5 block text-xs text-card-light-muted">
+              How many {partialUnit} of that one
+            </label>
+            <input
+              id="partial-reps"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              className={inputClass}
+              value={amrapPartialReps}
+              onChange={(e) => setAmrapPartialReps(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+            />
+          </div>
+        )}
+        {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+        <button type="button" disabled={amrapSubmitting || amrapRoundsCompleted === ""} className={buttonClass} onClick={submitAmrapTally}>
+          {amrapSubmitting ? "Saving..." : "Done →"}
         </button>
       </div>
     );
@@ -809,7 +1143,11 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       const nextExercise = detail!.exercises[exerciseIndex + 1];
       setExerciseIndex((i) => i + 1);
       setSetIndex(0);
-      setReps(nextExercise.sets[0].repsTarget);
+      // Straight-sets exercises (the only ones this "active"/"log set" flow
+      // ever runs for) always have a real reps_target — the ?? 0 only
+      // exists to satisfy WorkoutSet's now-nullable type (Stage 2's
+      // duration-based AMRAP sets), never hit in practice here.
+      setReps(nextExercise.sets[0].repsTarget ?? 0);
       // A different exercise never carries over the previous one's
       // weight — reset to its own target, blank if this is also the
       // first time doing it.
@@ -820,7 +1158,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     } else {
       const nextSet = exercise.sets[setIndex + 1];
       setSetIndex((i) => i + 1);
-      setReps(nextSet.repsTarget);
+      setReps(nextSet.repsTarget ?? 0);
       // A null target here means every set of this exercise is blank
       // (first time doing it, same exercise) — carry forward whatever
       // was just typed for the previous set rather than making the
@@ -908,6 +1246,23 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <button type="button" className={buttonClass} onClick={() => finishSession()}>
           Finish →
         </button>
+      </div>
+    );
+  }
+
+  if (phase === "summary" && detail.format === "amrap") {
+    const roundsLabel = `${amrapRoundsCompleted} round${amrapRoundsCompleted === 1 ? "" : "s"}`;
+    const partialExercise = amrapPartialIndex === "" ? null : detail.exercises[amrapPartialIndex];
+    return (
+      <div className="space-y-5 text-center">
+        <p className="text-xl font-semibold">AMRAP complete!</p>
+        <p className="text-sm text-card-light-muted">
+          {roundsLabel}
+          {partialExercise && `, then ${amrapPartialReps} ${partialExercise.sets[0]?.durationSeconds != null ? "seconds" : "reps"} of ${partialExercise.name}`}
+        </p>
+        <Link href="/" className={`${buttonClass} block`}>
+          Back to Home
+        </Link>
       </div>
     );
   }
