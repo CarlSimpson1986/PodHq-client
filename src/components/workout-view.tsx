@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RPE_SCALE } from "@/lib/coach/types";
-import { EXERCISE_CATALOG, getExerciseImages, getSafetyTip, getYoutubeVideoId, type CatalogExercise } from "@/lib/coach/exercise-catalog";
+import {
+  EXERCISE_CATALOG,
+  MUSCLE_GROUPS,
+  getExerciseImages,
+  getSafetyTip,
+  getYoutubeVideoId,
+  getYoutubeEmbedTiming,
+  type CatalogExercise,
+  type MuscleGroup,
+} from "@/lib/coach/exercise-catalog";
 import { WARMUP_ITEMS, COOLDOWN_ITEMS } from "@/lib/coach/warmup-cooldown";
 
 // How long each frame shows before auto-switching — reads as motion
@@ -54,7 +63,14 @@ interface WeightChange {
   lastRpe: number | null;
 }
 
-type Phase = "loading" | "error" | "intro" | "overview" | "warmup" | "active" | "rpe" | "cooldown" | "summary";
+// Stage 3 (2026-08-29) — "choose"/"focus-pick"/"custom-pick" are the new
+// pre-generation phases; every phase after "loading" is unchanged.
+type Phase = "choose" | "focus-pick" | "custom-pick" | "loading" | "error" | "intro" | "overview" | "warmup" | "active" | "rpe" | "cooldown" | "summary";
+
+type GenerateChoice =
+  | { mode: "default" }
+  | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
+  | { mode: "custom"; customExerciseKeys: string[] };
 
 const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
@@ -101,8 +117,14 @@ function getSwapCandidates(exercise: WorkoutExercise, detail: WorkoutSessionDeta
 }
 
 export function WorkoutView({ bookingId }: { bookingId: number }) {
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhase] = useState<Phase>("choose");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [focusSelection, setFocusSelection] = useState<MuscleGroup[]>([]);
+  const [customSelection, setCustomSelection] = useState<string[]>([]);
+  // null = not yet fetched — distinct from an empty array (a real, if
+  // unlikely, "nothing eligible" result).
+  const [customExcludedKeys, setCustomExcludedKeys] = useState<string[] | null>(null);
+  const [customLoadError, setCustomLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<WorkoutSessionDetail | null>(null);
   const [introNarration, setIntroNarration] = useState<string | null>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
@@ -127,42 +149,71 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [applyingRecovery, setApplyingRecovery] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
+  // Fires from the "choose"/"focus-pick"/"custom-pick" phases below, not
+  // on mount (2026-08-29 — previously this ran automatically in a mount
+  // effect, so a member never got a real choice at all). No cancellation
+  // guard, unlike the old mount effect — this fires from a click, same
+  // convention as every other button-triggered fetch in this file
+  // (handleComplete, logCurrentSet, the swap flow).
+  async function generate(choice: GenerateChoice) {
+    setPhase("loading");
+    setErrorMessage(null);
+    try {
+      const res = await fetch("/api/member/workout/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId, ...choice }),
+      });
+      const body = await res.json();
+      if (body.status !== "ok") {
+        setErrorMessage(
+          body.message === "coach_profile_missing"
+            ? "Set up your AI Coach first."
+            : body.message === "no_eligible_exercises"
+              ? "Not enough exercises available for that choice — try a different focus or picks."
+              : (body.message ?? "Something went wrong.")
+        );
+        setPhase("error");
+        return;
+      }
+      setDetail(body.session);
+      setIntroNarration(body.introNarration);
+      const firstSet = body.session.exercises[0]?.sets[0];
+      setReps(firstSet?.repsTarget ?? 0);
+      setWeight(firstSet?.weightTargetKg ?? "");
+      setPhase(body.introNarration ? "intro" : "overview");
+    } catch {
+      setErrorMessage("Something went wrong. Try again.");
+      setPhase("error");
+    }
+  }
+
+  // Lazily loads eligible exercises the first time "Build your own" is
+  // opened — needs to know what's excluded (injury/equipment) *before* a
+  // session exists, which getOrCreateWorkoutSession alone can't offer
+  // (see /api/member/workout/eligible-exercises's own comment).
   useEffect(() => {
+    if (phase !== "custom-pick" || customExcludedKeys !== null) return;
     let cancelled = false;
-    async function generate() {
+    async function loadEligible() {
       try {
-        const res = await fetch("/api/member/workout/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bookingId }),
-        });
+        const res = await fetch(`/api/member/workout/eligible-exercises?bookingId=${bookingId}`);
         const body = await res.json();
         if (cancelled) return;
         if (body.status !== "ok") {
-          setErrorMessage(
-            body.message === "coach_profile_missing" ? "Set up your AI Coach first." : body.message ?? "Something went wrong."
-          );
-          setPhase("error");
+          setCustomLoadError(body.message ?? "Couldn't load exercises.");
           return;
         }
-        setDetail(body.session);
-        setIntroNarration(body.introNarration);
-        const firstSet = body.session.exercises[0]?.sets[0];
-        setReps(firstSet?.repsTarget ?? 0);
-        setWeight(firstSet?.weightTargetKg ?? "");
-        setPhase(body.introNarration ? "intro" : "overview");
+        setCustomExcludedKeys(body.excludedExerciseKeys);
       } catch {
-        if (!cancelled) {
-          setErrorMessage("Something went wrong. Try again.");
-          setPhase("error");
-        }
+        if (!cancelled) setCustomLoadError("Couldn't load exercises. Try again.");
       }
     }
-    generate();
+    loadEligible();
     return () => {
       cancelled = true;
     };
-  }, [bookingId]);
+  }, [phase, customExcludedKeys, bookingId]);
 
   // Auto-loops the two demonstration frames while an exercise is active —
   // "should move automatically" (2026-08-23), rather than requiring a tap.
@@ -174,6 +225,150 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     const interval = setInterval(() => setImageFrame((f) => (f === 0 ? 1 : 0)), IMAGE_FRAME_MS);
     return () => clearInterval(interval);
   }, [phase, exerciseIndex, detail]);
+
+  if (phase === "choose") {
+    return (
+      <div className="space-y-5">
+        <ExitLink />
+        <p className="text-lg font-semibold">Choose today&apos;s session</p>
+        <div className="space-y-2">
+          <button type="button" className={buttonClass} onClick={() => generate({ mode: "default" })}>
+            Today&apos;s session
+          </button>
+          <button
+            type="button"
+            onClick={() => setPhase("focus-pick")}
+            className="w-full rounded-lg border border-card-light-border px-4 py-3 text-base font-semibold text-card-light-foreground hover:bg-card-border/10"
+          >
+            Focus day
+          </button>
+          <button
+            type="button"
+            onClick={() => setPhase("custom-pick")}
+            className="w-full rounded-lg border border-card-light-border px-4 py-3 text-base font-semibold text-card-light-foreground hover:bg-card-border/10"
+          >
+            Build your own
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "focus-pick") {
+    return (
+      <div className="space-y-5">
+        <ExitLink />
+        <p className="text-lg font-semibold">Pick 1-2 areas to focus on</p>
+        <div className="grid grid-cols-2 gap-2">
+          {MUSCLE_GROUPS.map((group) => {
+            const selected = focusSelection.includes(group);
+            return (
+              <button
+                key={group}
+                type="button"
+                onClick={() =>
+                  setFocusSelection((prev) => (selected ? prev.filter((g) => g !== group) : prev.length < 2 ? [...prev, group] : prev))
+                }
+                className={`rounded-lg border px-4 py-3 text-center text-sm font-medium capitalize ${
+                  selected
+                    ? "border-card-light-foreground bg-card-light-foreground text-white"
+                    : "border-card-light-border text-card-light-foreground hover:bg-card-border/10"
+                }`}
+              >
+                {group}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          disabled={focusSelection.length === 0}
+          className={buttonClass}
+          onClick={() => generate({ mode: "focus", focusMuscleGroups: focusSelection })}
+        >
+          Generate workout →
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setFocusSelection([]);
+            setPhase("choose");
+          }}
+          className="block w-full text-center text-xs font-medium text-card-light-muted underline"
+        >
+          ← Back
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === "custom-pick") {
+    const eligible = customExcludedKeys === null ? null : EXERCISE_CATALOG.filter((e) => !customExcludedKeys.includes(e.key));
+    const byGroup = (eligible ?? [])
+      .reduce<{ group: MuscleGroup; exercises: CatalogExercise[] }[]>((groups, exercise) => {
+        const existing = groups.find((g) => g.group === exercise.muscleGroup);
+        if (existing) existing.exercises.push(exercise);
+        else groups.push({ group: exercise.muscleGroup, exercises: [exercise] });
+        return groups;
+      }, [])
+      .sort((a, b) => MUSCLE_GROUPS.indexOf(a.group as (typeof MUSCLE_GROUPS)[number]) - MUSCLE_GROUPS.indexOf(b.group as (typeof MUSCLE_GROUPS)[number]));
+
+    return (
+      <div className="space-y-5">
+        <ExitLink />
+        <p className="text-lg font-semibold">Build your own — pick up to 6</p>
+        {customLoadError && <p className="text-sm text-danger">{customLoadError}</p>}
+        {eligible === null && !customLoadError && <p className="text-sm text-card-light-muted">Loading exercises...</p>}
+        {byGroup.map(({ group, exercises }) => (
+          <div key={group}>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted capitalize">{group}</p>
+            <div className="space-y-2">
+              {exercises.map((ex) => {
+                const selected = customSelection.includes(ex.key);
+                return (
+                  <button
+                    key={ex.key}
+                    type="button"
+                    disabled={!selected && customSelection.length >= 6}
+                    onClick={() =>
+                      setCustomSelection((prev) =>
+                        selected ? prev.filter((k) => k !== ex.key) : prev.length < 6 ? [...prev, ex.key] : prev
+                      )
+                    }
+                    className={`block w-full rounded-lg border px-4 py-3 text-left text-sm font-medium disabled:opacity-50 ${
+                      selected
+                        ? "border-card-light-foreground bg-card-light-foreground text-white"
+                        : "border-card-light-border text-card-light-foreground hover:bg-card-border/10"
+                    }`}
+                  >
+                    {ex.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          disabled={customSelection.length === 0}
+          className={buttonClass}
+          onClick={() => generate({ mode: "custom", customExerciseKeys: customSelection })}
+        >
+          Generate workout ({customSelection.length}/6) →
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setCustomSelection([]);
+            setPhase("choose");
+          }}
+          className="block w-full text-center text-xs font-medium text-card-light-muted underline"
+        >
+          ← Back
+        </button>
+      </div>
+    );
+  }
 
   if (phase === "loading") {
     return <p className="text-center text-sm text-card-light-muted">Building your workout...</p>;
@@ -187,6 +382,14 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           <Link href="/coach-onboarding" className="mt-3 inline-block text-sm font-semibold underline">
             Set up my AI Coach
           </Link>
+        )}
+        {/* A focus/custom pick that turned out ineligible is retriable —
+            unlike a missing coach profile or a network hiccup, going back
+            to "choose" and picking again is the actual fix. */}
+        {errorMessage?.includes("try a different") && (
+          <button type="button" onClick={() => setPhase("choose")} className="mt-3 inline-block text-sm font-semibold underline">
+            ← Choose again
+          </button>
         )}
       </div>
     );
@@ -554,6 +757,10 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const images = getExerciseImages(exercise.key);
   const safetyTip = getSafetyTip(exercise.key);
   const youtubeVideoId = getYoutubeVideoId(exercise.key);
+  const youtubeTiming = getYoutubeEmbedTiming(exercise.key);
+  const youtubeEmbedParams = new URLSearchParams({ rel: "0" });
+  if (youtubeTiming.start !== undefined) youtubeEmbedParams.set("start", String(youtubeTiming.start));
+  if (youtubeTiming.end !== undefined) youtubeEmbedParams.set("end", String(youtubeTiming.end));
   return (
     <div className="space-y-6">
       <ExitLink />
@@ -570,7 +777,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       {youtubeVideoId ? (
         <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?rel=0`}
+            src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?${youtubeEmbedParams.toString()}`}
             title={`${exercise.name} technique demonstration`}
             className="h-full w-full"
             allow="encrypted-media; picture-in-picture"

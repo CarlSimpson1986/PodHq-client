@@ -35,7 +35,7 @@ export const THUMB_FAT_G = 15;
 // deliberately covers both dual- and single-pulley setups — that nuance
 // belongs in exercise copy, not as a separate filterable dimension
 // (Carl's call, 2026-08-24).
-export const EQUIPMENT_TYPES = ["barbell_rack", "cable_machine", "dumbbells", "leg_extension_curl_machine"] as const;
+export const EQUIPMENT_TYPES = ["barbell_rack", "cable_machine", "dumbbells", "leg_extension_curl_machine", "kettlebells"] as const;
 export type EquipmentType = (typeof EQUIPMENT_TYPES)[number];
 
 // Daily protein target — flat 1.8g/kg bodyweight, Carl's call (2026-08-23):
@@ -72,21 +72,30 @@ export const CALORIE_TARGET_FLOOR = 1200;
 // midpoint of that range. See nutrition-targets.ts.
 export const FAT_PERCENT_OF_TARGET = 0.275;
 
-// Activity multiplier for TDEE, derived from coach_profiles.sessions_per_week
-// rather than a separate onboarding question — reuses data already
-// collected. Deliberately has no "sedentary" (1.2) tier: sessions_per_week
-// is DB-constrained to >= 1, so nobody in this feature's population is
-// sedentary by definition, and defaulting anyone to 1.2 would
-// systematically underestimate calories for the whole member base.
-// Standard PAL-based multiplier table (WHO activity categories), restricted
-// to the 1-6 range this app actually collects.
-export const ACTIVITY_MULTIPLIER_BY_SESSIONS_PER_WEEK: Record<number, number> = {
-  1: 1.375,
-  2: 1.375,
-  3: 1.55,
-  4: 1.55,
-  5: 1.725,
-  6: 1.725,
+// Daily activity level (2026-08-29) — a member's day-to-day/occupational
+// activity, entirely separate from coach_profiles.sessions_per_week
+// (that field is for training-block *programming*, per Carl's own call —
+// how many pod sessions a week, not how sedentary their job is). Before
+// this existed, TDEE's activity multiplier was derived purely from
+// sessions_per_week using the classic exercise-inclusive WHO PAL table —
+// which meant an office worker and someone doing heavy manual labour who
+// trained the same number of times a week got identical calorie targets.
+export const DAILY_ACTIVITY_LEVELS = ["sedentary", "lightly_active", "moderately_active", "very_active", "extra_active"] as const;
+export type DailyActivityLevel = (typeof DAILY_ACTIVITY_LEVELS)[number];
+
+// Standard WHO/PAL activity multiplier table, keyed on daily_activity_level
+// rather than sessions_per_week. Carl's call (2026-08-29): a single ~1hr
+// pod session doesn't move the needle enough on total daily burn to model
+// separately, and "eating back" exercise calories is a well-known way
+// people undermine a deficit — so sessions_per_week has zero influence on
+// nutrition, full stop; it stays purely a programming input
+// (generate-workout.ts). daily_activity_level alone drives TDEE.
+export const ACTIVITY_MULTIPLIER_BY_DAILY_ACTIVITY_LEVEL: Record<DailyActivityLevel, number> = {
+  sedentary: 1.2,
+  lightly_active: 1.375,
+  moderately_active: 1.55,
+  very_active: 1.725,
+  extra_active: 1.9,
 };
 
 export const MEALS = ["breakfast", "lunch", "dinner", "snacks"] as const;

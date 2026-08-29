@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       weightKg: parsed.data.weightKg,
       heightCm: parsed.data.heightCm,
       age: parsed.data.age,
+      dailyActivityLevel: parsed.data.dailyActivityLevel,
       mealCountPreference: parsed.data.mealCountPreference ?? null,
       foodAllergies: parsed.data.foodAllergies || null,
       foodPreferences: parsed.data.foodPreferences ?? null,

@@ -14,6 +14,7 @@ function profile(createdAt: string): CoachProfile {
     weight_kg: 80,
     height_cm: 180,
     age: 30,
+    daily_activity_level: "moderately_active",
     meal_count_preference: null,
     food_allergies: null,
     food_preferences: null,

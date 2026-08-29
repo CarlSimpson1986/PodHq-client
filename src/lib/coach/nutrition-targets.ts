@@ -3,7 +3,7 @@ import {
   PROTEIN_TARGET_G_PER_KG,
   CALORIE_TARGET_FLOOR,
   FAT_PERCENT_OF_TARGET,
-  ACTIVITY_MULTIPLIER_BY_SESSIONS_PER_WEEK,
+  ACTIVITY_MULTIPLIER_BY_DAILY_ACTIVITY_LEVEL,
 } from "@/lib/coach/types";
 
 export interface NutritionTargets {
@@ -13,15 +13,15 @@ export interface NutritionTargets {
   carbsG: number;
 }
 
-// Harris-Benedict — the formula MyFitPod-App-Brief.docx specifies (see
-// coach-profile.ts's validation comment). Recent literature generally
-// favours Mifflin-St Jeor as more accurate for a typical sedentary
-// population (Harris-Benedict tends to overestimate BMR by 5-15% there),
-// so this is a documented, revisitable spec choice, not an unexamined
-// default.
-function harrisBenedictBmr(weightKg: number, heightCm: number, age: number, gender: string | null): number {
-  const male = 88.362 + 13.397 * weightKg + 4.799 * heightCm - 5.677 * age;
-  const female = 447.593 + 9.247 * weightKg + 3.098 * heightCm - 4.33 * age;
+// Mifflin-St Jeor — swapped from Harris-Benedict (2026-08-29). Modern
+// literature (and the US Academy of Nutrition and Dietetics) treats this
+// as more accurate for a typical population; Harris-Benedict tends to
+// overestimate BMR by 5-15%. That gap was already flagged as a documented,
+// revisitable spec choice before this swap — see this file's own git
+// history for the original Harris-Benedict version.
+function mifflinStJeorBmr(weightKg: number, heightCm: number, age: number, gender: string | null): number {
+  const male = 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
+  const female = 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
   if (gender === "Male") return male;
   if (gender === "Female") return female;
   // null / "Prefer not to say" / "Other" — average of both formulas rather
@@ -29,16 +29,26 @@ function harrisBenedictBmr(weightKg: number, heightCm: number, age: number, gend
   return (male + female) / 2;
 }
 
-// Returns null when the profile is missing a body stat it needs — the DB
-// columns stay nullable even though onboarding now requires them (Stage 5
-// fix), so a profile created before that fix could still be incomplete.
+// Returns null when the profile is missing a body stat (or, since
+// 2026-08-29, daily_activity_level) it needs — the DB columns stay
+// nullable even though onboarding now requires them, so a profile created
+// before a given field existed could still be incomplete.
 export function computeNutritionTargets(profile: CoachProfile, gender: string | null): NutritionTargets | null {
-  const { weight_kg: weightKg, height_cm: heightCm, age, sessions_per_week: sessionsPerWeek, goal } = profile;
-  if (weightKg === null || heightCm === null || age === null) return null;
+  const {
+    weight_kg: weightKg,
+    height_cm: heightCm,
+    age,
+    goal,
+    daily_activity_level: activityLevel,
+  } = profile;
+  if (weightKg === null || heightCm === null || age === null || activityLevel === null) return null;
 
-  const bmr = harrisBenedictBmr(weightKg, heightCm, age, gender);
-  const activityMultiplier = ACTIVITY_MULTIPLIER_BY_SESSIONS_PER_WEEK[sessionsPerWeek] ?? 1.55;
-  const tdee = bmr * activityMultiplier;
+  const bmr = mifflinStJeorBmr(weightKg, heightCm, age, gender);
+
+  // daily_activity_level alone drives TDEE — see types.ts's
+  // ACTIVITY_MULTIPLIER_BY_DAILY_ACTIVITY_LEVEL for why sessions_per_week
+  // has no calorie contribution here at all (Carl's call, 2026-08-29).
+  const tdee = bmr * ACTIVITY_MULTIPLIER_BY_DAILY_ACTIVITY_LEVEL[activityLevel];
 
   const rawCalorieTarget = goal === "weight_loss" ? tdee - 500 : goal === "muscle_gain" ? tdee + 300 : tdee;
   const calories = Math.max(rawCalorieTarget, CALORIE_TARGET_FLOOR);

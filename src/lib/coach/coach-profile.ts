@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Goal, ExperienceLevel, FoodPreference, NutritionTrackingMode } from "@/lib/coach/types";
+import type { Goal, ExperienceLevel, FoodPreference, NutritionTrackingMode, DailyActivityLevel } from "@/lib/coach/types";
 
 export interface CoachProfile {
   id: number;
@@ -15,6 +15,12 @@ export interface CoachProfile {
   weight_kg: number | null;
   height_cm: number | null;
   age: number | null;
+  // Occupational activity, separate from sessions_per_week (that's for
+  // programming, not this) — see types.ts's DAILY_ACTIVITY_LEVELS and
+  // nutrition-targets.ts. Nullable same as weight/height/age: a profile
+  // created before this column existed just has no target until the
+  // member fills it in.
+  daily_activity_level: DailyActivityLevel | null;
   // Collected up front alongside the fitness questions (Carl's call,
   // 2026-08-23: one onboarding pass, not a second one when nutrition
   // itself ships) — unused by generate-workout.ts, waiting for that
@@ -41,12 +47,13 @@ export interface CoachProfileInput {
   experienceLevel: ExperienceLevel;
   injuries: string | null;
   sessionsPerWeek: number;
-  // Required on write (validated by coachProfileSchema) — Harris-Benedict
+  // Required on write (validated by coachProfileSchema) — Mifflin-St Jeor
   // BMR needs all three. CoachProfile's read-side type keeps these
   // nullable since the DB columns themselves stay nullable.
   weightKg: number;
   heightCm: number;
   age: number;
+  dailyActivityLevel: DailyActivityLevel;
   mealCountPreference: number | null;
   foodAllergies: string | null;
   foodPreferences: FoodPreference | null;
@@ -68,6 +75,7 @@ export async function createCoachProfile(memberId: number, input: CoachProfileIn
       weight_kg: input.weightKg,
       height_cm: input.heightCm,
       age: input.age,
+      daily_activity_level: input.dailyActivityLevel,
       meal_count_preference: input.mealCountPreference,
       food_allergies: input.foodAllergies,
       food_preferences: input.foodPreferences,
