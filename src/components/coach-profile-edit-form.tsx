@@ -7,15 +7,28 @@ import {
   EXPERIENCE_LEVELS,
   FOOD_PREFERENCES,
   NUTRITION_TRACKING_MODES,
+  DAILY_ACTIVITY_LEVELS,
   type Goal,
   type ExperienceLevel,
   type FoodPreference,
   type NutritionTrackingMode,
+  type DailyActivityLevel,
 } from "@/lib/coach/types";
 
 const NUTRITION_MODE_LABELS: Record<NutritionTrackingMode, string> = {
   calorie_counting: "Calorie counting",
   hand_portions: "Hand portions",
+};
+
+// Same occupation-only wording as coach-onboarding-form.tsx's
+// DAILY_ACTIVITY_LABELS (kept flat here, not title/subtitle, matching
+// this form's plain single-line option style throughout).
+const DAILY_ACTIVITY_LEVEL_LABELS: Record<DailyActivityLevel, string> = {
+  sedentary: "Sedentary",
+  lightly_active: "Lightly active",
+  moderately_active: "Moderately active",
+  very_active: "Very active",
+  extra_active: "Extra active",
 };
 
 const GOAL_LABELS: Record<Goal, string> = {
@@ -56,6 +69,7 @@ export interface CoachProfileEditFormValues {
   experienceLevel: ExperienceLevel;
   injuries: string;
   sessionsPerWeek: number;
+  dailyActivityLevel: DailyActivityLevel | null;
   weightKg: string;
   heightCm: string;
   age: string;
@@ -84,7 +98,7 @@ export function CoachProfileEditForm({ initial }: { initial: CoachProfileEditFor
     setSaved(false);
   }
 
-  const canSubmit = form.weightKg !== "" && form.heightCm !== "" && form.age !== "";
+  const canSubmit = form.weightKg !== "" && form.heightCm !== "" && form.age !== "" && form.dailyActivityLevel !== null;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -99,6 +113,7 @@ export function CoachProfileEditForm({ initial }: { initial: CoachProfileEditFor
           experienceLevel: form.experienceLevel,
           injuries: form.injuries,
           sessionsPerWeek: form.sessionsPerWeek,
+          dailyActivityLevel: form.dailyActivityLevel,
           weightKg: Number(form.weightKg),
           heightCm: Number(form.heightCm),
           age: Number(form.age),
@@ -157,6 +172,22 @@ export function CoachProfileEditForm({ initial }: { initial: CoachProfileEditFor
           {[1, 2, 3, 4, 5, 6].map((n) => (
             <button key={n} type="button" onClick={() => update("sessionsPerWeek", n)} className={optionClass(form.sessionsPerWeek === n)}>
               {n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-semibold">Daily activity (outside training)</p>
+        <div className="grid grid-cols-2 gap-2">
+          {DAILY_ACTIVITY_LEVELS.map((level) => (
+            <button
+              key={level}
+              type="button"
+              onClick={() => update("dailyActivityLevel", level)}
+              className={optionClass(form.dailyActivityLevel === level)}
+            >
+              {DAILY_ACTIVITY_LEVEL_LABELS[level]}
             </button>
           ))}
         </div>

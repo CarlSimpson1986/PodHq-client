@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { generateWorkout, getInjuryExcludedKeys, getEquipmentExcludedKeys, generateWorkoutTemplateSet, instantiateTemplate } from "./generate-workout";
+import {
+  generateWorkout,
+  getInjuryExcludedKeys,
+  getEquipmentExcludedKeys,
+  generateWorkoutTemplateSet,
+  instantiateTemplate,
+  pickFocusExercises,
+} from "./generate-workout";
 import type { CoachProfile } from "./coach-profile";
 
 function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
@@ -14,6 +21,7 @@ function profile(overrides: Partial<CoachProfile> = {}): CoachProfile {
     weight_kg: 75,
     height_cm: 178,
     age: 30,
+    daily_activity_level: "moderately_active",
     meal_count_preference: null,
     food_allergies: null,
     food_preferences: null,
@@ -110,18 +118,27 @@ describe("generateWorkout — injury avoidance", () => {
   it("never includes an unsafe exercise, even when heavy injury filtering leaves very few options", () => {
     // "knee, back, shoulders" excludes all but a few catalog entries —
     // safety (never surface an excluded exercise) wins over always filling
-    // a full 4-exercise session. Three isolation arm exercises have an
-    // empty avoidIfInjury list (dumbbell_bicep_curl, and since the
-    // 2026-08-28 free-weight expansion, barbell_bicep_curl and
-    // dumbbell_hammer_curl too) — any of the three is a valid safe result.
+    // a full 4-exercise session. These have an empty avoidIfInjury list
+    // (arm isolation exercises, plus dumbbell_calf_raise since the
+    // 2026-08-29 Unbroken Fitness batch) — any of them is a valid safe
+    // result.
     const result = generateWorkout({
       profile: profile({ injuries: "knee, back, shoulders" }),
       history: [],
       lastSession: null,
     });
     expect(result.length).toBeGreaterThan(0);
-    const safeArmIsolationKeys = ["dumbbell_bicep_curl", "barbell_bicep_curl", "dumbbell_hammer_curl"];
-    expect(result.every((e) => safeArmIsolationKeys.includes(e.key))).toBe(true);
+    const safeIsolationKeys = [
+      "dumbbell_bicep_curl",
+      "barbell_bicep_curl",
+      "dumbbell_hammer_curl",
+      "dumbbell_alternating_bicep_curl",
+      "dumbbell_concentration_curl",
+      "dumbbell_incline_hammer_curl",
+      "dumbbell_spider_curl",
+      "dumbbell_calf_raise",
+    ];
+    expect(result.every((e) => safeIsolationKeys.includes(e.key))).toBe(true);
   });
 });
 
@@ -277,8 +294,17 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
       activeBlock: { blockType: "strength", startedAt: BLOCK_START },
     });
     expect(result.length).toBeGreaterThan(0);
-    const safeArmIsolationKeys = ["dumbbell_bicep_curl", "barbell_bicep_curl", "dumbbell_hammer_curl"];
-    expect(result.every((e) => safeArmIsolationKeys.includes(e.key))).toBe(true);
+    const safeIsolationKeys = [
+      "dumbbell_bicep_curl",
+      "barbell_bicep_curl",
+      "dumbbell_hammer_curl",
+      "dumbbell_alternating_bicep_curl",
+      "dumbbell_concentration_curl",
+      "dumbbell_incline_hammer_curl",
+      "dumbbell_spider_curl",
+      "dumbbell_calf_raise",
+    ];
+    expect(result.every((e) => safeIsolationKeys.includes(e.key))).toBe(true);
   });
 });
 
@@ -400,6 +426,31 @@ describe("generateWorkoutTemplateSet — persistent A/B/C rotation", () => {
       "dumbbell_hammer_curl",
       "dumbbell_overhead_tricep_extension",
       "dumbbell_side_bend",
+      // 2026-08-29 — Unbroken Fitness Solutions batch, all dumbbells.
+      "dumbbell_alternating_bench_press",
+      "dumbbell_alternating_incline_press",
+      "dumbbell_neutral_grip_press",
+      "dumbbell_bench_supported_narrow_row",
+      "dumbbell_bench_supported_wide_row",
+      "dumbbell_prone_incline_row",
+      "dumbbell_alternating_bicep_curl",
+      "dumbbell_concentration_curl",
+      "dumbbell_incline_hammer_curl",
+      "dumbbell_spider_curl",
+      "dumbbell_skull_crusher",
+      "dumbbell_tricep_kickback",
+      "dumbbell_front_squat",
+      "dumbbell_goblet_squat",
+      "dumbbell_suitcase_squat",
+      "dumbbell_split_squat",
+      "dumbbell_bulgarian_split_squat",
+      "dumbbell_alternating_step_up",
+      "dumbbell_lunge",
+      "dumbbell_reverse_lunge",
+      "dumbbell_deficit_reverse_lunge",
+      "dumbbell_romanian_deadlift",
+      "dumbbell_hip_thrust",
+      "dumbbell_calf_raise",
     ];
     const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
     expect(allKeys.every((key) => allowedKeys.includes(key))).toBe(true);
@@ -429,5 +480,48 @@ describe("instantiateTemplate — turns a fixed template into a live plan", () =
     const result = instantiateTemplate(template, profile(), [], undefined);
     expect(result).toHaveLength(1);
     expect(result[0].key).toBe("plank");
+  });
+});
+
+describe("pickFocusExercises — Stage 3 focus-day selection", () => {
+  it("only picks exercises from the chosen muscle group", () => {
+    const result = pickFocusExercises(profile(), undefined, ["chest"]);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((e) => e.muscleGroup === "chest")).toBe(true);
+  });
+
+  it("caps at 6 exercises even with 2 well-stocked muscle groups", () => {
+    const result = pickFocusExercises(profile(), undefined, ["chest", "back"]);
+    expect(result.length).toBeLessThanOrEqual(6);
+  });
+
+  it("round-robins across 2 chosen groups rather than exhausting the first before touching the second", () => {
+    const result = pickFocusExercises(profile(), undefined, ["chest", "back"]);
+    const chestCount = result.filter((e) => e.muscleGroup === "chest").length;
+    const backCount = result.filter((e) => e.muscleGroup === "back").length;
+    // Both well-stocked groups (chest and back each have several catalog
+    // options) — round-robin should land close to evenly split, not
+    // all-chest-then-back.
+    expect(Math.abs(chestCount - backCount)).toBeLessThanOrEqual(1);
+  });
+
+  it("respects injury exclusions the same way generateWorkout does", () => {
+    const result = pickFocusExercises(profile({ injuries: "shoulders" }), undefined, ["shoulders"]);
+    expect(result.every((e) => e.key !== "dumbbell_shoulder_press" && e.key !== "cable_face_pull")).toBe(true);
+  });
+
+  it("respects equipment exclusions the same way generateWorkout does", () => {
+    const result = pickFocusExercises(profile(), ["dumbbells"], ["chest"]);
+    // Barbell/cable-only chest exercises must be excluded, leaving only
+    // dumbbell + bodyweight options for chest.
+    expect(result.every((e) => e.key !== "barbell_bench_press" && e.key !== "cable_chest_fly")).toBe(true);
+  });
+
+  it("returns an empty array when the chosen group has zero eligible exercises, rather than falling back to a different group", () => {
+    // Every core catalog exercise's avoidIfInjury includes "back" — a
+    // back-injury exclusion alone empties the core pool entirely,
+    // regardless of equipment.
+    const result = pickFocusExercises(profile({ injuries: "back" }), undefined, ["core"]);
+    expect(result).toEqual([]);
   });
 });

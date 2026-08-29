@@ -50,7 +50,15 @@ export function CoachChatView({ initialMessages }: { initialMessages: ChatMessag
   }
 
   return (
-    <div className="flex h-full min-h-[60vh] flex-col gap-4">
+    // max-h + the message list's own min-h-0/overflow-y-auto (below) is
+    // what actually makes this a scrollable chat pane rather than an
+    // ever-growing block — a flex child needs min-h-0 to respect
+    // overflow at all (its default min-height:auto otherwise just grows
+    // to fit content, defeating overflow-y-auto). Before this fix
+    // (2026-08-29 bug) the container had no max-height, so every message
+    // ever sent just kept pushing the whole /coach page taller instead
+    // of scrolling within its own bounded panel.
+    <div className="flex max-h-[70vh] min-h-[60vh] flex-col gap-4">
       {messages.length === 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick questions</p>
@@ -67,7 +75,7 @@ export function CoachChatView({ initialMessages }: { initialMessages: ChatMessag
         </div>
       )}
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
         {messages.map((m, i) => (
           <div
             key={i}

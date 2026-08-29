@@ -2,11 +2,16 @@ import { NextResponse } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
-import { getOrCreateWorkoutSession, type WorkoutChoice } from "@/lib/coach/workout-session";
-import { generateWorkoutSchema } from "@/lib/validation/workout";
+import { getExcludedExerciseKeysForBooking } from "@/lib/coach/workout-session";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-export async function POST(request: Request) {
+// Stage 3 (2026-08-29) — drives the pre-generation "build your own"
+// picker (workout-view.tsx). Read-only, GET rather than reusing the
+// POST /generate route, since this needs to run *before* a session is
+// created or a mode is chosen — the picker has to know what's eligible in
+// order to offer it. Same session→rate-limit→member→premium→booking-
+// ownership shape as /generate, just no session-creation side effect.
+export async function GET(request: Request) {
   const session = await createSessionClient();
   const {
     data: { user },
@@ -16,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "error", message: "Not signed in." }, { status: 401 });
   }
 
-  const rateLimit = await checkRateLimit(user.id, "/api/member/workout/generate");
+  const rateLimit = await checkRateLimit(user.id, "/api/member/workout/eligible-exercises");
   if (!rateLimit.allowed) {
     return NextResponse.json({ status: "error", message: "Too many requests. Slow down." }, { status: 429 });
   }
@@ -26,15 +31,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "error", message: "No member profile found." }, { status: 403 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
-  }
-
-  const parsed = generateWorkoutSchema.safeParse(body);
-  if (!parsed.success) {
+  const bookingIdRaw = new URL(request.url).searchParams.get("bookingId");
+  const bookingId = bookingIdRaw ? Number(bookingIdRaw) : NaN;
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
     return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
   }
 
@@ -43,40 +42,27 @@ export async function POST(request: Request) {
   }
 
   // Booking must belong to this member — never trusted as-is, same
-  // IDOR-proofing pattern as every other gym-scoped write in this app.
+  // IDOR-proofing pattern as every other gym-scoped read/write in this app.
   const admin = createAdminClient();
   const { data: booking, error: bookingError } = await admin
     .from("bookings")
     .select("id, member_id, resource_id")
-    .eq("id", parsed.data.bookingId)
+    .eq("id", bookingId)
     .maybeSingle();
 
   if (bookingError) {
-    console.error("[workout-generate] booking lookup failed", { error: bookingError.message });
+    console.error("[workout-eligible-exercises] booking lookup failed", { error: bookingError.message });
     return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });
   }
   if (!booking || booking.member_id !== member.id) {
     return NextResponse.json({ status: "error", message: "Booking not found." }, { status: 404 });
   }
 
-  const choice: WorkoutChoice =
-    parsed.data.mode === "focus"
-      ? { mode: "focus", focusMuscleGroups: parsed.data.focusMuscleGroups! }
-      : parsed.data.mode === "custom"
-        ? { mode: "custom", customExerciseKeys: parsed.data.customExerciseKeys! }
-        : { mode: "default" };
-
   try {
-    const { detail, introNarration } = await getOrCreateWorkoutSession(member.id, booking.id, booking.resource_id, member.name, choice);
-    return NextResponse.json({ status: "ok", session: detail, introNarration });
+    const excludedExerciseKeys = await getExcludedExerciseKeysForBooking(member.id, booking.resource_id);
+    return NextResponse.json({ status: "ok", excludedExerciseKeys });
   } catch (error) {
-    if ((error as Error).message === "coach_profile_missing") {
-      return NextResponse.json({ status: "error", message: "coach_profile_missing" }, { status: 409 });
-    }
-    if ((error as Error).message === "no_eligible_exercises") {
-      return NextResponse.json({ status: "error", message: "no_eligible_exercises" }, { status: 422 });
-    }
-    console.error("[workout-generate] failed", { error: (error as Error).message });
+    console.error("[workout-eligible-exercises] failed", { error: (error as Error).message });
     return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });
   }
 }

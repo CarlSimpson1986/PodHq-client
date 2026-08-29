@@ -9,10 +9,12 @@ import {
   blockPhaseIndex,
   generateWorkoutTemplateSet,
   instantiateTemplate,
+  pickFocusExercises,
   type GeneratedExercise,
+  type TemplateExercisePick,
 } from "@/lib/coach/generate-workout";
 import { getTemplateSet, createTemplateSet, countSessionsForTemplates } from "@/lib/coach/workout-templates";
-import { EXERCISE_CATALOG } from "@/lib/coach/exercise-catalog";
+import { EXERCISE_CATALOG, type MuscleGroup } from "@/lib/coach/exercise-catalog";
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { getActiveBlock } from "@/lib/coach/training-block-state";
@@ -96,6 +98,29 @@ async function getResourceEquipment(resourceId: number): Promise<EquipmentType[]
 function combineExcludedKeys(injuries: string | null, availableEquipment: EquipmentType[]): string[] {
   return [...new Set([...getInjuryExcludedKeys(injuries), ...getEquipmentExcludedKeys(availableEquipment)])];
 }
+
+// Stage 3 (2026-08-29) — drives the pre-generation "build your own"
+// picker screen, which needs to know what's eligible *before* a session
+// exists (getOrCreateWorkoutSession's own excludedExerciseKeys only ever
+// gets computed as part of generating/loading one). No coach-profile-missing
+// error here — an absent profile just means no injury exclusion data,
+// same graceful-degradation the existing-session path in
+// getOrCreateWorkoutSession already takes.
+export async function getExcludedExerciseKeysForBooking(memberId: number, resourceId: number): Promise<string[]> {
+  const profile = await getCoachProfile(memberId);
+  const availableEquipment = await getResourceEquipment(resourceId);
+  return combineExcludedKeys(profile?.injuries ?? null, availableEquipment);
+}
+
+// What the member chose on the pre-generation "choose" screen
+// (workout-view.tsx) — "default" is the existing A/B/C-or-goal-based
+// behaviour, byte-identical to before this existed. Both alternatives
+// leave template_id null (see getOrCreateWorkoutSession below) so an
+// off-plan day never consumes or skips the member's A/B/C rotation slot.
+export type WorkoutChoice =
+  | { mode: "default" }
+  | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
+  | { mode: "custom"; customExerciseKeys: string[] };
 
 // A session the member already confirmed a recovery adjustment on must
 // never show the banner again or be re-discountable — without this,
@@ -195,7 +220,8 @@ export async function getOrCreateWorkoutSession(
   memberId: number,
   bookingId: number,
   resourceId: number,
-  memberName: string
+  memberName: string,
+  choice: WorkoutChoice = { mode: "default" }
 ): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
   const admin = createAdminClient();
   const availableEquipment = await getResourceEquipment(resourceId);
@@ -226,8 +252,41 @@ export async function getOrCreateWorkoutSession(
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
-  const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment);
-  const plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment });
+
+  // Stage 3 (2026-08-29) — "focus" and "custom" are member overrides for
+  // this one session only (fresh choice every time, no remembered
+  // preference — Carl's call). Both leave templateId null below, same as
+  // the existing default-mode fallback already did, so an off-plan day
+  // never consumes or skips the member's A/B/C rotation slot.
+  let plan: GeneratedExercise[];
+  let templateId: number | null = null;
+
+  if (choice.mode === "focus") {
+    const picks = pickFocusExercises(profile, availableEquipment, choice.focusMuscleGroups);
+    plan = instantiateTemplate(picks, profile, history, activeBlock);
+    if (plan.length === 0) throw new Error("no_eligible_exercises");
+  } else if (choice.mode === "custom") {
+    // Never trust the client's list wholesale — re-validated against the
+    // live catalog and the same injury/equipment exclusions
+    // getExcludedExerciseKeysForBooking offered the picker, same posture
+    // swapExercise already takes for a single-exercise swap. An
+    // invalid/excluded/duplicate key is silently dropped rather than
+    // erroring the whole session, since the picker's own candidate list
+    // should already prevent this in the honest case.
+    const excludedKeys = combineExcludedKeys(profile.injuries, availableEquipment);
+    const picks: TemplateExercisePick[] = [];
+    for (const key of choice.customExerciseKeys) {
+      const entry = EXERCISE_CATALOG.find((e) => e.key === key);
+      if (!entry || excludedKeys.includes(key) || picks.some((p) => p.key === key)) continue;
+      picks.push({ key: entry.key, name: entry.name, muscleGroup: entry.muscleGroup });
+    }
+    plan = instantiateTemplate(picks, profile, history, activeBlock);
+    if (plan.length === 0) throw new Error("no_eligible_exercises");
+  } else {
+    const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment);
+    plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment });
+    templateId = templated?.templateId ?? null;
+  }
 
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
@@ -236,7 +295,7 @@ export async function getOrCreateWorkoutSession(
       booking_id: bookingId,
       resource_id: resourceId,
       status: "generated",
-      template_id: templated?.templateId ?? null,
+      template_id: templateId,
     })
     .select("id")
     .single();

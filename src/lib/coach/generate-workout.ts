@@ -293,6 +293,44 @@ export function generateWorkoutTemplateSet(input: {
   });
 }
 
+// Stage 3 (2026-08-29) — "focus day" selection, one of two member-chosen
+// alternatives to the default A/B/C rotation above (the other,
+// build-your-own, needs no selection function at all: workout-session.ts
+// builds its TemplateExercisePick[] straight from the member's own picks).
+// Only injury/equipment exclusions apply, same as generateWorkoutTemplateSet
+// — no lastSession rotation (this is a one-off choice, not a repeating
+// template) and no Strength-block compound preference (same reasoning as
+// that function's own comment).
+const FOCUS_EXERCISE_MAX = 6;
+
+// Picks up to FOCUS_EXERCISE_MAX exercises from the member's chosen
+// muscle group(s), round-robining across groups (rather than exhausting
+// the first group before touching the second) so a 2-group focus day
+// balances between them. Selection only — instantiateTemplate below turns
+// the result into a live weight/reps plan, same as every other selection
+// function in this file.
+export function pickFocusExercises(
+  profile: CoachProfile,
+  availableEquipment: EquipmentType[] | undefined,
+  muscleGroups: MuscleGroup[]
+): TemplateExercisePick[] {
+  const excludedKeys = new Set([...getInjuryExcludedKeys(profile.injuries), ...getEquipmentExcludedKeys(availableEquipment)]);
+  const byGroup = muscleGroups.map((group) => EXERCISE_CATALOG.filter((e) => e.muscleGroup === group && !excludedKeys.has(e.key)));
+
+  const picked: CatalogExercise[] = [];
+  for (let round = 0; picked.length < FOCUS_EXERCISE_MAX; round++) {
+    const before = picked.length;
+    for (const group of byGroup) {
+      if (picked.length >= FOCUS_EXERCISE_MAX) break;
+      const candidate = group[round];
+      if (candidate) picked.push(candidate);
+    }
+    if (picked.length === before) break; // every chosen group's candidates exhausted
+  }
+
+  return picked.map((e) => ({ key: e.key, name: e.name, muscleGroup: e.muscleGroup }));
+}
+
 // Turns a chosen template's fixed exercise list into a live plan —
 // weight and reps are computed fresh every time a template is used,
 // exactly the way generateWorkout() always has, so RPE-driven

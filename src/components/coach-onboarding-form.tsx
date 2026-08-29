@@ -2,7 +2,16 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { GOALS, EXPERIENCE_LEVELS, FOOD_PREFERENCES, type Goal, type ExperienceLevel, type FoodPreference } from "@/lib/coach/types";
+import {
+  GOALS,
+  EXPERIENCE_LEVELS,
+  FOOD_PREFERENCES,
+  DAILY_ACTIVITY_LEVELS,
+  type Goal,
+  type ExperienceLevel,
+  type FoodPreference,
+  type DailyActivityLevel,
+} from "@/lib/coach/types";
 
 const GOAL_LABELS: Record<Goal, string> = {
   weight_loss: "Lose weight",
@@ -26,7 +35,20 @@ const FOOD_PREFERENCE_LABELS: Record<FoodPreference, string> = {
   other: "Other",
 };
 
-const TOTAL_STEPS = 6;
+// Deliberately worded around occupation/daily life only, with no mention
+// of exercise — structured pod training is a separate question
+// (sessionsPerWeek, step 4) and gets its own additive calorie estimate
+// (nutrition-targets.ts's RESISTANCE_TRAINING_MET), so blending exercise
+// language in here would risk a member double-counting it themselves.
+const DAILY_ACTIVITY_LABELS: Record<DailyActivityLevel, { title: string; subtitle: string }> = {
+  sedentary: { title: "Sedentary", subtitle: "Desk job, mostly sitting" },
+  lightly_active: { title: "Lightly active", subtitle: "On your feet sometimes, e.g. retail or teaching" },
+  moderately_active: { title: "Moderately active", subtitle: "On your feet most of the day" },
+  very_active: { title: "Very active", subtitle: "Physically demanding job, e.g. trade or warehouse work" },
+  extra_active: { title: "Extra active", subtitle: "Heavy manual labour, e.g. construction" },
+};
+
+const TOTAL_STEPS = 7;
 
 const inputClass =
   "w-full rounded-lg border border-card-light-border bg-white px-4 py-3 text-base text-card-light-foreground placeholder:text-card-light-muted focus:border-card-light-foreground focus:outline-none";
@@ -44,6 +66,7 @@ interface FormState {
   experienceLevel: ExperienceLevel | null;
   injuries: string;
   sessionsPerWeek: number | null;
+  dailyActivityLevel: DailyActivityLevel | null;
   weightKg: string;
   heightCm: string;
   age: string;
@@ -57,6 +80,7 @@ const INITIAL_STATE: FormState = {
   experienceLevel: null,
   injuries: "",
   sessionsPerWeek: null,
+  dailyActivityLevel: null,
   weightKg: "",
   heightCm: "",
   age: "",
@@ -81,8 +105,9 @@ export function CoachOnboardingForm() {
     (step === 2 && form.experienceLevel !== null) ||
     step === 3 ||
     (step === 4 && form.sessionsPerWeek !== null) ||
-    (step === 5 && form.weightKg !== "" && form.heightCm !== "" && form.age !== "") ||
-    step === 6;
+    (step === 5 && form.dailyActivityLevel !== null) ||
+    (step === 6 && form.weightKg !== "" && form.heightCm !== "" && form.age !== "") ||
+    step === 7;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -97,6 +122,7 @@ export function CoachOnboardingForm() {
           experienceLevel: form.experienceLevel,
           injuries: form.injuries,
           sessionsPerWeek: form.sessionsPerWeek,
+          dailyActivityLevel: form.dailyActivityLevel,
           weightKg: Number(form.weightKg),
           heightCm: Number(form.heightCm),
           age: Number(form.age),
@@ -190,6 +216,26 @@ export function CoachOnboardingForm() {
       )}
 
       {step === 5 && (
+        <fieldset className="space-y-5">
+          <legend className="mb-1.5 block text-base font-semibold">What&apos;s your day-to-day like?</legend>
+          <p className="-mt-3 text-xs text-card-light-muted">Outside your pod sessions — your job and general daily activity.</p>
+          <div className="space-y-2">
+            {DAILY_ACTIVITY_LEVELS.map((level) => (
+              <button
+                key={level}
+                type="button"
+                onClick={() => update("dailyActivityLevel", level)}
+                className={optionClass(form.dailyActivityLevel === level)}
+              >
+                <span className="block font-semibold">{DAILY_ACTIVITY_LABELS[level].title}</span>
+                <span className="block text-xs opacity-80">{DAILY_ACTIVITY_LABELS[level].subtitle}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {step === 6 && (
         <div className="space-y-5">
           <p className="text-base font-semibold">Your body stats</p>
           <p className="-mt-3 text-xs text-card-light-muted">
@@ -216,7 +262,7 @@ export function CoachOnboardingForm() {
         </div>
       )}
 
-      {step === 6 && (
+      {step === 7 && (
         <div className="space-y-5">
           <p className="text-base font-semibold">A bit about your diet</p>
           <p className="-mt-3 text-xs text-card-light-muted">Optional — for when nutrition guidance is available.</p>

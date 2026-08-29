@@ -45,6 +45,7 @@ export default async function CoachProfilePage() {
               experienceLevel: coachProfile.experience_level,
               injuries: coachProfile.injuries ?? "",
               sessionsPerWeek: coachProfile.sessions_per_week,
+              dailyActivityLevel: coachProfile.daily_activity_level,
               weightKg: coachProfile.weight_kg?.toString() ?? "",
               heightCm: coachProfile.height_cm?.toString() ?? "",
               age: coachProfile.age?.toString() ?? "",
