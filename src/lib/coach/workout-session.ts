@@ -25,7 +25,15 @@ import { getRecoverySignal, type RecoverySignal } from "@/lib/coach/recovery-sig
 export interface WorkoutSet {
   id: number;
   setNumber: number;
-  repsTarget: number;
+  // Exactly one of these two is ever set — every non-circuit set still
+  // gets repsTarget the same as always; durationSeconds is the circuit-
+  // format alternative (Stage 2, 2026-08-29): a time-based movement (e.g.
+  // a 30s plank hold within an AMRAP round) prescribed by duration
+  // instead of a rep count. reps_target's DB NOT NULL was dropped for
+  // this — a duration-based set genuinely has no rep count, same "blank,
+  // not a guessed placeholder" reasoning as weightTargetKg below.
+  repsTarget: number | null;
+  durationSeconds: number | null;
   // null the first time a member does this exercise — see
   // generate-workout.ts's GeneratedExercise for the full reasoning.
   weightTargetKg: number | null;
@@ -48,6 +56,14 @@ export interface WorkoutExercise {
   sets: WorkoutSet[];
 }
 
+// AMRAP fields (Stage 2, 2026-08-29) — timeCapSeconds is the prescription
+// (set at generation), roundsCompleted/partialRoundExerciseIndex/
+// partialRoundReps are the member's self-reported tally, null until
+// completeAmrapSession writes them. format defaults to "straight_sets" at
+// the DB level, so every pre-existing session (and every default/focus/
+// straight-sets-custom one from here on) reads exactly that, unchanged.
+export type WorkoutFormat = "straight_sets" | "amrap";
+
 // What loadSessionDetail alone can produce — it has no coach-profile
 // access, so it can't compute excludedExerciseKeys itself. Callers that
 // have (or can cheaply get) the member's profile attach that field on
@@ -55,6 +71,11 @@ export interface WorkoutExercise {
 interface SessionExerciseDetail {
   sessionId: number;
   status: string;
+  format: WorkoutFormat;
+  timeCapSeconds: number | null;
+  roundsCompleted: number | null;
+  partialRoundExerciseIndex: number | null;
+  partialRoundReps: number | null;
   exercises: WorkoutExercise[];
 }
 
@@ -127,10 +148,24 @@ export async function getExcludedExerciseKeysForBooking(memberId: number, resour
 // only. A key the member left at the builder's default (or that doesn't
 // appear in the map at all) gets rest_seconds: null on its workout_exercises
 // row, same as every non-custom exercise — no rest-timer screen shown.
+// custom-amrap (Stage 2, 2026-08-29) — a genuinely different shape from
+// every other mode: no RPE-driven weight/reps computation at all (the
+// block/phase engine has nothing to say about a once-off circuit), so the
+// member specifies each exercise's own prescription directly. Exactly one
+// of reps/durationSeconds per exercise, validated in the route
+// (generateWorkoutSchema) and re-checked in generateCircuitSession below.
+export interface AmrapExercisePick {
+  key: string;
+  reps?: number;
+  durationSeconds?: number;
+  weightKg?: number;
+}
+
 export type WorkoutChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
-  | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> };
+  | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> }
+  | { mode: "custom-amrap"; timeCapSeconds: number; exercises: AmrapExercisePick[] };
 
 // A session the member already confirmed a recovery adjustment on must
 // never show the banner again or be re-discountable — without this,
@@ -350,6 +385,14 @@ async function generateAndPersistSession(
 ): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
   const admin = createAdminClient();
 
+  // AMRAP is a genuinely different shape from every other mode below — no
+  // RPE-driven weight/reps computation at all (the block/phase engine has
+  // nothing to say about a once-off member-authored circuit) — so it's a
+  // fully separate branch rather than another `if` alongside focus/custom.
+  if (choice.mode === "custom-amrap") {
+    return generateCircuitSession(admin, memberId, bookingId, resourceId, choice, availableEquipment);
+  }
+
   const profile = await getCoachProfile(memberId);
   if (!profile) {
     throw new Error("coach_profile_missing");
@@ -461,6 +504,106 @@ async function generateAndPersistSession(
   };
 }
 
+// AMRAP generation (Stage 2, 2026-08-29) — no coach-profile-missing
+// hard-block the way every other mode has: there's no weight/reps
+// computation needing profile data, only injury filtering, and a missing
+// profile there just means no exclusion data (same graceful-degradation
+// getExcludedExerciseKeysForBooking already uses). No intro narration
+// either — narrateSessionIntro expects a GeneratedExercise[] shaped by
+// the RPE-driven engine, which a member-authored circuit never goes
+// through; skipped rather than reshaping this into that engine's input.
+async function generateCircuitSession(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: number,
+  bookingId: number,
+  resourceId: number,
+  choice: Extract<WorkoutChoice, { mode: "custom-amrap" }>,
+  availableEquipment: EquipmentType[]
+): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
+  const profile = await getCoachProfile(memberId);
+  const excludedKeys = combineExcludedKeys(profile?.injuries ?? null, availableEquipment);
+
+  // Never trust the client's list wholesale, same posture as every other
+  // mode — re-validated against the live catalog and injury/equipment
+  // exclusions. An invalid/excluded/duplicate key, or one missing exactly
+  // one of reps/durationSeconds, is dropped rather than guessed at.
+  const picks: { key: string; name: string; muscleGroup: string; reps: number | null; durationSeconds: number | null; weightKg: number | null }[] = [];
+  for (const ex of choice.exercises) {
+    const entry = EXERCISE_CATALOG.find((e) => e.key === ex.key);
+    if (!entry || excludedKeys.includes(ex.key) || picks.some((p) => p.key === ex.key)) continue;
+    const hasReps = typeof ex.reps === "number" && ex.reps > 0;
+    const hasDuration = typeof ex.durationSeconds === "number" && ex.durationSeconds > 0;
+    if (hasReps === hasDuration) continue; // exactly one required, not both, not neither
+    picks.push({
+      key: entry.key,
+      name: entry.name,
+      muscleGroup: entry.muscleGroup,
+      reps: hasReps ? ex.reps! : null,
+      durationSeconds: hasDuration ? ex.durationSeconds! : null,
+      weightKg: typeof ex.weightKg === "number" && ex.weightKg > 0 ? ex.weightKg : null,
+    });
+  }
+  if (picks.length === 0) throw new Error("no_eligible_exercises");
+
+  const { data: session, error: sessionError } = await admin
+    .from("workout_sessions")
+    .insert({
+      member_id: memberId,
+      booking_id: bookingId,
+      resource_id: resourceId,
+      status: "generated",
+      format: "amrap",
+      time_cap_seconds: choice.timeCapSeconds,
+    })
+    .select("id")
+    .single();
+
+  if (sessionError) {
+    // Same concurrent-request race recovery as generateAndPersistSession's
+    // straight-sets insert above — the unique index on booking_id is the
+    // real guard.
+    if (sessionError.code === "23505") {
+      const { data: winner, error: winnerError } = await admin.from("workout_sessions").select("id").eq("booking_id", bookingId).single();
+      if (winnerError) throw new Error(winnerError.message);
+      const detail = await loadSessionDetail(winner.id);
+      return {
+        detail: { ...detail, excludedExerciseKeys: excludedKeys, recoveryAdvice: { kind: "insufficient_data" } },
+        introNarration: null,
+      };
+    }
+    throw new Error(sessionError.message);
+  }
+
+  for (let i = 0; i < picks.length; i++) {
+    const pick = picks[i];
+    const { data: exerciseRow, error: exerciseError } = await admin
+      .from("workout_exercises")
+      .insert({ session_id: session.id, exercise_key: pick.key, name: pick.name, muscle_group: pick.muscleGroup, sort_order: i })
+      .select("id")
+      .single();
+    if (exerciseError) throw new Error(exerciseError.message);
+
+    // One workout_sets row per exercise (set_number 1) — a circuit
+    // exercise has no discrete "sets" concept the way straight sets does;
+    // this row is purely the round's prescription for that movement,
+    // never logged/completed per-set (see completeAmrapSession).
+    const { error: setError } = await admin.from("workout_sets").insert({
+      exercise_id: exerciseRow.id,
+      set_number: 1,
+      reps_target: pick.reps,
+      duration_seconds: pick.durationSeconds,
+      weight_target_kg: pick.weightKg,
+    });
+    if (setError) throw new Error(setError.message);
+  }
+
+  const detail = await loadSessionDetail(session.id);
+  return {
+    detail: { ...detail, excludedExerciseKeys: excludedKeys, recoveryAdvice: { kind: "insufficient_data" } },
+    introNarration: null,
+  };
+}
+
 async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise[], restByKey?: Record<string, number>): Promise<void> {
   const admin = createAdminClient();
 
@@ -497,7 +640,11 @@ async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise
 export async function loadSessionDetail(sessionId: number): Promise<SessionExerciseDetail> {
   const admin = createAdminClient();
 
-  const { data: session, error: sessionError } = await admin.from("workout_sessions").select("id, status").eq("id", sessionId).single();
+  const { data: session, error: sessionError } = await admin
+    .from("workout_sessions")
+    .select("id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps")
+    .eq("id", sessionId)
+    .single();
   if (sessionError) throw new Error(sessionError.message);
 
   const { data: exercises, error: exercisesError } = await admin
@@ -517,6 +664,11 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
   return {
     sessionId: session.id,
     status: session.status,
+    format: session.format as WorkoutFormat,
+    timeCapSeconds: session.time_cap_seconds,
+    roundsCompleted: session.rounds_completed,
+    partialRoundExerciseIndex: session.partial_round_exercise_index,
+    partialRoundReps: session.partial_round_reps,
     exercises: (exercises ?? []).map((e) => ({
       id: e.id,
       key: e.exercise_key,
@@ -529,6 +681,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
           id: s.id,
           setNumber: s.set_number,
           repsTarget: s.reps_target,
+          durationSeconds: s.duration_seconds,
           weightTargetKg: s.weight_target_kg,
           repsActual: s.reps_actual,
           weightActualKg: s.weight_actual_kg,
@@ -734,6 +887,34 @@ export interface WeightChangePreview {
   oldWeightKg: number;
   newWeightKg: number;
   lastRpe: number | null;
+}
+
+// AMRAP completion (Stage 2, 2026-08-29) — a circuit format has no
+// discrete logged sets to derive volume/changes from the way
+// completeSession below does, so this is a separate, much simpler
+// function: just records the member's self-reported final tally (same
+// trust posture as RPE/weight everywhere else in this app — no
+// rep-counting sensors) and marks the session done. partialRoundReps
+// pairs with partialRoundExerciseIndex — both null together means the
+// member finished exactly on a round boundary, nothing partial to record.
+export interface AmrapTally {
+  roundsCompleted: number;
+  partialRoundExerciseIndex: number | null;
+  partialRoundReps: number | null;
+}
+
+export async function completeAmrapSession(sessionId: number, tally: AmrapTally): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("workout_sessions")
+    .update({
+      status: "completed",
+      rounds_completed: tally.roundsCompleted,
+      partial_round_exercise_index: tally.partialRoundExerciseIndex,
+      partial_round_reps: tally.partialRoundReps,
+    })
+    .eq("id", sessionId);
+  if (error) throw new Error(error.message);
 }
 
 // Marks a session complete and previews the NEXT session's weights right
