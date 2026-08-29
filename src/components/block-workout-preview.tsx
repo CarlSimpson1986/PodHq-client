@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { getYoutubeVideoId, getYoutubeEmbedTiming } from "@/lib/coach/exercise-catalog";
+import { getStrengthFocusLabel } from "@/lib/coach/generate-workout";
 import type { StoredTemplate } from "@/lib/coach/workout-templates";
+import type { BlockType } from "@/lib/coach/types";
 import { ChevronRightIcon } from "@/components/icons";
 
 // Tap-to-expand technique video per exercise (2026-08-29, Carl's call) —
@@ -49,14 +51,25 @@ function ExerciseRow({ ex }: { ex: StoredTemplate["exercises"][number] }) {
 // Each Workout letter is its own tap-to-expand card (2026-08-29, Carl's
 // call) — "today's pick" opens by default since that's the one a member
 // actually cares about right now, the other two start collapsed.
-function WorkoutCard({ template, repsTarget, isNext }: { template: StoredTemplate; repsTarget: number; isNext: boolean }) {
+function WorkoutCard({
+  template,
+  repsTarget,
+  isNext,
+  blockType,
+}: {
+  template: StoredTemplate;
+  repsTarget: number;
+  isNext: boolean;
+  blockType: BlockType;
+}) {
   const [expanded, setExpanded] = useState(isNext);
+  const focusLabel = getStrengthFocusLabel(template.letter, blockType);
 
   return (
     <div className="card-light overflow-hidden">
       <button type="button" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded} className="flex w-full items-center justify-between gap-3 p-4 text-left">
         <span className="flex items-center gap-2 text-sm font-semibold">
-          Workout {template.letter} · {template.exercises.length} exercises · {repsTarget} reps
+          {focusLabel ?? `Workout ${template.letter}`} · {template.exercises.length} exercises · {repsTarget} reps
           {isNext && <span className="rounded-full bg-card-light-foreground px-2 py-0.5 text-xs font-semibold text-white">Today&apos;s pick</span>}
         </span>
         <ChevronRightIcon className={`h-4 w-4 flex-none text-card-light-muted transition-transform ${expanded ? "rotate-90" : ""}`} />
@@ -76,15 +89,17 @@ export function BlockWorkoutPreview({
   templates,
   repsTarget,
   nextLetter,
+  blockType,
 }: {
   templates: StoredTemplate[];
   repsTarget: number;
   nextLetter: StoredTemplate["letter"] | null;
+  blockType: BlockType;
 }) {
   return (
     <div className="space-y-3">
       {templates.map((t) => (
-        <WorkoutCard key={t.id} template={t} repsTarget={repsTarget} isNext={t.letter === nextLetter} />
+        <WorkoutCard key={t.id} template={t} repsTarget={repsTarget} isNext={t.letter === nextLetter} blockType={blockType} />
       ))}
     </div>
   );

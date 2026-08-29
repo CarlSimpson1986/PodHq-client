@@ -276,6 +276,79 @@ const TEMPLATE_MUSCLE_GROUP_PRIORITY: Record<TemplateLetter, MuscleGroup[]> = {
   C: ["legs", "chest", "shoulders", "core", "back", "arms", "legs", "chest"],
 };
 
+// Squat/bench/deadlift split for Strength blocks specifically (2026-08-29,
+// Carl's call) — replaces the muscle-group rotation above for Strength
+// only; Hypertrophy/Deload are untouched. Adapted from Sebastian Oreb's
+// real, published coaching approach (strengthsystem.com, Melbourne
+// Personal Trainers' Wolf's Den interview, Men's Health AU — researched
+// 2026-08-29, not invented): one main compound lift per session,
+// accessories chosen for *structural balance* around that lift's actual
+// weak points (posterior chain / unilateral stability for squat; upper
+// back / external rotators / triceps for bench; posterior chain / lats /
+// bracing for deadlift) rather than generic per-muscle-group volume.
+// Deliberately does NOT follow his real competition-phase intensity
+// (near-max unsupervised singles/doubles) — this app's existing 3-rep
+// floor (REP_TARGET_BY_BLOCK_PHASE.strength, computeWeightKgForBlock)
+// stays exactly as it was; these are unstaffed pods with no spotter (see
+// generateWorkout's own comment on why strength never goes below 3 reps).
+// Fixed key lists, not muscle-group filters — this is deliberate exercise
+// curation, so an excluded pick is skipped (see selectStrengthFocusPlan
+// below), never swapped for an unrelated same-muscle-group substitute.
+const STRENGTH_FOCUS_PLAN: Record<TemplateLetter, { label: string; keys: string[] }> = {
+  A: {
+    label: "Squat Day",
+    // leg_extension/lying_leg_curl — the gym's 2-in-1 leg extension/curl
+    // machine (Carl, 2026-08-29): direct quad + hamstring isolation,
+    // exactly the "weak point" accessory pairing Oreb's structural-balance
+    // approach calls for around a squat.
+    keys: [
+      "barbell_squat",
+      "leg_extension",
+      "lying_leg_curl",
+      "barbell_hip_thrust",
+      "plank",
+      "barbell_front_squat",
+      "dumbbell_bulgarian_split_squat",
+      "romanian_deadlift",
+    ],
+  },
+  B: {
+    label: "Bench Day",
+    keys: ["barbell_bench_press", "barbell_overhead_press", "barbell_bent_over_row", "cable_face_pull", "tricep_pushdown", "lat_pulldown", "seated_row"],
+  },
+  C: {
+    label: "Deadlift Day",
+    // lying_leg_curl here too — hamstrings are one of the biggest direct
+    // contributors to the deadlift, same 2-in-1 machine.
+    keys: ["barbell_deadlift", "lying_leg_curl", "barbell_bent_over_row", "barbell_hip_thrust", "plank", "lat_pulldown", "romanian_deadlift", "dumbbell_russian_twist"],
+  },
+};
+
+// "Squat Day"/"Bench Day"/"Deadlift Day" for a Strength-block template's
+// letter, null for any other block type — pure lookup, safe to call from
+// client components (no server-only import) so /training's preview and
+// any future workout-screen label can both use it without threading the
+// full plan through props.
+export function getStrengthFocusLabel(letter: TemplateLetter, blockType: BlockType | undefined): string | null {
+  return blockType === "strength" ? STRENGTH_FOCUS_PLAN[letter].label : null;
+}
+
+// Injury/equipment-filtered candidates only (safe) — an excluded key
+// (main lift or accessory) is skipped outright rather than backfilled
+// with something else, same "never guess, degrade honestly" posture as
+// the muscle-group path's own zero-candidates case. Capped at
+// exerciseCount same as every other selection path.
+function selectStrengthFocusExercises(letter: TemplateLetter, safe: CatalogExercise[], exerciseCount: number): CatalogExercise[] {
+  const bySafeKey = new Map(safe.map((e) => [e.key, e]));
+  const picked: CatalogExercise[] = [];
+  for (const key of STRENGTH_FOCUS_PLAN[letter].keys) {
+    if (picked.length >= exerciseCount) break;
+    const exercise = bySafeKey.get(key);
+    if (exercise) picked.push(exercise);
+  }
+  return picked;
+}
+
 export interface TemplateExercisePick {
   key: string;
   name: string;
@@ -304,8 +377,16 @@ export function generateWorkoutTemplateSet(input: {
   const { profile, availableEquipment, activeBlock, now = new Date() } = input;
   const excludedKeys = new Set([...getInjuryExcludedKeys(profile.injuries), ...getEquipmentExcludedKeys(availableEquipment)]);
   const safe = EXERCISE_CATALOG.filter((exercise) => !excludedKeys.has(exercise.key));
-  const usedKeys = new Set<string>();
   const exerciseCount = computeExerciseCount(activeBlock, profile.goal, now);
+
+  if (activeBlock?.blockType === "strength") {
+    return TEMPLATE_LETTERS.map((letter) => {
+      const exercises = selectStrengthFocusExercises(letter, safe, exerciseCount);
+      return { letter, exercises: exercises.map((e) => ({ key: e.key, name: e.name, muscleGroup: e.muscleGroup })) };
+    });
+  }
+
+  const usedKeys = new Set<string>();
 
   return TEMPLATE_LETTERS.map((letter) => {
     const groups = TEMPLATE_MUSCLE_GROUP_PRIORITY[letter].slice(0, Math.min(exerciseCount, TEMPLATE_MUSCLE_GROUP_PRIORITY[letter].length));
