@@ -48,6 +48,15 @@ export interface CatalogExercise {
   // compound lifts during a Strength training block (see
   // generate-workout.ts's selectExercises).
   isCompound: boolean;
+  // True for real HIIT/CrossFit-style conditioning movements — researched
+  // against actual published HIIT/CrossFit programming (2026-08-29, not
+  // guessed), then cross-checked against what this app's pods actually
+  // have (bodyweight + kettlebells + dumbbells; no rower, bike, pull-up
+  // bar, plyo box, or wall-ball target). Drives the "Build your own"
+  // builder's Weights/Cardio split (workout-view.tsx) — Cardio only ever
+  // offers exercises with this flag true, Weights only ever offers the
+  // rest. A given exercise is one or the other, never both.
+  isConditioning: boolean;
   // Which pod_resources.equipment category this exercise needs — null
   // for bodyweight-only movements (always available regardless of a
   // resource's configured equipment). A hard exclusion in
@@ -92,6 +101,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "CM4V8uX0bnk",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -103,6 +113,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "wkAahHGkpXA",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -114,6 +125,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "wpMyPMjGHvI",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -125,6 +137,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "6zhBExMcpyc",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -134,6 +147,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back"],
     safetyTip: "Keep your back straight and squeeze your shoulder blades together. Don't round forward at the start.",
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -145,6 +159,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "gDZAbauWnbk",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -156,6 +171,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "Ejp6Y6v7b9k",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -167,6 +183,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "XSFhpU04AMg",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -176,6 +193,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["knee"],
     safetyTip: "Move through a controlled range — avoid snapping your knees straight at the top.",
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "leg_extension_curl_machine",
   },
   {
@@ -185,6 +203,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["knee"],
     safetyTip: "Keep your hips pressed into the pad. Avoid using momentum to swing the weight up.",
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "leg_extension_curl_machine",
   },
   {
@@ -194,6 +213,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back"],
     safetyTip: "Keep your body in a straight line from head to heels — don't let your hips sag or pike up.",
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: null,
   },
 
@@ -220,6 +240,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "vnX5WfQE3b0",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -231,6 +252,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "jpQK7coF8BE",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -240,6 +262,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders"],
     safetyTip: "Raise the dumbbells out to shoulder height with a slight bend in your elbows. Avoid swinging or using momentum — control the weight down.",
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -251,6 +274,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "n6M82WrD3dA",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -262,6 +286,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "2AZyh9BDOjk",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -271,6 +296,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back"],
     safetyTip: "Sit with your knees bent and lean back slightly, keeping your back straight. Rotate your torso side to side under control — don't just swing your arms.",
     isCompound: false,
+    isConditioning: true,
     requiredEquipment: "dumbbells",
   },
   {
@@ -282,6 +308,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "KUlUyT3uE0M",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
 
@@ -300,6 +327,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "NSPjk6AyMPo",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -311,6 +339,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "NJTcg-YM-FM",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -320,6 +349,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["knee", "back"],
     safetyTip: "Take controlled steps and keep your front knee tracking over your foot, not caving inward. Keep your torso upright — don't lean forward into the step.",
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -331,6 +361,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "3LdRSp4zAB8",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -340,6 +371,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["knee", "back"],
     safetyTip: "Step fully onto the platform with your whole foot before standing up. Control the descent — don't let your trailing leg slam down or push off it to help.",
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -351,6 +383,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "Fax4AiBrdO4",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -362,6 +395,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "p87DMU7_htI",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -371,6 +405,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back", "shoulders"],
     safetyTip: "Support yourself with one hand and knee on a bench, keeping your back flat. Pull the dumbbell towards your hip — don't twist your torso to help lift it.",
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -380,6 +415,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders"],
     safetyTip: "Lift your shoulders straight up towards your ears, not rolling them forward or back. Keep your arms straight and avoid using momentum to jerk the weight up.",
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -391,6 +427,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "rbSdBZemHIY",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -400,6 +437,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders", "back"],
     safetyTip: "Brace your core and keep the bar path close to your face as you press. Avoid arching your lower back to get the weight up — press with your shoulders, not your spine.",
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -411,6 +449,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "sSsfuXTYwMQ",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -422,6 +461,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "M00nnV6YnCY",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -431,6 +471,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["shoulders"],
     safetyTip: "Start with palms facing you and rotate outward as you press overhead. Keep the movement smooth and controlled — don't rush the rotation or arch your lower back.",
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -442,6 +483,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "eHs-fow7yEY",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -453,6 +495,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "mxL4lbtE2Q4",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -464,6 +507,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "D01uAVxJZ5M",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -473,6 +517,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     avoidIfInjury: ["back"],
     safetyTip: "Hold the dumbbell at your side and bend directly sideways, not forward or backward. Keep the movement slow and controlled — don't use momentum to swing back up.",
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
 
@@ -498,6 +543,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "leNVSRnKxik",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -509,6 +555,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "jzbrPwcOn_w",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -520,6 +567,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "S_F8GJ_OryY",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -531,6 +579,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "0ME3jhU7i4Y",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -542,6 +591,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "gtCA_B4pSGU",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -553,6 +603,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "6_3YdFnDlWs",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -564,6 +615,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "fsRokxfWnTc",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -575,6 +627,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "RNYHPu68yUA",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -586,6 +639,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "ekP8JdVtiRk",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -597,6 +651,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "wtINfcarEAk",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -608,6 +663,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "UxDRKelKFhY",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -619,6 +675,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "LLB37Ooo148",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -630,6 +687,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "o93yodKr1H0",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -641,6 +699,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "J_02FP1z8Eg",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -652,6 +711,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "hzo9Rh1jSyI",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -663,6 +723,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "loIjwi8IheU",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -674,6 +735,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "bLyFixmbKcs",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -685,6 +747,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "yx0nWoRXS_I",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -696,6 +759,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "tP-7grkgSzo",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -707,6 +771,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "KQ9J8tLNRTk",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -718,6 +783,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "m5euERW07gI",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -729,6 +795,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "_m6r8WGutJY",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -740,6 +807,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "45vy63uj61g",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
   {
@@ -751,6 +819,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "DTQFpX2bgWM",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "dumbbells",
   },
 
@@ -771,6 +840,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "Y3kWhb6ZMZ4",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -782,6 +852,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "2rY1Y9j_BiE",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -793,6 +864,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "iafLfF5730s",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -804,6 +876,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "8NRhSq49430",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -815,6 +888,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "5pagyDq-QRc",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -826,6 +900,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "TLuODhezsg0",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
   {
@@ -837,6 +912,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "pY-8V89G1EI",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "barbell_rack",
   },
 
@@ -860,6 +936,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "_HrQpdTi2kY",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -871,6 +948,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "pEOQsendlK4",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -882,6 +960,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "KVgjqo0p5mY",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -893,6 +972,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "yuIiei-D3ks",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -904,6 +984,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "5AjzNU1SK5A",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -915,6 +996,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "GxTm0x07Gbo",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -926,6 +1008,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "kge1ZiEiUeE",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -937,6 +1020,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "KSH6IEiKWjE",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -948,6 +1032,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "l8lgVBjwD08",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -959,6 +1044,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "79EoDDehUoA",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -970,6 +1056,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "cbmmp8UGUVg",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -981,6 +1068,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "YypHtX2qvk0",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -992,6 +1080,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "7IHXXAXEqss",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -1003,6 +1092,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "WKbbDpZo49g",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -1014,6 +1104,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "3zcb_9plUM4",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "cable_machine",
   },
   {
@@ -1025,6 +1116,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "qoxJxTc9FD8",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1036,6 +1128,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "9x_JA84vgnk",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1047,6 +1140,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "PR62CSAHM1Y",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1058,6 +1152,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "zZj4m30r6cE",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1069,6 +1164,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "GTS8rOmIFkA",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1080,6 +1176,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "hVFIG5rnPfY",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1091,6 +1188,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "5tG5bKNbSWo",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1102,6 +1200,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "LwfHkyRpy1s",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1113,6 +1212,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "La5NnrZqJoA",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: false,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1124,6 +1224,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "lFLg0nPSP8k",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: false,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1135,6 +1236,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "wEQHyOaj_dQ",
     youtubeEndSeconds: 10,
     isCompound: false,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1146,6 +1248,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "qzvEYPzcWng",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
   },
   {
@@ -1157,7 +1260,75 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     youtubeVideoId: "qLmx9IM1ZyQ",
     youtubeEndSeconds: 10,
     isCompound: true,
+    isConditioning: true,
     requiredEquipment: "kettlebells",
+  },
+  // Real bodyweight HIIT/CrossFit staples (2026-08-29, Carl's call —
+  // researched against actual published CrossFit/HIIT programming, not
+  // guessed) — the "Cardio" half of "Build your own"'s Weights/Cardio
+  // split. No requiredEquipment: every pod has these regardless of
+  // configured kit. No youtubeVideoId — outside the four Unbroken Fitness
+  // Solutions equipment categories sourced earlier this session; follow
+  // the safety tip until real technique videos are found for these.
+  {
+    key: "burpee",
+    name: "Burpee",
+    muscleGroup: "full_body",
+    avoidIfInjury: ["knee", "wrist", "shoulders"],
+    safetyTip: "Land softly on the push-up and the jump — don't let your hips sag in the plank, and keep landings quiet and controlled rather than jarring.",
+    isCompound: true,
+    isConditioning: true,
+    requiredEquipment: null,
+  },
+  {
+    key: "mountain_climbers",
+    name: "Mountain Climbers",
+    muscleGroup: "core",
+    avoidIfInjury: ["wrist"],
+    safetyTip: "Keep your hips level and core braced — don't let them pike up or sag. Hands stay stacked under your shoulders throughout.",
+    isCompound: true,
+    isConditioning: true,
+    requiredEquipment: null,
+  },
+  {
+    key: "jumping_jacks",
+    name: "Jumping Jacks",
+    muscleGroup: "full_body",
+    avoidIfInjury: ["knee", "ankle"],
+    safetyTip: "Land with soft knees, not flat-footed. Keep a slight bend throughout rather than locking your knees on each landing.",
+    isCompound: true,
+    isConditioning: true,
+    requiredEquipment: null,
+  },
+  {
+    key: "high_knees",
+    name: "High Knees",
+    muscleGroup: "legs",
+    avoidIfInjury: ["knee", "hip"],
+    safetyTip: "Drive from the hip, not just the lower leg, and land midfoot under your body rather than reaching out in front.",
+    isCompound: true,
+    isConditioning: true,
+    requiredEquipment: null,
+  },
+  {
+    key: "jump_squats",
+    name: "Jump Squats",
+    muscleGroup: "legs",
+    avoidIfInjury: ["knee", "back"],
+    safetyTip: "Land in the same squat position you jumped from — knees tracking over toes, not caving in — before the next rep.",
+    isCompound: true,
+    isConditioning: true,
+    requiredEquipment: null,
+  },
+  {
+    key: "plank_jacks",
+    name: "Plank Jacks",
+    muscleGroup: "core",
+    avoidIfInjury: ["wrist", "knee"],
+    safetyTip: "Keep your core braced and hips level as your feet jack in and out — don't let your hips rise up or sag throughout.",
+    isCompound: true,
+    isConditioning: true,
+    requiredEquipment: null,
   },
 ];
 

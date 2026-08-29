@@ -571,10 +571,11 @@ describe("pickFocusExercises — Stage 3 focus-day selection", () => {
   });
 
   it("returns an empty array when the chosen group has zero eligible exercises, rather than falling back to a different group", () => {
-    // Every core catalog exercise's avoidIfInjury includes "back" — a
-    // back-injury exclusion alone empties the core pool entirely,
-    // regardless of equipment.
-    const result = pickFocusExercises(profile({ injuries: "back" }), undefined, ["core"]);
+    // Every core catalog exercise's avoidIfInjury includes "back" or
+    // "wrist" (the two bodyweight HIIT additions, mountain_climbers/
+    // plank_jacks, are wrist-tagged rather than back-tagged) — combining
+    // both empties the core pool entirely, regardless of equipment.
+    const result = pickFocusExercises(profile({ injuries: "back and wrist" }), undefined, ["core"]);
     expect(result).toEqual([]);
   });
 });

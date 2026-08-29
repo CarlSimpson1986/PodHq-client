@@ -14,104 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-42.md`, covering the pilot
-mechanism proof (2026-08-05) through the "Today's Mission on Home"
-session (2026-08-29) — all split out to keep this file within Claude
-Code's ~15,000-character `@`-import limit. Archives aren't always the
-strictly oldest material — the split point is "what's finished and
-stable" as much as "what's oldest" (see each archive's own header note
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-43.md`, covering the pilot
+mechanism proof (2026-08-05) through the Squat/Bench/Deadlift split and
+custom-workout rest timer (2026-08-29) — all split out to keep this file
+within Claude Code's ~15,000-character `@`-import limit. Archives aren't
+always the strictly oldest material — the split point is "what's finished
+and stable" as much as "what's oldest" (see each archive's own header note
 for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
 for full build history, or `git log` on this file for exact split
-points. Active content here starts at "Squat/Bench/Deadlift split..."
-(2026-08-29). If this file grows too large again, split it the same
-way: move the most clearly finished section into `ROADMAP-ARCHIVE-43.md`,
-update this paragraph.
-
-## Squat/Bench/Deadlift split for Strength, custom-workout rest timer (Stage 1 of CrossFit-style formats) — 2026-08-29
-
-**Strength blocks get a real squat/bench/deadlift split**, replacing the
-generic muscle-group A/B/C rotation for Strength specifically (Hypertrophy/
-Deload untouched) — Carl asked whether this matches how Sebastian Oreb
-would actually structure it; researched his real, published coaching
-approach rather than guessing (strengthsystem.com, Melbourne Personal
-Trainers' Wolf's Den interview, Men's Health AU). Confirmed: our existing
-`REP_TARGET_BY_BLOCK_PHASE.strength` ([6, 4, 3] across 3 phases) already
-matches his real base→peak descending-rep shape and ~12-week/3-phase
-cadence — the one deliberate gap is the floor (he goes to 1-2 reps by the
-final phase, we stop at 3, unstaffed-pods-no-spotter reason already
-agreed this session). New `STRENGTH_FOCUS_PLAN` in `generate-workout.ts`:
-Squat/Bench/Deadlift Day, main lift always first, accessories chosen for
-*structural balance* around that lift's actual weak points (his real
-philosophy) rather than generic volume — fixed key lists, not muscle-group
-filters, so an excluded pick is skipped outright, never swapped for
-something unrelated. Carl caught a real gap: the gym's 2-in-1 leg
-extension/curl machine wasn't in the list — added `leg_extension`/
-`lying_leg_curl` to both Squat Day (quad/hamstring weak-point pairing) and
-Deadlift Day (`lying_leg_curl`, direct hamstring contribution). `/training`'s
-preview now shows "Squat Day"/"Bench Day"/"Deadlift Day" instead of
-"Workout A/B/C" for Strength (`getStrengthFocusLabel`, pure lookup, safe
-from a client component). 6 new unit tests (main-lift-first, no duplicate
-exercises even though Romanian Deadlift appears on two days, exclusion
-skips gracefully rather than substituting, Hypertrophy/Deload unaffected,
-label lookup) — live-verified against the playground member (switched
-their test block to Strength via a direct `training_blocks` insert,
-confirmed all three days render correctly with the right main lift and
-accessory order).
-
-**Custom-workout "Your workouts" cards became tap-to-expand** — each
-Workout letter is its own collapsible card (the "today's pick" one opens
-by default) rather than always showing all three expanded, cleaner for
-Strength's now-longer accessory lists too.
-
-**Stage 1 of Carl's CrossFit-style custom-format idea**: eventually wants
-AMRAP ("as many rounds as possible in X minutes") and Rounds-For-Time
-formats for "build your own" workouts, with reps/duration/weight/rest
-configurable per exercise. Scoped in three stages before building anything
-(format picker vs. replacing straight sets; what "rest" actually means for
-a format that's traditionally continuous) — confirmed: straight sets stays
-as a member-pickable format alongside AMRAP/RFT (not built yet, stages 2-3),
-and "rest" only ever applies to straight-sets custom workouts (real
-CrossFit AMRAP/RFT has no prescribed rest, that's the point of the format).
-
-Stage 1 shipped: **member-set rest-between-sets on custom straight-sets
-exercises**, replacing the app's assumed rest values for that one session.
-Migration `0071_workout_exercise_rest.sql` (podHq) — nullable
-`rest_seconds` on `workout_exercises`, null for every default/focus
-exercise and any custom pick left at the builder's default (no behaviour
-change there). `WorkoutChoice`'s custom variant gets an optional
-`customExerciseRests: Record<string, number>`, threaded through
-`generateAndPersistSession`/`changeWorkoutMode`/both API routes/
-`loadSessionDetail`. Builder UI: each selected custom exercise gets an
-inline "Rest between sets" number input (default 90s, 0-600s range).
-Workout-taking UI: a new "resting" phase — countdown from the exercise's
-`restSeconds`, "Skip rest →" to advance early, shows which exercise is
-next. Needed a `useRef`-backed "latest callback" bridge
-(`applyAdvanceRef`) since the rest-timer's `useEffect` has to live in the
-component's early, unconditional hooks block (Rules of Hooks — this file
-has several early returns before `detail`/`exercise` are known), while the
-actual advance logic can only be defined later once those are guaranteed
-non-null.
-
-**Real hydration bug caught, not yet fixed** — a genuine SSR/CSR text
-mismatch on `/training` ("Workout A" server-rendered vs. "Squat Day"
-client-corrected), almost certainly the same stale-cached-JS-after-
-dev-restart problem behind this session's repeated hard-reload
-workaround, just manifesting as a proper hydration error this time
-instead of silently stale content. Self-corrects (React discards and
-re-renders client-side) so nothing's broken, but flagged to Carl — likely
-what he meant by an earlier "hydration issue on local" comment that got
-lost in the conversation before it could be chased down. Suggested Chrome
-DevTools' "Disable cache" (Network tab) as a durable fix for his own
-testing sessions rather than repeated hard-reloads; root cause (why dev
-mode's static chunk URLs don't cache-bust properly across restarts in
-this environment) still unresolved.
-
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (148/148),
-and `npm run build` (respects the `--webpack` pin) all clean throughout.
-Squat/Bench/Deadlift split live-verified end-to-end. Rest-timer UI is
-code-reviewed and build/test-verified only — same playground-member
-0-credits blocker as the earlier "Change today's workout" feature
-prevented a live click-through of the actual workout-taking screen.
+points. Active content here starts at "Stage 2 of custom workouts —
+AMRAP format..." (2026-08-29). If this file grows too large again, split
+it the same way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-44.md`, update this paragraph.
 
 ## Stage 2 of custom workouts — AMRAP format — 2026-08-29
 
@@ -198,3 +112,63 @@ for next time, not an app bug: setting a controlled React input's
 trigger its `onChange` — go through the native `HTMLInputElement`
 value-setter descriptor first, same trick used for React Testing
 Library's `fireEvent`.
+
+
+## "Build your own" split into Weights/Cardio, real HIIT/CrossFit content added — 2026-08-29
+
+Carl's reaction to the AMRAP builder once it was live: the single flat
+exercise list mixing strength and conditioning movements was confusing
+("its fucking all over the place") — asked for an overarching Weights vs.
+Cardio choice up front. Rather than reuse AMRAP's reps-vs-duration toggle
+as a proxy for the split (arbitrary — plenty of strength accessories are
+duration-based too, e.g. planks), added a real `isConditioning: boolean`
+field to `CatalogExercise` and tagged every entry against actual
+researched HIIT/CrossFit programming, not guessed: the 10 already-present
+ballistic/dynamic kettlebell and Russian-twist movements (swings, cleans,
+sumo deadlift, core rotation) flipped to `true`; the more controlled
+kettlebell entries (goblet squat, bottoms-up press, halo) stayed
+strength-tagged as the same slow pattern as their dumbbell/barbell
+equivalents. Added 6 new bodyweight conditioning entries — burpee,
+mountain climbers, jumping jacks, high knees, jump squats, plank jacks —
+real CrossFit/HIIT staples, cross-checked against what the pods actually
+have (bodyweight + kettlebells + dumbbells only; no rower, bike, pull-up
+bar, plyo box, or wall-ball target, so those movements were deliberately
+left out).
+
+`workout-view.tsx`'s format picker relabelled Straight Sets/AMRAP →
+**Weights**/**Cardio**, and the exercise list shown in the builder now
+filters on `isConditioning` matching the chosen mode (previously showed
+every exercise regardless of format) — switching format also clears the
+in-progress selection so a half-built Weights pick can't leak into
+Cardio. AMRAP's per-exercise default flipped from reps-first to
+duration-first (30s) to match how conditioning movements are actually
+programmed, in both places that seed it (the config-fallback function and
+the exercise-tap handler each had their own hardcoded default — found and
+fixed both). Also fixed the muscle-group heading rendering the literal
+string "FULL_BODY" instead of "FULL BODY" (`uppercase` class was already
+winning the cascade over `capitalize`, and neither handles underscores —
+switched to `.replace("_", " ")`).
+
+One existing unit test asserted that `injuries: "back"` alone empties the
+"core" exercise pool — broken by the new core-tagged bodyweight additions
+(mountain climbers, plank jacks), which are wrist-tagged rather than
+back-tagged. This is the third time this session the catalog has outgrown
+a test's literal assumption. Fixed by updating the test's injury text to
+`"back and wrist"`, verified against a full enumeration of every
+core-tagged entry's `avoidIfInjury` list rather than guessed.
+
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (148/148), and
+`npm run build` all clean. Live-verified via Turbopack hot-reload on the
+same playground booking used for the AMRAP live test: Weights shows the
+full strength catalog, Cardio shows only conditioning-tagged exercises
+with a duration default already filled in, generating a Cardio session
+produced a real AMRAP overview ("8 minutes / 1. Burpee / 30s").
+
+**Not built this stage**: no way back from an in-progress AMRAP/Cardio
+session to Weights/straight-sets once generated — only the straight-sets
+overview screen has a "Change today's workout" link; also, that link's
+gating (`hasSessionStarted`) checks for a `completedAt` on any
+`workout_sets` row, which AMRAP sessions never set, so if the link were
+added to the AMRAP screens as-is a fully-finished AMRAP session would
+still read as "not started." Noted, not fixed — no user-facing report of
+this being hit yet.
