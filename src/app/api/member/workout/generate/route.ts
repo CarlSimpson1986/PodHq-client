@@ -66,7 +66,14 @@ export async function POST(request: Request) {
         ? { mode: "custom", customExerciseKeys: parsed.data.customExerciseKeys!, customExerciseRests: parsed.data.customExerciseRests }
         : parsed.data.mode === "custom-amrap"
           ? { mode: "custom-amrap", timeCapSeconds: parsed.data.timeCapSeconds!, exercises: parsed.data.amrapExercises! }
-          : { mode: "default" };
+          : parsed.data.mode === "custom-rft"
+            ? {
+                mode: "custom-rft",
+                targetRounds: parsed.data.targetRounds!,
+                timeCapSeconds: parsed.data.timeCapSeconds!,
+                exercises: parsed.data.amrapExercises!,
+              }
+            : { mode: "default" };
 
   try {
     const { detail, introNarration } = await getOrCreateWorkoutSession(member.id, booking.id, booking.resource_id, member.name, choice);

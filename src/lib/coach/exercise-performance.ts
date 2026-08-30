@@ -96,6 +96,11 @@ export interface LastSessionSet {
   repsActual: number | null;
   // 1-5, see RPE_SCALE in types.ts — null if the member didn't rate that set.
   rpe: number | null;
+  // Prescription, not result — a circuit format (AMRAP/RFT) never logs
+  // per-set actuals (weightActualKg/repsActual/rpe above stay null for
+  // those), so this is what the card falls back to for its round preview.
+  repsTarget: number | null;
+  weightTargetKg: number | null;
 }
 
 export interface LastSessionExercise {
@@ -105,9 +110,24 @@ export interface LastSessionExercise {
   sets: LastSessionSet[];
 }
 
+// Cardio-format result fields (2026-08-30 — LastSessionCard was built
+// straight-sets-only, before AMRAP/RFT sessions could actually complete;
+// without these a completed circuit session rendered as a wall of "Not
+// rated" badges with no weight, silently losing the one thing that
+// actually matters for it: the rounds/time result). Mirrors
+// WorkoutSessionDetail's own shape in workout-session.ts.
+export type LastSessionFormat = "straight_sets" | "amrap" | "rounds_for_time";
+
 export interface LastSessionDetail {
   sessionId: number;
   createdAt: string;
+  format: LastSessionFormat;
+  timeCapSeconds: number | null;
+  roundsCompleted: number | null;
+  targetRounds: number | null;
+  elapsedSeconds: number | null;
+  partialRoundExerciseIndex: number | null;
+  partialRoundReps: number | null;
   exercises: LastSessionExercise[];
 }
 
@@ -121,7 +141,7 @@ export async function getLastCompletedSessionDetail(memberId: number): Promise<L
 
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
-    .select("id, created_at")
+    .select("id, created_at, format, time_cap_seconds, rounds_completed, target_rounds, elapsed_seconds, partial_round_exercise_index, partial_round_reps")
     .eq("member_id", memberId)
     .eq("status", "completed")
     .order("created_at", { ascending: false })
@@ -130,6 +150,18 @@ export async function getLastCompletedSessionDetail(memberId: number): Promise<L
   if (sessionError) throw new Error(sessionError.message);
   if (!session) return null;
 
+  const base = {
+    sessionId: session.id,
+    createdAt: session.created_at,
+    format: session.format as LastSessionFormat,
+    timeCapSeconds: session.time_cap_seconds,
+    roundsCompleted: session.rounds_completed,
+    targetRounds: session.target_rounds,
+    elapsedSeconds: session.elapsed_seconds,
+    partialRoundExerciseIndex: session.partial_round_exercise_index,
+    partialRoundReps: session.partial_round_reps,
+  };
+
   const { data: exercises, error: exercisesError } = await admin
     .from("workout_exercises")
     .select("id, exercise_key, name, muscle_group, sort_order")
@@ -137,13 +169,13 @@ export async function getLastCompletedSessionDetail(memberId: number): Promise<L
     .order("sort_order", { ascending: true });
   if (exercisesError) throw new Error(exercisesError.message);
   if (!exercises || exercises.length === 0) {
-    return { sessionId: session.id, createdAt: session.created_at, exercises: [] };
+    return { ...base, exercises: [] };
   }
 
   const exerciseIds = exercises.map((e) => e.id);
   const { data: sets, error: setsError } = await admin
     .from("workout_sets")
-    .select("exercise_id, set_number, weight_actual_kg, reps_actual, rpe")
+    .select("exercise_id, set_number, weight_actual_kg, reps_actual, rpe, reps_target, weight_target_kg")
     .in("exercise_id", exerciseIds)
     .order("set_number", { ascending: true });
   if (setsError) throw new Error(setsError.message);
@@ -151,13 +183,19 @@ export async function getLastCompletedSessionDetail(memberId: number): Promise<L
   const setsByExercise = new Map<number, LastSessionSet[]>();
   for (const set of sets ?? []) {
     const list = setsByExercise.get(set.exercise_id) ?? [];
-    list.push({ setNumber: set.set_number, weightActualKg: set.weight_actual_kg, repsActual: set.reps_actual, rpe: set.rpe });
+    list.push({
+      setNumber: set.set_number,
+      weightActualKg: set.weight_actual_kg,
+      repsActual: set.reps_actual,
+      rpe: set.rpe,
+      repsTarget: set.reps_target,
+      weightTargetKg: set.weight_target_kg,
+    });
     setsByExercise.set(set.exercise_id, list);
   }
 
   return {
-    sessionId: session.id,
-    createdAt: session.created_at,
+    ...base,
     exercises: exercises.map((e) => ({
       exerciseKey: e.exercise_key,
       name: e.name,

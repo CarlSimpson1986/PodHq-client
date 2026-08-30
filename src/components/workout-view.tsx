@@ -59,11 +59,13 @@ type RecoveryAdvice = { kind: "low_recovery"; reason: "elevated_resting_hr" | "l
 interface WorkoutSessionDetail {
   sessionId: number;
   status: string;
-  format: "straight_sets" | "amrap";
+  format: "straight_sets" | "amrap" | "rounds_for_time";
   timeCapSeconds: number | null;
   roundsCompleted: number | null;
   partialRoundExerciseIndex: number | null;
   partialRoundReps: number | null;
+  targetRounds: number | null;
+  elapsedSeconds: number | null;
   exercises: WorkoutExercise[];
   excludedExerciseKeys: string[];
   recoveryAdvice: RecoveryAdvice;
@@ -105,13 +107,28 @@ type Phase =
   | "cooldown"
   | "summary"
   | "amrap-active"
-  | "amrap-tally";
+  | "amrap-tally"
+  | "rft-active"
+  | "rft-tally";
 
 type GenerateChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
   | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> }
-  | { mode: "custom-amrap"; timeCapSeconds: number; amrapExercises: { key: string; reps?: number; durationSeconds?: number; weightKg?: number }[] };
+  | { mode: "custom-amrap"; timeCapSeconds: number; amrapExercises: { key: string; reps?: number; durationSeconds?: number; weightKg?: number }[] }
+  // Rounds-For-Time (Stage 3, 2026-08-30; corrected same day — real RFT
+  // WODs always carry a time cap, so timeCapSeconds is required here too
+  // now) — serializes its exercise list under the same `amrapExercises`
+  // key as custom-amrap, NOT `rftExercises` — the server schema reuses
+  // that one field name for both circuit formats (see
+  // validation/workout.ts). Stage 2's own writeup hit exactly this kind
+  // of client/server field-name mismatch once already; don't repeat it.
+  | {
+      mode: "custom-rft";
+      targetRounds: number;
+      timeCapSeconds: number;
+      amrapExercises: { key: string; reps?: number; weightKg?: number }[];
+    };
 
 // Rest defaults offered in the custom builder (Stage 1, 2026-08-29) — same
 // two values Carl set for Hypertrophy's assumed rest (see
@@ -171,7 +188,10 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [customRests, setCustomRests] = useState<Record<string, number>>({});
   const [restSecondsRemaining, setRestSecondsRemaining] = useState(0);
   // AMRAP builder + taking-the-workout state (Stage 2, 2026-08-29).
-  const [customFormat, setCustomFormat] = useState<"straight_sets" | "amrap">("straight_sets");
+  // customFormat is 3-way (Stage 3, 2026-08-30) — "amrap"/"rounds_for_time"
+  // are both Cardio sub-modes, sharing customAmrapConfig/customSelection;
+  // only entering/leaving "straight_sets" clears the exercise picks.
+  const [customFormat, setCustomFormat] = useState<"straight_sets" | "amrap" | "rounds_for_time">("straight_sets");
   const [amrapTimeCapMinutes, setAmrapTimeCapMinutes] = useState(12);
   const [customAmrapConfig, setCustomAmrapConfig] = useState<Record<string, { unit: "reps" | "duration"; value: number; weightKg: number | "" }>>({});
   const [amrapSecondsRemaining, setAmrapSecondsRemaining] = useState(0);
@@ -179,6 +199,26 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [amrapPartialIndex, setAmrapPartialIndex] = useState<number | "">("");
   const [amrapPartialReps, setAmrapPartialReps] = useState<number | "">("");
   const [amrapSubmitting, setAmrapSubmitting] = useState(false);
+  // Rounds-For-Time builder + taking-the-workout state (Stage 3,
+  // 2026-08-30; corrected same day — real RFT WODs carry a time cap, so a
+  // member can fail to finish). rftSecondsElapsed is a stopwatch counting
+  // UP (unlike amrapSecondsRemaining's countdown) — it's the visible
+  // "how long" tracker in both outcomes: it stops naturally under the cap
+  // on a real finish, or is pinned at rftCapSeconds if the cap is hit.
+  // rftCapSeconds is seeded from the session's own timeCapSeconds when
+  // "Start" is tapped (mirrors amrapSecondsRemaining's own seeding), kept
+  // as separate local state so the tick effect below doesn't need
+  // `detail` in its deps. rftRoundsCompleted/rftPartialIndex/
+  // rftPartialReps mirror AMRAP's own tally fields exactly — only used on
+  // the capped-out path (rft-tally); a normal finish never touches them.
+  const [rftTargetRounds, setRftTargetRounds] = useState(4);
+  const [rftTimeCapMinutes, setRftTimeCapMinutes] = useState(12);
+  const [rftSecondsElapsed, setRftSecondsElapsed] = useState(0);
+  const [rftCapSeconds, setRftCapSeconds] = useState(0);
+  const [rftRoundsCompleted, setRftRoundsCompleted] = useState<number | "">(0);
+  const [rftPartialIndex, setRftPartialIndex] = useState<number | "">("");
+  const [rftPartialReps, setRftPartialReps] = useState<number | "">("");
+  const [rftSubmitting, setRftSubmitting] = useState(false);
   // Holds the latest applyAdvance closure — applyAdvance itself is only
   // defined later, after `detail` is known non-null, but the rest-timer
   // effect below has to be declared unconditionally up here alongside
@@ -189,6 +229,9 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   // unlike applyAdvanceRef this only ever needs to be set once — the
   // AMRAP countdown's target phase never depends on late-computed values.
   const goToAmrapTallyRef = useRef(() => setPhase("amrap-tally"));
+  // Same reasoning as goToAmrapTallyRef — the RFT stopwatch auto-transitions
+  // to the capped-out tally once it reaches the session's time cap.
+  const goToRftTallyRef = useRef(() => setPhase("rft-tally"));
   // null = not yet fetched — distinct from an empty array (a real, if
   // unlikely, "nothing eligible" result).
   const [customExcludedKeys, setCustomExcludedKeys] = useState<string[] | null>(null);
@@ -370,6 +413,22 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return () => clearTimeout(timer);
   }, [phase, amrapSecondsRemaining]);
 
+  // Rounds-For-Time stopwatch (Stage 3, 2026-08-30; corrected same day —
+  // real RFT WODs carry a time cap) — ticks UP once a second while phase
+  // is "rft-active" (the visible "how long" tracker), but stops and
+  // auto-transitions to the capped-out tally once it reaches rftCapSeconds
+  // — same ref-held target-phase pattern as the AMRAP countdown's own
+  // auto-advance-at-zero, just checking the opposite bound.
+  useEffect(() => {
+    if (phase !== "rft-active") return;
+    if (rftSecondsElapsed >= rftCapSeconds) {
+      goToRftTallyRef.current();
+      return;
+    }
+    const timer = setTimeout(() => setRftSecondsElapsed((s) => s + 1), 1000);
+    return () => clearTimeout(timer);
+  }, [phase, rftSecondsElapsed, rftCapSeconds]);
+
   if (phase === "change-warning") {
     return (
       <div className="space-y-5">
@@ -472,13 +531,16 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     // Weights vs Cardio (2026-08-29, Carl's call) — the top-level choice,
     // not a format picker buried below the exercise list. Weights =
     // straight sets, picking from the resistance-training catalog (what
-    // "Build your own" always offered). Cardio = AMRAP, picking only from
-    // isConditioning-tagged real HIIT/CrossFit movements — a genuinely
-    // different exercise pool, not the same catalog relabeled.
+    // "Build your own" always offered). Cardio = a conditioning circuit,
+    // picking only from isConditioning-tagged real HIIT/CrossFit
+    // movements — a genuinely different exercise pool, not the same
+    // catalog relabeled. Cardio itself has two clock styles (Stage 3,
+    // 2026-08-30): AMRAP (countdown, open-ended rounds) and Rounds For
+    // Time (stopwatch, fixed rounds) — see the nested toggle below.
     const eligible =
       customExcludedKeys === null
         ? null
-        : EXERCISE_CATALOG.filter((e) => !customExcludedKeys.includes(e.key) && e.isConditioning === (customFormat === "amrap"));
+        : EXERCISE_CATALOG.filter((e) => !customExcludedKeys.includes(e.key) && e.isConditioning === (customFormat !== "straight_sets"));
     const byGroup = (eligible ?? [])
       .reduce<{ group: MuscleGroup; exercises: CatalogExercise[] }[]>((groups, exercise) => {
         const existing = groups.find((g) => g.group === exercise.muscleGroup);
@@ -488,13 +550,18 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       }, [])
       .sort((a, b) => MUSCLE_GROUPS.indexOf(a.group as (typeof MUSCLE_GROUPS)[number]) - MUSCLE_GROUPS.indexOf(b.group as (typeof MUSCLE_GROUPS)[number]));
 
-    // AMRAP-config helper — seeds a sensible default the first time an
-    // exercise is selected under Cardio, otherwise reads back whatever
-    // the member already set. Duration (not reps) as the default unit —
-    // HIIT/circuit work is naturally time-based ("30 seconds of X"), reps
-    // is the exception here, not the rule.
+    // Circuit-config helper — seeds a sensible default the first time an
+    // exercise is selected under Cardio, otherwise reads back whatever the
+    // member already set. AMRAP defaults to duration ("30 seconds of X") —
+    // HIIT/circuit work is naturally time-based there. RFT is always reps
+    // (real RFT WODs prescribe reps per round, never a timed hold — see
+    // generateCircuitSession's own comment), so it defaults to a rep count
+    // instead and the builder never offers a Duration option for it.
     function amrapConfigFor(key: string) {
-      return customAmrapConfig[key] ?? { unit: "duration" as const, value: 30, weightKg: "" as const };
+      return (
+        customAmrapConfig[key] ??
+        (customFormat === "rounds_for_time" ? { unit: "reps" as const, value: 10, weightKg: "" as const } : { unit: "duration" as const, value: 30, weightKg: "" as const })
+      );
     }
 
     return (
@@ -524,16 +591,49 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
               if (customFormat === "straight_sets") {
                 setCustomSelection([]);
                 setCustomRests({});
+                setCustomFormat("amrap");
               }
-              setCustomFormat("amrap");
             }}
             className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
-              customFormat === "amrap" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
+              customFormat !== "straight_sets" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
             }`}
           >
             Cardio
           </button>
         </div>
+
+        {customFormat !== "straight_sets" && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                // Config entries don't carry over between the two Cardio
+                // sub-modes — AMRAP defaults to duration, RFT is reps-only,
+                // so a stale "30 seconds" entry from AMRAP would be wrong
+                // (and invalid) if left in place for RFT.
+                if (customFormat !== "amrap") setCustomAmrapConfig({});
+                setCustomFormat("amrap");
+              }}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                customFormat === "amrap" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
+              }`}
+            >
+              AMRAP
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (customFormat !== "rounds_for_time") setCustomAmrapConfig({});
+                setCustomFormat("rounds_for_time");
+              }}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                customFormat === "rounds_for_time" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
+              }`}
+            >
+              Rounds For Time
+            </button>
+          </div>
+        )}
 
         {customFormat === "amrap" && (
           <div className="flex items-center gap-2">
@@ -552,6 +652,43 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             />
             <span className="text-sm text-card-light-muted">minutes</span>
           </div>
+        )}
+
+        {customFormat === "rounds_for_time" && (
+          <>
+            <div className="flex items-center gap-2">
+              <label htmlFor="rft-target-rounds" className="text-sm text-card-light-muted">
+                Complete
+              </label>
+              <input
+                id="rft-target-rounds"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={20}
+                value={rftTargetRounds}
+                onChange={(e) => setRftTargetRounds(Math.max(1, Math.min(20, Number(e.target.value))))}
+                className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+              />
+              <span className="text-sm text-card-light-muted">rounds for time</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="rft-time-cap" className="text-sm text-card-light-muted">
+                Time cap
+              </label>
+              <input
+                id="rft-time-cap"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={60}
+                value={rftTimeCapMinutes}
+                onChange={(e) => setRftTimeCapMinutes(Math.max(1, Math.min(60, Number(e.target.value))))}
+                className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+              />
+              <span className="text-sm text-card-light-muted">minutes</span>
+            </div>
+          </>
         )}
 
         {customLoadError && <p className="text-sm text-danger">{customLoadError}</p>}
@@ -583,7 +720,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                         } else if (customSelection.length < 6) {
                           setCustomSelection((prev) => [...prev, ex.key]);
                           setCustomRests((prev) => ({ ...prev, [ex.key]: DEFAULT_REST_SECONDS }));
-                          setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: { unit: "duration", value: 30, weightKg: "" } }));
+                          setCustomAmrapConfig((prev) => ({ ...prev, [ex.key]: amrapConfigFor(ex.key) }));
                         }
                       }}
                       className={`block w-full rounded-lg border px-4 py-3 text-left text-sm font-medium disabled:opacity-50 ${
@@ -660,6 +797,40 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                         />
                       </div>
                     )}
+                    {/* RFT is reps-only (real RFT WODs never prescribe a timed
+                        hold) — no Reps/Duration toggle, just a rep count. */}
+                    {selected && customFormat === "rounds_for_time" && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-1">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          value={amrapConfigFor(ex.key).value}
+                          onChange={(e) =>
+                            setCustomAmrapConfig((prev) => ({
+                              ...prev,
+                              [ex.key]: { unit: "reps", value: Math.max(1, Number(e.target.value)), weightKg: amrapConfigFor(ex.key).weightKg },
+                            }))
+                          }
+                          className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+                        />
+                        <span className="text-xs text-card-light-muted">reps</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          placeholder="kg (optional)"
+                          value={amrapConfigFor(ex.key).weightKg}
+                          onChange={(e) =>
+                            setCustomAmrapConfig((prev) => ({
+                              ...prev,
+                              [ex.key]: { unit: "reps", value: amrapConfigFor(ex.key).value, weightKg: e.target.value === "" ? "" : Number(e.target.value) },
+                            }))
+                          }
+                          className="w-24 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -670,25 +841,32 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           type="button"
           disabled={customSelection.length === 0}
           className={buttonClass}
-          onClick={() =>
+          onClick={() => {
+            // Shared between both Cardio sub-modes — identical per-exercise
+            // shape, only the session-level prescription (timeCapSeconds vs
+            // targetRounds) differs.
+            const circuitExercises = customSelection.map((key) => {
+              const cfg = amrapConfigFor(key);
+              return {
+                key,
+                reps: cfg.unit === "reps" ? cfg.value : undefined,
+                durationSeconds: cfg.unit === "duration" ? cfg.value : undefined,
+                weightKg: cfg.weightKg === "" ? undefined : cfg.weightKg,
+              };
+            });
             changeMode(
               customFormat === "straight_sets"
                 ? { mode: "custom", customExerciseKeys: customSelection, customExerciseRests: customRests }
-                : {
-                    mode: "custom-amrap",
-                    timeCapSeconds: amrapTimeCapMinutes * 60,
-                    amrapExercises: customSelection.map((key) => {
-                      const cfg = amrapConfigFor(key);
-                      return {
-                        key,
-                        reps: cfg.unit === "reps" ? cfg.value : undefined,
-                        durationSeconds: cfg.unit === "duration" ? cfg.value : undefined,
-                        weightKg: cfg.weightKg === "" ? undefined : cfg.weightKg,
-                      };
-                    }),
-                  }
-            )
-          }
+                : customFormat === "amrap"
+                  ? { mode: "custom-amrap", timeCapSeconds: amrapTimeCapMinutes * 60, amrapExercises: circuitExercises }
+                  : {
+                      mode: "custom-rft",
+                      targetRounds: rftTargetRounds,
+                      timeCapSeconds: rftTimeCapMinutes * 60,
+                      amrapExercises: circuitExercises.map(({ key, reps, weightKg }) => ({ key, reps, weightKg })),
+                    }
+            );
+          }}
         >
           Generate workout ({customSelection.length}/6) →
         </button>
@@ -699,6 +877,8 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             setCustomRests({});
             setCustomAmrapConfig({});
             setCustomFormat("straight_sets");
+            setRftTargetRounds(4);
+            setRftTimeCapMinutes(12);
             setPhase("choose");
           }}
           className="block w-full text-center text-xs font-medium text-card-light-muted underline"
@@ -793,6 +973,52 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     );
   }
 
+  // Rounds-For-Time overview (Stage 3, 2026-08-30; corrected same day —
+  // real RFT WODs always carry a time cap) — same shape as AMRAP's above
+  // (no sets to preview, no warm-up/cool-down toggles, no swap), but
+  // shows the round target AND the time cap, and "Start" resets the
+  // stopwatch to zero and seeds rftCapSeconds from the session's own
+  // timeCapSeconds.
+  if (phase === "overview" && detail.format === "rounds_for_time") {
+    return (
+      <div className="space-y-5">
+        <ExitLink />
+        <p className="text-lg font-semibold">{detail.targetRounds} Rounds For Time</p>
+        <p className="text-sm text-card-light-muted">
+          Complete every exercise below, {detail.targetRounds} times through, as fast as you can. Time cap:{" "}
+          {Math.round((detail.timeCapSeconds ?? 0) / 60)} minutes.
+        </p>
+        <ul className="space-y-2">
+          {detail.exercises.map((ex, i) => {
+            const set = ex.sets[0];
+            return (
+              <li key={ex.id} className="rounded-lg border border-card-light-border p-3">
+                <p className="text-sm font-semibold">
+                  {i + 1}. {ex.name}
+                </p>
+                <p className="text-xs text-card-light-muted">
+                  {set?.repsTarget ?? "—"} reps
+                  {set?.weightTargetKg ? ` @ ${set.weightTargetKg}kg` : ""}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={() => {
+            setRftSecondsElapsed(0);
+            setRftCapSeconds(detail.timeCapSeconds ?? 0);
+            setPhase("rft-active");
+          }}
+        >
+          Start →
+        </button>
+      </div>
+    );
+  }
+
   if (phase === "amrap-active" && detail.format === "amrap") {
     const minutes = Math.floor(amrapSecondsRemaining / 60);
     const seconds = amrapSecondsRemaining % 60;
@@ -821,6 +1047,176 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         </ul>
         <button type="button" className={buttonClass} onClick={() => setPhase("amrap-tally")}>
           Finish now →
+        </button>
+      </div>
+    );
+  }
+
+  // Rounds-For-Time active phase (Stage 3, 2026-08-30; corrected same day
+  // — real RFT WODs carry a time cap) — a stopwatch counting UP, the
+  // visible "how long" tracker. Two ways out: "Finished!" before the cap
+  // (round count is already known — the prescription — so nothing to
+  // self-report, submits straight to /complete-rft), or the cap-check
+  // effect above auto-transitions to "rft-tally" once rftSecondsElapsed
+  // reaches rftCapSeconds (a genuine DNF — how far the member got is NOT
+  // known in advance, same self-report need as AMRAP's own tally).
+  if (phase === "rft-active" && detail.format === "rounds_for_time") {
+    const minutes = Math.floor(rftSecondsElapsed / 60);
+    const seconds = rftSecondsElapsed % 60;
+    const capMinutes = Math.floor(rftCapSeconds / 60);
+    const capSecs = rftCapSeconds % 60;
+
+    async function submitRft() {
+      setRftSubmitting(true);
+      setErrorMessage(null);
+      try {
+        const res = await fetch(`/api/member/workout/${detail!.sessionId}/complete-rft`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ elapsedSeconds: rftSecondsElapsed, roundsCompleted: detail!.targetRounds }),
+        });
+        const body = await res.json();
+        if (body.status !== "ok") {
+          setErrorMessage(body.message ?? "Couldn't save that. Try again.");
+          return;
+        }
+        setRftRoundsCompleted(detail!.targetRounds!);
+        setPhase("summary");
+      } catch {
+        setErrorMessage("Couldn't save that. Try again.");
+      } finally {
+        setRftSubmitting(false);
+      }
+    }
+
+    return (
+      <div className="space-y-5 text-center">
+        <ExitLink />
+        <p className="text-lg font-semibold">Go!</p>
+        <p className="text-5xl font-bold tabular-nums">
+          {minutes}:{String(seconds).padStart(2, "0")}
+        </p>
+        <p className="text-xs text-card-light-muted">
+          Cap: {capMinutes}:{String(capSecs).padStart(2, "0")}
+        </p>
+        <ul className="space-y-2 text-left">
+          {detail.exercises.map((ex, i) => {
+            const set = ex.sets[0];
+            return (
+              <li key={ex.id} className="rounded-lg border border-card-light-border p-3">
+                <p className="text-sm font-semibold">
+                  {i + 1}. {ex.name}
+                </p>
+                <p className="text-xs text-card-light-muted">
+                  {set?.repsTarget ?? "—"} reps
+                  {set?.weightTargetKg ? ` @ ${set.weightTargetKg}kg` : ""}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+        {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+        <button type="button" disabled={rftSubmitting} className={buttonClass} onClick={submitRft}>
+          {rftSubmitting ? "Saving..." : "Finished! →"}
+        </button>
+      </div>
+    );
+  }
+
+  // Rounds-For-Time capped-out tally (Stage 3, 2026-08-30) — reached only
+  // via the auto-transition when the stopwatch hits rftCapSeconds. Direct
+  // mirror of amrap-tally: how far the member got is genuinely unknown
+  // (self-report, same trust posture), but unlike AMRAP there's no
+  // reps-vs-duration ambiguity for the partial exercise — RFT is
+  // reps-only, so the label is always "reps". elapsedSeconds submitted
+  // here is rftCapSeconds itself (the stopwatch is pinned there, not
+  // rftSecondsElapsed, though they're equal at this point).
+  if (phase === "rft-tally" && detail.format === "rounds_for_time") {
+    const partialExercise = rftPartialIndex === "" ? null : detail.exercises[rftPartialIndex];
+
+    async function submitRftTally() {
+      if (rftRoundsCompleted === "") return;
+      setRftSubmitting(true);
+      setErrorMessage(null);
+      try {
+        const res = await fetch(`/api/member/workout/${detail!.sessionId}/complete-rft`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            elapsedSeconds: rftCapSeconds,
+            roundsCompleted: rftRoundsCompleted,
+            partialRoundExerciseIndex: rftPartialIndex === "" ? undefined : rftPartialIndex,
+            partialRoundReps: rftPartialIndex === "" ? undefined : (rftPartialReps === "" ? 0 : rftPartialReps),
+          }),
+        });
+        const body = await res.json();
+        if (body.status !== "ok") {
+          setErrorMessage(body.message ?? "Couldn't save that. Try again.");
+          return;
+        }
+        setPhase("summary");
+      } catch {
+        setErrorMessage("Couldn't save that. Try again.");
+      } finally {
+        setRftSubmitting(false);
+      }
+    }
+
+    return (
+      <div className="space-y-5">
+        <p className="text-lg font-semibold">Time cap reached — how far did you get?</p>
+        <div>
+          <label htmlFor="rft-rounds-completed" className="mb-1.5 block text-xs text-card-light-muted">
+            Full rounds completed
+          </label>
+          <input
+            id="rft-rounds-completed"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={detail.targetRounds ?? 20}
+            className={inputClass}
+            value={rftRoundsCompleted}
+            onChange={(e) => setRftRoundsCompleted(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+          />
+        </div>
+        <div>
+          <label htmlFor="rft-partial-exercise" className="mb-1.5 block text-xs text-card-light-muted">
+            Then got through to (optional — leave blank if you finished exactly on a round)
+          </label>
+          <select
+            id="rft-partial-exercise"
+            value={rftPartialIndex}
+            onChange={(e) => setRftPartialIndex(e.target.value === "" ? "" : Number(e.target.value))}
+            className="w-full rounded-lg border border-card-light-border bg-white px-4 py-3 text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+          >
+            <option value="">— Finished exactly on a round —</option>
+            {detail.exercises.map((ex, i) => (
+              <option key={ex.id} value={i}>
+                {ex.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {rftPartialIndex !== "" && (
+          <div>
+            <label htmlFor="rft-partial-reps" className="mb-1.5 block text-xs text-card-light-muted">
+              How many reps of that one, {partialExercise?.name}
+            </label>
+            <input
+              id="rft-partial-reps"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              className={inputClass}
+              value={rftPartialReps}
+              onChange={(e) => setRftPartialReps(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+            />
+          </div>
+        )}
+        {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+        <button type="button" disabled={rftSubmitting || rftRoundsCompleted === ""} className={buttonClass} onClick={submitRftTally}>
+          {rftSubmitting ? "Saving..." : "Done →"}
         </button>
       </div>
     );
@@ -1269,6 +1665,34 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <button type="button" className={buttonClass} onClick={() => finishSession()}>
           Finish →
         </button>
+      </div>
+    );
+  }
+
+  // Two real outcomes (corrected 2026-08-30 — real RFT WODs have a time
+  // cap, so "capped" is a genuine possibility): capped === rftSecondsElapsed
+  // reaching rftCapSeconds exactly (the stopwatch's cap-check effect stops
+  // ticking there, so this is a reliable derived signal, no extra state
+  // needed) means the tally screen's self-reported partial result; anything
+  // less means a real finish, always reporting the full targetRounds.
+  if (phase === "summary" && detail.format === "rounds_for_time") {
+    const capped = rftSecondsElapsed >= rftCapSeconds;
+    const minutes = Math.floor(rftSecondsElapsed / 60);
+    const seconds = rftSecondsElapsed % 60;
+    const partialExercise = rftPartialIndex === "" ? null : detail.exercises[rftPartialIndex];
+    return (
+      <div className="space-y-5 text-center">
+        <p className="text-xl font-semibold">{capped ? "Time cap reached" : "Rounds For Time complete!"}</p>
+        <p className="text-sm text-card-light-muted">
+          {rftRoundsCompleted} round{rftRoundsCompleted === 1 ? "" : "s"}
+          {capped && partialExercise && `, then ${rftPartialReps} reps of ${partialExercise.name}`}
+          {" in "}
+          {minutes}:{String(seconds).padStart(2, "0")}
+          {capped ? " (time cap)" : ""}
+        </p>
+        <Link href="/" className={`${buttonClass} block`}>
+          Back to Home
+        </Link>
       </div>
     );
   }
