@@ -23,6 +23,9 @@ function isNutritionDone(nutrition: TodaysMission["nutrition"]): boolean {
 function isHabitsDone(habits: TodaysMission["habits"]): boolean {
   return habits.total > 0 && habits.done >= habits.total;
 }
+function isCardioDone(cardio: TodaysMission["cardio"]): boolean {
+  return cardio.done;
+}
 
 function StatusDot({ done }: { done: boolean }) {
   return (
@@ -89,20 +92,39 @@ function NutritionRow({ nutrition }: { nutrition: TodaysMission["nutrition"] }) 
   );
 }
 
+function CardioRow({ cardio }: { cardio: TodaysMission["cardio"] }) {
+  const done = isCardioDone(cardio);
+  return (
+    <Link href="/cardio-log" prefetch={false} className={`${rowClass} hover:bg-card-border/10`}>
+      <span className="flex items-center gap-2.5 text-sm">
+        <StatusDot done={done} />
+        Cardio
+      </span>
+      <span className="text-xs text-card-light-muted">{done ? "Logged" : "Log a machine →"}</span>
+    </Link>
+  );
+}
+
 // Home's "Today's Mission" card — premium-only (trial_active/subscriber),
 // see src/app/page.tsx. Collapsed by default (Carl's call, 2026-08-29):
 // Home already stacks the AI Coach pointer, upcoming session, leaderboard
-// and find-a-professional cards, so this stays a one-line "x/4 today"
+// and find-a-professional cards, so this stays a one-line "x/5 today"
 // summary until tapped open, rather than permanently adding two cards'
 // worth of height. Habits render via the same DailyHabitsCard used
 // standalone on /coach/profile, just with `embedded` to drop its own card
-// chrome since it's already inside this card's expanded body.
+// chrome since it's already inside this card's expanded body. Cardio
+// (2026-08-30) is the 5th row, added the same shape as Workout/Nutrition
+// — a link out to a separate logging entry point, not an inline action.
 export function TodaysMissionCard({ mission, initialHabits }: { mission: TodaysMission; initialHabits: Habit[] }) {
   const [expanded, setExpanded] = useState(false);
 
-  const doneCount = [isWorkoutDone(mission.workout), isStepsDone(mission.steps), isNutritionDone(mission.nutrition), isHabitsDone(mission.habits)].filter(
-    Boolean
-  ).length;
+  const doneCount = [
+    isWorkoutDone(mission.workout),
+    isStepsDone(mission.steps),
+    isNutritionDone(mission.nutrition),
+    isHabitsDone(mission.habits),
+    isCardioDone(mission.cardio),
+  ].filter(Boolean).length;
 
   return (
     <div className="card-light overflow-hidden">
@@ -114,7 +136,7 @@ export function TodaysMissionCard({ mission, initialHabits }: { mission: TodaysM
       >
         <span className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Today&apos;s mission</span>
         <span className="flex items-center gap-2">
-          <span className="text-sm font-semibold">{doneCount} / 4 today</span>
+          <span className="text-sm font-semibold">{doneCount} / 5 today</span>
           <ChevronRightIcon className={`h-4 w-4 flex-none text-card-light-muted transition-transform ${expanded ? "rotate-90" : ""}`} />
         </span>
       </button>
@@ -125,6 +147,7 @@ export function TodaysMissionCard({ mission, initialHabits }: { mission: TodaysM
             <WorkoutRow workout={mission.workout} />
             <StepsRow steps={mission.steps} />
             <NutritionRow nutrition={mission.nutrition} />
+            <CardioRow cardio={mission.cardio} />
           </div>
           <div className="border-t border-card-light-border pt-4">
             <DailyHabitsCard initialHabits={initialHabits} embedded />

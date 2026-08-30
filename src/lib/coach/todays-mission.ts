@@ -7,6 +7,7 @@ import { computeNutritionTargets } from "@/lib/coach/nutrition-targets";
 import { getDayLog } from "@/lib/coach/food-log";
 import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
 import { getLatestWearableSnapshot } from "@/lib/data/wearables";
+import { getTodayCardioLogCount } from "@/lib/coach/cardio-equipment";
 
 export type WorkoutMissionStatus =
   | { kind: "no_booking" }
@@ -18,6 +19,10 @@ export interface TodaysMission {
   steps: { count: number | null; target: number };
   habits: { done: number; total: number };
   nutrition: { calories: number; target: number | null };
+  // Cardio equipment logging (2026-08-30) — done once at least one
+  // machine's been logged today, same "count(*) > 0" posture as habits'
+  // own checkbox-type done-check, not a target/count pair.
+  cardio: { done: boolean };
 }
 
 // Same 8,000 figure as the "Walk 8,000+ steps" entry in habit-catalog.ts —
@@ -35,13 +40,14 @@ const STEP_TARGET = 8000;
 export async function getTodaysMission(memberId: number, gym: string, gender: string | null): Promise<TodaysMission> {
   const today = londonDateString(new Date());
 
-  const [booking, coachProfile, dayLog, habits, progress, snapshot] = await Promise.all([
+  const [booking, coachProfile, dayLog, habits, progress, snapshot, cardioLogCount] = await Promise.all([
     getTodayBookingForMember(memberId, gym),
     getCoachProfile(memberId),
     getDayLog(memberId, today),
     getActiveHabits(memberId),
     getTodayProgress(memberId),
     getLatestWearableSnapshot(memberId),
+    getTodayCardioLogCount(memberId, today),
   ]);
 
   let workout: WorkoutMissionStatus = { kind: "no_booking" };
@@ -65,5 +71,6 @@ export async function getTodaysMission(memberId: number, gym: string, gender: st
     steps: { count: snapshot?.recordedDate === today ? snapshot.steps : null, target: STEP_TARGET },
     habits: { done: habitsDone, total: habits.length },
     nutrition: { calories: dayLog.totals.calories, target: nutritionTarget },
+    cardio: { done: cardioLogCount > 0 },
   };
 }

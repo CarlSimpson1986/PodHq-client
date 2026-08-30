@@ -14,49 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-45.md`, covering the pilot
-mechanism proof (2026-08-05) through Rounds For Time and the coaching
-review (2026-08-30) — all split out to keep this file within Claude
-Code's ~15,000-character `@`-import limit. Archives aren't always the
-strictly oldest material — the split point is "what's finished and
-stable" as much as "what's oldest" (see each archive's own header note
-for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
-for full build history, or `git log` on this file for exact split
-points. Active content here starts at "Injury-keyword coverage expanded
-to full body parts" (2026-08-30). If this file grows too large again,
-split it the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-46.md`, update this paragraph.
-
-## Injury-keyword coverage expanded to full body parts — 2026-08-30
-
-Asked to expand the pain-caution/standing-injuries keyword list beyond
-its original six (knee, back, shoulders, hip, ankle, wrist). Added
-**neck, elbow, hamstring, calf, groin, quad** across 86 of the catalog's
-98 exercises, tagged by real movement pattern rather than blanket-applied:
-elbow on nearly every press/pull/curl (the most common gym overuse
-site), hamstring/quad/calf weighted per exercise (a squat gets all
-three; a hip-hinge RDL gets hamstring only — a hinge barely touches the
-quads), groin only where a movement genuinely stretches the adductors
-(sumo deadlift, reverse/deficit lunges), neck on overhead
-presses/shrugs/face-pulls/the kettlebell halo. Surfaced two real gaps in
-the existing tagging while at it: `dumbbell_calf_raise` had no injury
-tags at all despite being *the* calf exercise, and `lying_leg_curl` (a
-hamstring isolation machine) had no hamstring tag.
-
-Caught a repeat of the shoulder singular/plural bug (see the coaching-
-review stage above) before it shipped: "calf" pluralises irregularly to
-"calves", not "calfs" — the same silent-match-failure class, just for
-"my calves hurt" instead of "my shoulder hurts". Fixed generally with an
-irregular-plurals map (`IRREGULAR_INJURY_PLURALS`) alongside the
-existing trailing-"s" strip, so the next irregular plural (English has a
-few more — foot/feet, if that's ever added) is a one-line addition, not
-a new bug to rediscover.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (158/158, +1
-regression test for calf/calves), and `npm run build` all clean. Purely
-additive to `avoidIfInjury` arrays — no existing exercise's tags were
-changed or removed, confirmed by every pre-existing test still passing
-unmodified.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-46.md`, covering the pilot
+mechanism proof (2026-08-05) through the injury-keyword expansion
+(2026-08-30) — all split out to keep this file within Claude Code's
+~15,000-character `@`-import limit. Archives aren't always the strictly
+oldest material — the split point is "what's finished and stable" as
+much as "what's oldest" (see each archive's own header note for
+examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
+full build history, or `git log` on this file for exact split points.
+Active content here starts at "Weekly check-in rebuilt as a real
+conversation" (2026-08-30). If this file grows too large again, split it
+the same way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-47.md`, update this paragraph.
 
 ## Weekly check-in rebuilt as a real conversation — 2026-08-30
 
@@ -236,3 +205,33 @@ regression to the existing straight-sets RPE-badge display.
 
 **Not built this stage**: pagination past the last 20 sessions; editing/
 deleting a past session; a stats page independent of the history list.
+
+## Cardio equipment logging — 2026-08-30
+
+Scoped 2026-08-29, never built until Carl asked "cardio wise — I can add
+that via the UI right?" — confirmed nothing existed on either side.
+Gym staff name individual machines on podHq's `/setup` (new
+`gym_cardio_equipment` table, `0076` shared DB, owner-editable with
+admin fallback, mirrors the pricing catalog's exact pattern —
+soft-disable not delete, so history stays meaningful). Members log which
+one they used as a 5th row on Today's Mission ("2/5 today" →
+"3/5 today" etc.), tapping through to `/cardio-log`, a plain named-button
+list; `member_cardio_logs` is insert-only, same convention `habit_logs`
+already established (no stateful "completed" flag, "done today" is
+`count(*) > 0`). Binary log only, no duration/distance this stage —
+matches Carl's own framing ("counts toward missions"), not a fitness
+tracker.
+
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (172/172), and
+`npm run build` all clean in both repos. Live-verified end to end on the
+Aylesbury Berryfields gym: added Treadmill 1 + Rower 1 on `/setup`,
+disabled Treadmill 1, confirmed podhq-client's picker showed only Rower
+1; logged it, confirmed the Today's Mission Cardio row flipped to
+"Logged" and the `member_cardio_logs` row matched exactly. Hit and
+resolved an incidental blocker: the playground member's browser session
+had expired mid-test with no stored password — reset it via the same
+service-role script pattern podHq already has for its own pilot account.
+
+**Not built this stage**: duration/distance tracking; cross-gym equipment
+visibility for members training at a different network gym; equipment
+type/category taxonomy.
