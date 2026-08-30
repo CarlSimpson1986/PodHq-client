@@ -170,3 +170,22 @@ export function formatPubMedResultsForModel(results: PubMedResult[]): string {
     .map((r) => `[PMID ${r.pmid}] ${r.authors} (${r.year}). "${r.title}" ${r.journal}.\nAbstract: ${r.abstract}`)
     .join("\n\n");
 }
+
+const PMID_TAG = /\[PMID (\d+)\]/g;
+
+/** PMIDs actually present in a formatted tool result — the only ones a citation is allowed to reference. */
+export function extractCitedPmids(formattedResults: string): Set<string> {
+  const found = new Set<string>();
+  for (const match of formattedResults.matchAll(PMID_TAG)) found.add(match[1]);
+  return found;
+}
+
+/**
+ * Strips any [PMID n] tag the model wrote that wasn't actually returned by
+ * search_pubmed this turn — a hallucinated citation degrades to no citation
+ * (the surrounding sentence stays, just unlinked) rather than a fake PMID
+ * reaching the member as a clickable, seemingly-verified link.
+ */
+export function sanitizeCitedPmids(reply: string, knownPmids: Set<string>): string {
+  return reply.replace(PMID_TAG, (full, pmid) => (knownPmids.has(pmid) ? full : "")).replace(/ {2,}/g, " ").trim();
+}

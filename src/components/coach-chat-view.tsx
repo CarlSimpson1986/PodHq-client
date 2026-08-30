@@ -9,6 +9,33 @@ interface ChatMessage {
 
 const QUICK_QUESTIONS = ["Should I train today?", "Is my protein enough?", "Why did my weight change this week?"];
 
+// The coach's system prompt (coach-chat.ts) has the model tag any real
+// PubMed citation with "[PMID n]", copied verbatim from the search tool's
+// own results — server-side sanitizeCitedPmids() strips any tag that
+// wasn't actually returned, so every tag reaching here is real. Rendered
+// as a link so a member (or Carl) can independently verify a citation
+// with one click rather than trusting the summary on faith.
+const PMID_TAG = /\[PMID (\d+)\]/g;
+
+function renderMessageContent(content: string) {
+  const parts = content.split(PMID_TAG);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <a
+        key={i}
+        href={`https://pubmed.ncbi.nlm.nih.gov/${part}/`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline decoration-dotted underline-offset-2"
+      >
+        [PMID {part}]
+      </a>
+    ) : (
+      part
+    ),
+  );
+}
+
 export function CoachChatView({ initialMessages }: { initialMessages: ChatMessage[] }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -83,7 +110,7 @@ export function CoachChatView({ initialMessages }: { initialMessages: ChatMessag
               m.role === "user" ? "ml-auto bg-accent text-accent-foreground" : "card-glass text-foreground"
             }`}
           >
-            {m.content}
+            {m.role === "assistant" ? renderMessageContent(m.content) : m.content}
           </div>
         ))}
         {sending && <p className="text-sm text-muted-foreground">Thinking…</p>}

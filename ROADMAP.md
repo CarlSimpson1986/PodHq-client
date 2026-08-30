@@ -14,70 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-46.md`, covering the pilot
-mechanism proof (2026-08-05) through the injury-keyword expansion
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-47.md`, covering the pilot
+mechanism proof (2026-08-05) through the weekly-check-in rebuild
 (2026-08-30) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see each archive's own header note for
 examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
 full build history, or `git log` on this file for exact split points.
-Active content here starts at "Weekly check-in rebuilt as a real
-conversation" (2026-08-30). If this file grows too large again, split it
-the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-47.md`, update this paragraph.
-
-## Weekly check-in rebuilt as a real conversation — 2026-08-30
-
-Client-perspective companion to the same day's coaching review — asked
-Claude to go through the check-in "as a client" rather than a code
-reviewer. Closes the two gaps the previous stage's own "Not built this
-stage" note had already flagged (habit accountability, and the
-review-before-listening ordering), plus the pain-acknowledgment gap
-found this same session:
-
-**Reordered.** The "coach's review" used to be generated in the GET
-route, before the member had answered a single reflection question — a
-report, then a form, never a conversation. Now the reflection questions
-render first; the response is generated in `/complete`, after those
-answers exist, and is actually built from them (mood, barriers, habit)
-via a new `narrateCheckInResponse` (coach-bot.ts), not `narrateWeeklyReview`'s
-old stats-only prompt. Live-verified: reporting a hectic work week and a
-"partially" kept habit produced a response that named both specifically,
-not a generic stats summary.
-
-**Habit accountability, closed.** `getPreviousHabit` (check-ins.ts)
-surfaces last week's commitment; the check-in now asks "how did that
-go?" (No/Partially/Yes) before setting a new one — the follow-up that
-was entirely missing before. The existing habit streak (`computeHabitStreak`,
-previously only shown on `/coach`) is now surfaced here too, at the
-moment it's actually relevant.
-
-**Pain acknowledgment, held to the same compliance bar as wearables.**
-The completed screen now acknowledges a reported pain — but via fixed,
-reviewed copy (`PAIN_ACKNOWLEDGMENT`), never sent to the LLM. Not a
-shortcut: `narrateWeeklyReview`'s own comment already draws this exact
-line around wearable sleep/heart-rate data (a real UK GDPR Art 9
-special-category-data question from an earlier legal-review session,
-2026-08-28) — a pain report is the same category, so it gets the same
-treatment rather than quietly reopening that question in a new spot.
-Live-verified the LLM response never mentions reported pain, and
-`painAcknowledgment` comes back `null` cleanly on the no-pain path.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (158/158, no
-regressions), and `npm run build` all clean. Live-tested both the pain
-and no-pain completion paths directly against the API (the UI itself
-was already "not due" for the playground member that day, having
-completed an earlier check-in — same code path either way, verified via
-direct request/response rather than click-through).
-
-**Not built this stage**: `weekFeel`/`barriers` are now at least
-acknowledged by the coach's response, but nothing yet adjusts future
-programming based on them (e.g. a string of "Rough" weeks doesn't
-trigger anything). Habit streak still counts "weeks a habit was set",
-not "weeks it was actually kept" — evolving that needs the
-`habitFollowUp` data this stage just started collecting to accumulate
-first.
+Active content here starts at "Stage 4 of custom workouts" (2026-08-30).
+If this file grows too large again, split it the same way: move the
+most clearly finished section into `ROADMAP-ARCHIVE-48.md`, update this
+paragraph.
 
 ## Stage 4 of custom workouts — HIIT interval timer + reps tally — 2026-08-30
 
@@ -235,3 +183,47 @@ service-role script pattern podHq already has for its own pilot account.
 **Not built this stage**: duration/distance tracking; cross-gym equipment
 visibility for members training at a different network gym; equipment
 type/category taxonomy.
+
+## PubMed citations made independently verifiable — 2026-08-30
+
+Carl asked how anyone could check the AI Coach's PubMed citations were
+correct — until now the model was only *instructed* not to invent one
+(`coach-chat.ts`'s system prompt), with no technical backstop and nothing
+in the UI a member or Carl could actually click to verify.
+
+**Model now tags every real citation with its PMID**, copied verbatim
+from `search_pubmed`'s own tool output (which already prefixed each
+result with `[PMID n]` — the model just wasn't asked to echo it back).
+**Server-side backstop, not just a prompt change**: `pubmed.ts` gained
+`extractCitedPmids()` (reads the real PMIDs out of a formatted tool
+result) and `sanitizeCitedPmids()` (strips any `[PMID n]` tag in the
+model's reply that isn't in that set). Both `askGroq` and `askClaude`
+now accumulate a `knownPmids` set from every `search_pubmed` call made
+that turn and run the final reply through the sanitizer before
+returning it — a hallucinated PMID degrades to an unlinked sentence
+(same as before this stage), never a fake-but-clickable citation.
+
+**UI renders the tag as a real link** (`coach-chat-view.tsx`): assistant
+messages are split on the `[PMID n]` pattern and each match becomes an
+`<a href="https://pubmed.ncbi.nlm.nih.gov/{n}/">` — one tap confirms the
+study is real.
+
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (178/178, +6 new
+for `extractCitedPmids`/`sanitizeCitedPmids` covering the known/unknown/
+empty-set cases), and `npm run build` all clean. Live-tested against the
+real Groq + PubMed APIs in local dev (not the deployed preview) with
+debug logging temporarily added and removed after: a no-results query
+correctly produced no citation and no tag; a real query returned 5 real
+PMIDs and the model's reply cited `[PMID 35986981]` — a genuine 2022
+*Nutrition* meta-analysis actually in that result set — which rendered
+as a working link in the UI. Also root-caused why two earlier live tests
+that session had shown citations with no PMID tag at all: they'd hit a
+dev server process still running the pre-edit code (Turbopack doesn't
+always hot-reload a `server-only` lib change for an API route) — killing
+and restarting it fixed it, consistent with prior stale-bundle issues
+this project has hit before.
+
+**Not built this stage**: no check that the citation's *claim* (not just
+the PMID) accurately reflects the abstract — the sanitizer guarantees
+the PMID is real, not that the summary is a faithful one; that still
+needs an occasional human spot-check.
