@@ -58,13 +58,29 @@ export interface RecentCheckIn {
 // back from most recent without re-sorting. 26 weeks (half a year) is
 // comfortably past any real streak this brand-new feature could have
 // yet, while keeping the query bounded as check-in history grows.
+// Ordering bug found live testing getPreviousHabit below (2026-08-30) —
+// this used to order by period_start alone. In real single-check-in-per-
+// week usage that's indistinguishable from ordering by completed_at (one
+// row per period, so no ties to break), which is exactly why it went
+// unnoticed: nothing before getPreviousHabit needed "the single most
+// recent row" to be genuinely correct, only "roughly newest-first" for
+// computeHabitStreak's own week-by-week walk. Multiple check-ins landing
+// in the same period (only reachable by calling /complete directly more
+// than once — the UI's own due-state gate prevents it normally, this was
+// caught testing the deployed build against the shared DB) share an
+// identical period_start, so Postgres has no defined tie-break order
+// between them — getPreviousHabit silently returned a stale row instead
+// of the real latest. completed_at is a real timestamp, never tied in
+// practice, and gives the exact same ordering as period_start in the
+// one-row-per-week case, so this is a strictly more correct sort key
+// with no behaviour change for computeHabitStreak's own consumer.
 export async function getRecentCheckIns(memberId: number, limit = 26): Promise<RecentCheckIn[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("check_ins")
-    .select("period_start, answers")
+    .select("period_start, completed_at, answers")
     .eq("member_id", memberId)
-    .order("period_start", { ascending: false })
+    .order("completed_at", { ascending: false })
     .limit(limit);
 
   if (error) throw new Error(error.message);
