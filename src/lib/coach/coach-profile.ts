@@ -88,6 +88,21 @@ export async function createCoachProfile(memberId: number, input: CoachProfileIn
   if (error) throw new Error(error.message);
 }
 
+// Weekly weigh-in (2026-08-30) — a plain partial update, deliberately
+// NOT a call to createCoachProfile above: that function upserts every
+// profile field, so reusing it from the check-in flow (which only ever
+// knows about weight) would risk clobbering goal/injuries/activity
+// level/etc. with stale or absent form state. Callers must already know
+// a coach_profiles row exists (true for anyone who's reached the weekly
+// check-in — that requires having completed onboarding first).
+// nutrition-targets.ts reads weight_kg fresh on every call, so this is
+// the only wiring a weigh-in needs for nutrition targets to reflect it.
+export async function updateProfileWeightKg(memberId: number, weightKg: number): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("coach_profiles").update({ weight_kg: weightKg, updated_at: new Date().toISOString() }).eq("member_id", memberId);
+  if (error) throw new Error(error.message);
+}
+
 export interface ExerciseHistoryEntry {
   exerciseKey: string;
   lastWeightKg: number;

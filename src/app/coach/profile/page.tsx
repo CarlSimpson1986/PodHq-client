@@ -3,12 +3,14 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
+import { getBodyMeasurementHistory } from "@/lib/coach/body-measurements";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { MoreMenu } from "@/components/more-menu";
 import { CoachProfileEditForm } from "@/components/coach-profile-edit-form";
 import { DailyHabitsCard } from "@/components/daily-habits-card";
+import { BodyMeasurementTrends } from "@/components/body-measurement-trends";
 
 // The Profile tab — metrics/goals/plan, editable (the earlier onboarding
 // flow had no way to come back and change any of this afterwards).
@@ -36,7 +38,11 @@ export default async function CoachProfilePage() {
     redirect("/coach-onboarding");
   }
 
-  const [habits, progress] = await Promise.all([getActiveHabits(member.id), getTodayProgress(member.id)]);
+  const [habits, progress, measurementHistory] = await Promise.all([
+    getActiveHabits(member.id),
+    getTodayProgress(member.id),
+    getBodyMeasurementHistory(member.id),
+  ]);
   const habitsWithProgress = habits.map((h) => ({ ...h, todayCount: progress.get(h.id) ?? 0 }));
 
   return (
@@ -62,6 +68,18 @@ export default async function CoachProfilePage() {
               }}
             />
           </div>
+
+          {/* Weekly weigh-in trend (2026-08-30) — logged as part of the
+              weekly check-in, not here; this card is read-only, showing
+              whatever's been logged so far, right next to where the
+              current weight field lives. No card at all until a member
+              has logged at least one measurement — an empty trend card
+              on a brand-new profile isn't a useful prompt, just clutter. */}
+          {measurementHistory.length > 0 && (
+            <div className="card-light p-6">
+              <BodyMeasurementTrends history={measurementHistory} />
+            </div>
+          )}
 
           <DailyHabitsCard initialHabits={habitsWithProgress} />
         </div>

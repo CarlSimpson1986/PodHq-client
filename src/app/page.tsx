@@ -22,6 +22,7 @@ import { getTodaysMission } from "@/lib/coach/todays-mission";
 import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
 import { getRecentCheckIns, getLatestCheckInResponse } from "@/lib/coach/check-ins";
 import { computeHabitStreak } from "@/lib/coach/habit-streak";
+import { computeHabitFollowThrough } from "@/lib/coach/habit-follow-through";
 import { TrophyIcon, UsersIcon } from "@/components/icons";
 
 export default async function HomePage() {
@@ -64,6 +65,7 @@ export default async function HomePage() {
     : [[], null];
   const currentHabit = recentCheckIns[0]?.habit ?? null;
   const habitStreak = computeHabitStreak(recentCheckIns);
+  const followThrough = computeHabitFollowThrough(recentCheckIns);
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
@@ -81,7 +83,7 @@ export default async function HomePage() {
           {showTodaysMission && (
             <>
               <CoachResponseCard response={checkInResponse} />
-              <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} />
+              <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />
             </>
           )}
 

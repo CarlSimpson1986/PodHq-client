@@ -1,10 +1,12 @@
 import type { CheckInState } from "@/lib/coach/checkin-state";
 import type { RecoveryStatus } from "@/lib/coach/recovery-status";
 import type { WeeklyReview } from "@/lib/coach/weekly-review";
+import type { MoodTrend } from "@/lib/coach/mood-trend";
 
 export type WeeklyRecommendation =
   | { kind: "complete_checkin"; habit: string; reason: string }
   | { kind: "hit_sessions"; habit: string; reason: string }
+  | { kind: "low_mood"; habit: string; reason: string }
   | { kind: "prioritise_sleep"; habit: string; reason: string }
   | { kind: "member_habit"; habit: string; reason: string }
   | { kind: "log_nutrition"; habit: string; reason: string }
@@ -32,13 +34,23 @@ export type WeeklyRecommendation =
 // It does outrank the generic log_nutrition/hit_protein nudges below,
 // though — a specific thing the member actually committed to is more
 // motivating than a generic system-derived reminder.
+//
+// low_mood (2026-08-30, client-perspective review — mood-trend.ts) sits
+// ABOVE prioritise_sleep, checked first: three Rough/Tough weeks in a
+// row is the member's own explicit, repeated word, not an inference from
+// wearable data — a stronger signal than the recovery status derived
+// from sleep/heart-rate, so it wins when both would otherwise apply.
+// Hardcoded copy, same reasoning as this file's own top comment — a
+// wellbeing-adjacent nudge like this is exactly the kind of thing that
+// shouldn't be left to an LLM to improvise phrasing around.
 export function getWeeklyRecommendation(
   checkInState: CheckInState,
   sessionsCompleted: number,
   sessionsTarget: number,
   recoveryStatus: RecoveryStatus,
   weeklyReview: WeeklyReview,
-  memberHabit: string | null
+  memberHabit: string | null,
+  moodTrend: MoodTrend
 ): WeeklyRecommendation {
   if (checkInState.kind === "overdue" || checkInState.kind === "due") {
     return {
@@ -53,6 +65,14 @@ export function getWeeklyRecommendation(
       kind: "hit_sessions",
       habit: "Hit your session target this week",
       reason: `You've completed ${sessionsCompleted} of ${sessionsTarget} sessions so far — consistency moves the needle more than any single hard session does.`,
+    };
+  }
+
+  if (moodTrend.kind === "low") {
+    return {
+      kind: "low_mood",
+      habit: "Take it a little easier this week",
+      reason: `You've rated the last ${moodTrend.consecutiveWeeks} weeks Rough or Tough — recovery matters as much as the training itself.`,
     };
   }
 

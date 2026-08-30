@@ -69,7 +69,15 @@ export interface WorkoutExercise {
 // timeCapSeconds/partialRoundExerciseIndex/partialRoundReps null, since
 // those are AMRAP-only concepts; targetRounds/elapsedSeconds below are
 // RFT's own fields, see completeRoundsForTimeSession.
-export type WorkoutFormat = "straight_sets" | "amrap" | "rounds_for_time";
+// HIIT (Stage 4, 2026-08-30) reuses targetRounds/roundsCompleted/
+// elapsedSeconds too — same reuse convention RFT itself followed against
+// AMRAP's columns — but leaves timeCapSeconds/partialRoundExerciseIndex/
+// partialRoundReps null: there's no time cap (total duration is fully
+// determined by the work/rest/rounds prescription) and no partial
+// credit (v1 has no early-exit, so completion always writes the full
+// target). See workSeconds/restSeconds/restBetweenRoundsSeconds below
+// and completeHiitSession.
+export type WorkoutFormat = "straight_sets" | "amrap" | "rounds_for_time" | "hiit";
 
 // What loadSessionDetail alone can produce — it has no coach-profile
 // access, so it can't compute excludedExerciseKeys itself. Callers that
@@ -86,9 +94,16 @@ interface SessionExerciseDetail {
   // Rounds-For-Time (Stage 3, 2026-08-30) — targetRounds is the prescription
   // (set at generation), elapsedSeconds the member's stopwatch result (null
   // until completeRoundsForTimeSession writes it). Both null for every
-  // non-RFT session.
+  // non-RFT session. HIIT (Stage 4) also populates targetRounds/
+  // elapsedSeconds (see WorkoutFormat above) — elapsedSeconds there is
+  // server-computed at completion, never self-reported.
   targetRounds: number | null;
   elapsedSeconds: number | null;
+  // HIIT (Stage 4, 2026-08-30) — the interval prescription set at
+  // generation. All three null for every non-HIIT session.
+  workSeconds: number | null;
+  restSeconds: number | null;
+  restBetweenRoundsSeconds: number | null;
   exercises: WorkoutExercise[];
 }
 
@@ -193,12 +208,30 @@ export interface AmrapExercisePick {
 // targetRounds is still the prescription; the result is elapsed time
 // (finished before the cap) or a self-reported partial tally at the cap
 // (didn't finish) — see completeRoundsForTimeSession.
+// HIIT (Stage 4, 2026-08-30) — a genuinely simpler shape than AMRAP/RFT's
+// AmrapExercisePick: work/rest seconds and round count are set once for
+// the whole session and apply uniformly as the timer cycles the picked
+// exercises each round (Carl's own ask — no per-exercise reps/duration/
+// weight). exerciseKeys is deliberately plain string[], not
+// AmrapExercisePick[], and gets its own payload key on the wire
+// (hiitExerciseKeys in workout-view.tsx/validation/workout.ts) rather
+// than reusing "exercises"/"amrapExercises" — those two formats sharing
+// one field name already caused a real client/server mismatch bug once
+// (see workout-view.tsx's GenerateChoice comment).
 export type WorkoutChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
   | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> }
   | { mode: "custom-amrap"; timeCapSeconds: number; exercises: AmrapExercisePick[] }
-  | { mode: "custom-rft"; targetRounds: number; timeCapSeconds: number; exercises: AmrapExercisePick[] };
+  | { mode: "custom-rft"; targetRounds: number; timeCapSeconds: number; exercises: AmrapExercisePick[] }
+  | {
+      mode: "custom-hiit";
+      workSeconds: number;
+      restSeconds: number;
+      rounds: number;
+      restBetweenRoundsSeconds: number;
+      exerciseKeys: string[];
+    };
 
 // A session the member already confirmed a recovery adjustment on must
 // never show the banner again or be re-discountable — without this,
@@ -445,6 +478,18 @@ async function generateAndPersistSession(
   // alongside focus/custom.
   if (choice.mode === "custom-amrap" || choice.mode === "custom-rft") {
     return generateCircuitSession(admin, memberId, bookingId, resourceId, choice, availableEquipment);
+  }
+
+  // HIIT (Stage 4, 2026-08-30) is its own branch, not a third case inside
+  // generateCircuitSession — its exercise-list shape (plain keys, no
+  // per-exercise reps/duration/weight) and DB writes (work/rest/rounds
+  // prescription instead of a per-exercise reps-or-duration split) differ
+  // enough that forcing it into the shared function would just be an
+  // extra layer of mode-branching inside an already mode-branching
+  // function. Same graceful-degradation/no-narration posture as
+  // generateCircuitSession, so it's structured as a close sibling.
+  if (choice.mode === "custom-hiit") {
+    return generateHiitSession(admin, memberId, bookingId, resourceId, choice, availableEquipment);
   }
 
   const profile = await getCoachProfile(memberId);
@@ -694,6 +739,114 @@ async function generateCircuitSession(
   };
 }
 
+// HIIT generation (Stage 4, 2026-08-30) — same graceful-degradation
+// posture as generateCircuitSession (no coach-profile hard-block, only
+// injury filtering), but simpler validation: no reps-vs-duration branch,
+// since HIIT's work/rest timing is uniform across the whole session
+// (set once, not per exercise). time_cap_seconds stays null — HIIT has
+// no time cap, the total duration is fully determined by the
+// prescription (see completeHiitSession).
+async function generateHiitSession(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: number,
+  bookingId: number,
+  resourceId: number,
+  choice: Extract<WorkoutChoice, { mode: "custom-hiit" }>,
+  availableEquipment: EquipmentType[]
+): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
+  const profile = await getCoachProfile(memberId);
+  const excludedKeys = combineExcludedKeys(profile?.injuries ?? null, availableEquipment);
+
+  // Never trust the client's list wholesale, same posture as
+  // generateCircuitSession — re-validated against the live catalog and
+  // injury/equipment exclusions. An invalid/excluded/duplicate key is
+  // dropped rather than guessed at.
+  const picks: { key: string; name: string; muscleGroup: string }[] = [];
+  for (const key of choice.exerciseKeys) {
+    const entry = EXERCISE_CATALOG.find((e) => e.key === key);
+    if (!entry || excludedKeys.includes(key) || picks.some((p) => p.key === key)) continue;
+    picks.push({ key: entry.key, name: entry.name, muscleGroup: entry.muscleGroup });
+  }
+  if (picks.length === 0) throw new Error("no_eligible_exercises");
+
+  const { data: session, error: sessionError } = await admin
+    .from("workout_sessions")
+    .insert({
+      member_id: memberId,
+      booking_id: bookingId,
+      resource_id: resourceId,
+      status: "generated",
+      format: "hiit",
+      work_seconds: choice.workSeconds,
+      rest_seconds: choice.restSeconds,
+      rest_between_rounds_seconds: choice.restBetweenRoundsSeconds,
+      target_rounds: choice.rounds,
+    })
+    .select("id")
+    .single();
+
+  if (sessionError) {
+    // Same concurrent-request race recovery as generateCircuitSession's
+    // own insert above — the unique index on booking_id is the real
+    // guard.
+    if (sessionError.code === "23505") {
+      const { data: winner, error: winnerError } = await admin.from("workout_sessions").select("id").eq("booking_id", bookingId).single();
+      if (winnerError) throw new Error(winnerError.message);
+      const detail = await loadSessionDetail(winner.id);
+      return {
+        detail: {
+          ...detail,
+          excludedExerciseKeys: excludedKeys,
+          recoveryAdvice: { kind: "insufficient_data" },
+          painCaution: await getPainCautionForSession(
+            memberId,
+            detail.exercises.map((e) => e.key)
+          ),
+        },
+        introNarration: null,
+      };
+    }
+    throw new Error(sessionError.message);
+  }
+
+  for (let i = 0; i < picks.length; i++) {
+    const pick = picks[i];
+    const { data: exerciseRow, error: exerciseError } = await admin
+      .from("workout_exercises")
+      .insert({ session_id: session.id, exercise_key: pick.key, name: pick.name, muscle_group: pick.muscleGroup, sort_order: i })
+      .select("id")
+      .single();
+    if (exerciseError) throw new Error(exerciseError.message);
+
+    // One workout_sets row per exercise (set_number 1), duration_seconds
+    // set to the session's uniform work interval so the existing
+    // duration-based set rendering needs no changes — same "no discrete
+    // sets concept" posture as generateCircuitSession's own rows.
+    const { error: setError } = await admin.from("workout_sets").insert({
+      exercise_id: exerciseRow.id,
+      set_number: 1,
+      reps_target: null,
+      duration_seconds: choice.workSeconds,
+      weight_target_kg: null,
+    });
+    if (setError) throw new Error(setError.message);
+  }
+
+  const detail = await loadSessionDetail(session.id);
+  return {
+    detail: {
+      ...detail,
+      excludedExerciseKeys: excludedKeys,
+      recoveryAdvice: { kind: "insufficient_data" },
+      painCaution: await getPainCautionForSession(
+        memberId,
+        detail.exercises.map((e) => e.key)
+      ),
+    },
+    introNarration: null,
+  };
+}
+
 async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise[], restByKey?: Record<string, number>): Promise<void> {
   const admin = createAdminClient();
 
@@ -732,7 +885,9 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
 
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
-    .select("id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps, target_rounds, elapsed_seconds")
+    .select(
+      "id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps, target_rounds, elapsed_seconds, work_seconds, rest_seconds, rest_between_rounds_seconds"
+    )
     .eq("id", sessionId)
     .single();
   if (sessionError) throw new Error(sessionError.message);
@@ -761,6 +916,9 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
     partialRoundReps: session.partial_round_reps,
     targetRounds: session.target_rounds,
     elapsedSeconds: session.elapsed_seconds,
+    workSeconds: session.work_seconds,
+    restSeconds: session.rest_seconds,
+    restBetweenRoundsSeconds: session.rest_between_rounds_seconds,
     exercises: (exercises ?? []).map((e) => ({
       id: e.id,
       key: e.exercise_key,
@@ -1066,6 +1224,83 @@ export async function completeRoundsForTimeSession(sessionId: number, result: Rf
   if (error) throw new Error(error.message);
 }
 
+// HIIT completion (Stage 4, 2026-08-30) — nothing self-reported at all,
+// unlike AMRAP's tally or RFT's stopwatch result: v1 has no early-exit
+// path, so the member always completes every prescribed round, and the
+// total duration is fully determined by the stored work/rest/rounds
+// prescription. The server computes elapsedSeconds itself from that
+// prescription plus the session's own exercise count — never trusts
+// anything from the client (there's nothing for the client to submit),
+// strictly more defensive than RFT's own clamp-against-stored-target.
+export async function completeHiitSession(sessionId: number): Promise<void> {
+  const admin = createAdminClient();
+  const { data: session, error: sessionError } = await admin
+    .from("workout_sessions")
+    .select("target_rounds, work_seconds, rest_seconds, rest_between_rounds_seconds")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (sessionError) throw new Error(sessionError.message);
+  if (!session || session.target_rounds === null || session.work_seconds === null) throw new Error("session_not_found");
+
+  const { count: exerciseCount, error: countError } = await admin
+    .from("workout_exercises")
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", sessionId);
+  if (countError) throw new Error(countError.message);
+
+  const rounds = session.target_rounds;
+  const n = exerciseCount ?? 0;
+  const workSeconds = session.work_seconds;
+  const restSeconds = session.rest_seconds ?? 0;
+  const restBetweenRoundsSeconds = session.rest_between_rounds_seconds ?? 0;
+  // Work→rest→work→...→work (no trailing rest within a round) per round,
+  // plus rest-between-rounds after every round except the last — matches
+  // the sequencer's own transition rules in workout-view.tsx.
+  const elapsedSeconds = rounds * (n * workSeconds + Math.max(n - 1, 0) * restSeconds) + Math.max(rounds - 1, 0) * restBetweenRoundsSeconds;
+
+  const { error } = await admin
+    .from("workout_sessions")
+    .update({
+      status: "completed",
+      rounds_completed: rounds,
+      elapsed_seconds: elapsedSeconds,
+    })
+    .eq("id", sessionId);
+  if (error) throw new Error(error.message);
+}
+
+// HIIT reps tally (2026-08-30, Carl's own follow-up: "would you not want
+// to track how many of each you did in the 30s?"). Optional, logged
+// AFTER completion (completeHiitSession already ran automatically —
+// this never blocks or delays that) — one number per exercise, the
+// member's own recollection of roughly how many reps they got per
+// interval, not a per-round breakdown (too fine-grained to remember
+// accurately, and every other self-reported number in this app — AMRAP's
+// tally, RPE — is already a single post-hoc estimate, not a live count).
+// Reuses workout_sets.reps_actual, the exact column every other format
+// already writes real logged reps into — no new column needed. A member
+// can leave any exercise blank; only the ones actually supplied are
+// written. Ownership of each exerciseId is re-verified against this
+// session, same never-trust-the-client-ids posture as swapExercise.
+export async function logHiitReps(sessionId: number, reps: { exerciseId: number; reps: number }[]): Promise<void> {
+  if (reps.length === 0) return;
+  const admin = createAdminClient();
+
+  const { data: exercises, error: exercisesError } = await admin.from("workout_exercises").select("id").eq("session_id", sessionId);
+  if (exercisesError) throw new Error(exercisesError.message);
+  const validExerciseIds = new Set((exercises ?? []).map((e) => e.id));
+
+  for (const entry of reps) {
+    if (!validExerciseIds.has(entry.exerciseId)) continue;
+    const { error } = await admin
+      .from("workout_sets")
+      .update({ reps_actual: entry.reps })
+      .eq("exercise_id", entry.exerciseId)
+      .eq("set_number", 1);
+    if (error) throw new Error(error.message);
+  }
+}
+
 // Marks a session complete and previews the NEXT session's weights right
 // away, using today's just-logged RPE — the brief's "AI Coach next session
 // preview: what's next and why weights changed" (§9 Post-Session Summary).
@@ -1126,23 +1361,35 @@ export async function completeSession(
   return { totalVolumeKg, changes, narration };
 }
 
-export interface RecentSessionSummary {
+export interface SessionHistoryEntry {
   sessionId: number;
   createdAt: string;
+  format: WorkoutFormat;
   muscleGroups: string[];
   totalVolumeKg: number;
+  roundsCompleted: number | null;
+  elapsedSeconds: number | null;
+  targetRounds: number | null;
 }
 
-// For the Coach hub's "Recent workouts" list — same on-the-fly volume
-// calculation completeSession() uses, no persisted stats column needed.
-// Batches exercises/sets across all returned sessions in two queries
-// rather than one round-trip per session.
-export async function getRecentCompletedSessions(memberId: number, limit = 5): Promise<RecentSessionSummary[]> {
+// Session-history list (2026-08-30) — was getRecentCompletedSessions,
+// built for the Coach hub's "Recent workouts" list but never actually
+// wired up anywhere (confirmed zero callers) and format-unaware (volume
+// is 0 and muscleGroups is meaningless for every circuit-format session,
+// since those never log reps_actual/weight_actual_kg the normal way).
+// Fixed and renamed for /training/history's own list, which needs the
+// circuit result fields (roundsCompleted/elapsedSeconds/targetRounds) to
+// show a real headline stat per row instead of a straight-sets-only
+// volume figure. Same on-the-fly volume calculation completeSession()
+// uses, no persisted stats column needed. Batches exercises/sets across
+// all returned sessions in two queries rather than one round-trip per
+// session.
+export async function getSessionHistory(memberId: number, limit = 20): Promise<SessionHistoryEntry[]> {
   const admin = createAdminClient();
 
   const { data: sessions, error: sessionsError } = await admin
     .from("workout_sessions")
-    .select("id, created_at")
+    .select("id, created_at, format, rounds_completed, elapsed_seconds, target_rounds")
     .eq("member_id", memberId)
     .eq("status", "completed")
     .order("created_at", { ascending: false })
@@ -1172,6 +1419,67 @@ export async function getRecentCompletedSessions(memberId: number, limit = 5): P
     const totalVolumeKg = (sets ?? [])
       .filter((s) => sessionExerciseIds.has(s.exercise_id))
       .reduce((sum, s) => sum + (s.reps_actual ?? 0) * (s.weight_actual_kg ?? 0), 0);
-    return { sessionId: session.id, createdAt: session.created_at, muscleGroups, totalVolumeKg };
+    return {
+      sessionId: session.id,
+      createdAt: session.created_at,
+      format: session.format as WorkoutFormat,
+      muscleGroups,
+      totalVolumeKg,
+      roundsCompleted: session.rounds_completed,
+      elapsedSeconds: session.elapsed_seconds,
+      targetRounds: session.target_rounds,
+    };
   });
+}
+
+const STATS_WEEKS_WINDOW = 26;
+
+export interface LifetimeWorkoutStats {
+  totalSessions: number;
+  totalVolumeKg: number;
+  byFormat: Record<WorkoutFormat, number>;
+}
+
+// Stats summary at the top of /training/history (2026-08-30) — "last 26
+// weeks", not unbounded lifetime: matches the WEEKS_WINDOW convention
+// every other aggregate function in this codebase already uses
+// (consistency.ts, exercise-performance.ts, body-measurements.ts), and
+// sidesteps needing unbounded .range() pagination past PostgREST's
+// 1000-row cap for a long-tenured member — see CLAUDE.md's own Data
+// pipeline note on that cap (written about the podHq admin app's tables,
+// but the same PostgREST behaviour applies to this Supabase project's
+// workout_sessions too). One query for the window is well within that
+// cap for any realistic training frequency.
+export async function getLifetimeWorkoutStats(memberId: number): Promise<LifetimeWorkoutStats> {
+  const admin = createAdminClient();
+  const since = new Date(Date.now() - STATS_WEEKS_WINDOW * 7 * 24 * 60 * 60 * 1000);
+
+  const { data: sessions, error: sessionsError } = await admin
+    .from("workout_sessions")
+    .select("id, format")
+    .eq("member_id", memberId)
+    .eq("status", "completed")
+    .gte("created_at", since.toISOString());
+  if (sessionsError) throw new Error(sessionsError.message);
+
+  const byFormat: Record<WorkoutFormat, number> = { straight_sets: 0, amrap: 0, rounds_for_time: 0, hiit: 0 };
+  for (const session of sessions ?? []) {
+    const format = session.format as WorkoutFormat;
+    byFormat[format] = (byFormat[format] ?? 0) + 1;
+  }
+
+  const sessionIds = (sessions ?? []).map((s) => s.id);
+  let totalVolumeKg = 0;
+  if (sessionIds.length > 0) {
+    const { data: exercises, error: exercisesError } = await admin.from("workout_exercises").select("id").in("session_id", sessionIds);
+    if (exercisesError) throw new Error(exercisesError.message);
+    const exerciseIds = (exercises ?? []).map((e) => e.id);
+    if (exerciseIds.length > 0) {
+      const { data: sets, error: setsError } = await admin.from("workout_sets").select("reps_actual, weight_actual_kg").in("exercise_id", exerciseIds);
+      if (setsError) throw new Error(setsError.message);
+      totalVolumeKg = (sets ?? []).reduce((sum, s) => sum + (s.reps_actual ?? 0) * (s.weight_actual_kg ?? 0), 0);
+    }
+  }
+
+  return { totalSessions: (sessions ?? []).length, totalVolumeKg, byFormat };
 }

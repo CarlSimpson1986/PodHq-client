@@ -79,7 +79,16 @@ export async function POST(request: Request) {
                 timeCapSeconds: parsed.data.timeCapSeconds!,
                 exercises: parsed.data.amrapExercises!,
               }
-            : { mode: "default" };
+            : parsed.data.mode === "custom-hiit"
+              ? {
+                  mode: "custom-hiit",
+                  workSeconds: parsed.data.workSeconds!,
+                  restSeconds: parsed.data.restSeconds!,
+                  rounds: parsed.data.targetRounds!,
+                  restBetweenRoundsSeconds: parsed.data.restBetweenRoundsSeconds!,
+                  exerciseKeys: parsed.data.hiitExerciseKeys!,
+                }
+              : { mode: "default" };
 
   try {
     const { detail, introNarration } = await changeWorkoutMode(member.id, booking.id, booking.resource_id, member.name, choice);
