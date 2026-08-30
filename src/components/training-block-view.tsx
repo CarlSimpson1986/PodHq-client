@@ -11,7 +11,7 @@ type TrainingBlockState =
 
 type BlockChangeRecommendation =
   | { kind: "shift"; nextBlockType: BlockType }
-  | { kind: "keep"; reason: "low_attendance" }
+  | { kind: "keep"; reason: "low_attendance" | "insufficient_data" }
   | { kind: "extend_deload"; reason: "high_fatigue" };
 
 // The current 4-week rep-range phase within a hypertrophy/strength block
@@ -140,7 +140,9 @@ export function TrainingBlockView() {
             <>
               <p className="text-sm font-semibold">Suggested: stay in {BLOCK_LABELS[state.currentBlockType]}</p>
               <p className="mt-1 text-sm text-card-light-muted">
-                A few sessions were missed this block — worth making the most of it before moving on.
+                {recommendation.reason === "low_attendance"
+                  ? "A few sessions were missed this block — worth making the most of it before moving on."
+                  : "Not enough recent difficulty ratings to tell if you're ready for something harder — an extra week here first."}
               </p>
             </>
           )}

@@ -36,7 +36,7 @@ describe("generateWorkout — RPE-based weight progression", () => {
   // The rule added to MyFitPod-App-Brief.docx §9 this session: Effortless/
   // Easy trends the weight up, Just Right holds it, Hard/Killer holds or
   // trends it down.
-  it("increases weight ~5% after an Easy (RPE 2) set, rounded to the nearest 1.25kg plate", () => {
+  it("increases weight ~5% after an Easy (RPE 2) set for intermediate (this app's default), rounded to the nearest 1.25kg plate", () => {
     const result = generateWorkout({
       profile: profile(),
       history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
@@ -45,6 +45,32 @@ describe("generateWorkout — RPE-based weight progression", () => {
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
     // 40 * 1.05 = 42, rounds up to the nearest 1.25kg plate increment.
     expect(exercise.weightTargetKg).toBe(42.5);
+  });
+
+  // RPE_ADJUSTMENT_PERCENT_BY_EXPERIENCE (2026-08-30, coaching review) —
+  // beginner moves faster (bigger jumps, further from their ceiling),
+  // advanced moves slower (smaller jumps, closer to their ceiling and a
+  // real overshoot risk) — see that constant's own comment in types.ts.
+  it("increases weight ~8% after an Easy set for a beginner", () => {
+    const result = generateWorkout({
+      profile: profile({ experience_level: "beginner" }),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
+      lastSession: null,
+    });
+    const exercise = result.find((e) => e.key === "barbell_bench_press")!;
+    // 40 * 1.08 = 43.2, rounds to the nearest 1.25kg plate increment.
+    expect(exercise.weightTargetKg).toBe(43.75);
+  });
+
+  it("increases weight ~3% after an Easy set for an advanced lifter", () => {
+    const result = generateWorkout({
+      profile: profile({ experience_level: "advanced" }),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
+      lastSession: null,
+    });
+    const exercise = result.find((e) => e.key === "barbell_bench_press")!;
+    // 40 * 1.03 = 41.2, rounds to the nearest 1.25kg plate increment.
+    expect(exercise.weightTargetKg).toBe(41.25);
   });
 
   it("holds weight after a Just Right (RPE 3) set", () => {
@@ -155,6 +181,17 @@ describe("getInjuryExcludedKeys", () => {
     expect(excluded).toContain("barbell_squat");
     expect(excluded).toContain("leg_extension");
     expect(excluded).not.toContain("barbell_bench_press");
+  });
+
+  // Regression (2026-08-30) — "shoulders" is the one avoidIfInjury keyword
+  // stored plural; a member typing the far more natural singular used to
+  // match nothing at all (a real injury, silently ignored). Both forms
+  // must exclude the same set now.
+  it("matches the singular form of a plural-stored keyword (shoulder injury)", () => {
+    const singular = getInjuryExcludedKeys("shoulder injury");
+    const plural = getInjuryExcludedKeys("shoulders");
+    expect(singular).toContain("dumbbell_shoulder_press");
+    expect(singular).toEqual(plural);
   });
 });
 

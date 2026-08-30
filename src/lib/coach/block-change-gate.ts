@@ -2,7 +2,7 @@ import { BLOCK_ATTENDANCE_KEEP_THRESHOLD, BLOCK_HIGH_RPE_THRESHOLD, BLOCK_MIN_RP
 
 export type BlockChangeRecommendation =
   | { kind: "shift"; nextBlockType: BlockType }
-  | { kind: "keep"; reason: "low_attendance" }
+  | { kind: "keep"; reason: "low_attendance" | "insufficient_data" }
   | { kind: "extend_deload"; reason: "high_fatigue" };
 
 export interface AttendanceInput {
@@ -37,12 +37,21 @@ export function getBlockChangeRecommendation(
   // Fatigue only matters at the one real escalation point in the whole
   // cycle: coming out of a deload into a harder Strength block.
   // Hypertrophy→deload and strength→deload never escalate difficulty, so
-  // there's nothing to gate there beyond attendance. Below the RPE
-  // sample floor, a thin sample can only ever make the recommendation
-  // more conservative — it's never the sole reason to block a shift when
-  // attendance was fine, so this branch simply doesn't fire rather than
-  // guessing from too little data.
-  if (scheduledNextType === "strength" && recentRpe.length >= BLOCK_MIN_RPE_SAMPLE) {
+  // there's nothing to gate there beyond attendance.
+  if (scheduledNextType === "strength") {
+    // Corrected 2026-08-30 (coaching review) — below the RPE sample
+    // floor, a thin sample used to just let this branch not fire,
+    // silently falling through to "shift". That's backwards: not having
+    // enough recent signal on how hard training's actually been is not
+    // the same as having checked and found it's fine. A real coach who
+    // doesn't have enough recent information wouldn't default to
+    // green-lighting the harder phase — they'd hold. AMRAP/RFT sessions
+    // never log per-set RPE (nothing to rate in a circuit), so this
+    // branch increasingly matters as members adopt those custom formats
+    // between deload and their next Strength escalation.
+    if (recentRpe.length < BLOCK_MIN_RPE_SAMPLE) {
+      return { kind: "keep", reason: "insufficient_data" };
+    }
     const hardRatio = recentRpe.filter((rpe) => rpe >= 4).length / recentRpe.length;
     if (hardRatio >= BLOCK_HIGH_RPE_THRESHOLD) {
       return { kind: "extend_deload", reason: "high_fatigue" };
