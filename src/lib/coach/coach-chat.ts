@@ -5,7 +5,7 @@ import type { RecoveryStatus } from "@/lib/coach/recovery-status";
 import type { WeeklyReview } from "@/lib/coach/weekly-review";
 import type { LastSessionDetail } from "@/lib/coach/exercise-performance";
 import { CRISIS_MARKER, CRISIS_REPLY, CRISIS_SYSTEM_PROMPT_RULE } from "@/lib/crisis-response";
-import { searchPubMed, formatPubMedResultsForModel } from "@/lib/coach/pubmed";
+import { searchPubMed, formatPubMedResultsForModel, extractCitedPmids, sanitizeCitedPmids } from "@/lib/coach/pubmed";
 import { COACH_MANUAL } from "@/lib/coach/coach-manual";
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -91,7 +91,7 @@ ${COACH_MANUAL}
 
 Answer questions using this context where relevant. Be direct, confident, and encouraging — never hedge, never say "I'm an AI" or suggest they double-check with someone else. You have a search_pubmed tool that searches real, peer-reviewed research. For any question about training methodology or programming — repetition ranges, sets, frequency, exercise selection (e.g. one exercise vs. another), rest periods, nutrition timing, recovery science — call search_pubmed before answering; err on the side of searching rather than skipping it. Skip it only for logistics questions (bookings, their own program or recovery data, general chat) where there's no research claim to check.
 
-When results come back and one is genuinely on-topic, structure your answer in two parts: first, one sentence giving the science with a natural citation (e.g. "A 2021 study in [journal] found..."), using ONLY the specific studies actually returned — never invent an author, year, journal, or finding that wasn't in the tool's results; then one sentence giving the practical takeaway — what this actually means for what they should do. If the tool returns nothing genuinely on-topic, skip straight to the practical takeaway in general evidence-based terms, with no specific citation, same as if you'd never searched. Keep answers to 3-4 short sentences total, plain language, no markdown.`;
+When results come back and one is genuinely on-topic, structure your answer in two parts: first, one sentence giving the science with a natural citation (e.g. "A 2021 study in [journal] found..."), using ONLY the specific studies actually returned — never invent an author, year, journal, or finding that wasn't in the tool's results — and end that sentence with the exact PMID tag copied character-for-character from the result you're citing, e.g. "[PMID 34567890]", so the member can verify it themselves; then one sentence giving the practical takeaway — what this actually means for what they should do. If the tool returns nothing genuinely on-topic, skip straight to the practical takeaway in general evidence-based terms, with no specific citation and no PMID tag, same as if you'd never searched. Keep answers to 3-4 short sentences total, plain language, no markdown other than the PMID tag itself.`;
 }
 
 // OpenAI-compatible shape (Groq) — see askGroq.
@@ -154,11 +154,13 @@ async function askGroq(systemPrompt: string, message: string, history: ChatTurn[
   let data = await callGroq(messages, true);
   let choice = data.choices?.[0];
   const toolCalls = choice?.message?.tool_calls;
+  const knownPmids = new Set<string>();
 
   if (Array.isArray(toolCalls) && toolCalls.length > 0) {
     messages.push(choice.message);
     for (const toolCall of toolCalls) {
       const results = await runPubMedToolCall(toolCall.function?.arguments);
+      for (const pmid of extractCitedPmids(results)) knownPmids.add(pmid);
       messages.push({ role: "tool", tool_call_id: toolCall.id, content: results });
     }
     data = await callGroq(messages, false);
@@ -169,7 +171,7 @@ async function askGroq(systemPrompt: string, message: string, history: ChatTurn[
   if (typeof reply !== "string" || !reply.trim()) {
     throw new Error("Groq returned no reply content.");
   }
-  return reply.trim();
+  return sanitizeCitedPmids(reply.trim(), knownPmids);
 }
 
 async function callGroq(messages: Record<string, unknown>[], withTools: boolean) {
@@ -206,11 +208,13 @@ async function askClaude(systemPrompt: string, message: string, history: ChatTur
   const messages: Record<string, unknown>[] = [...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: message }];
 
   let data = await callClaude(systemPrompt, messages, true);
+  const knownPmids = new Set<string>();
 
   if (data.stop_reason === "tool_use") {
     const toolUseBlock = (data.content as { type: string; id: string; input?: { query?: string } }[])?.find((c) => c.type === "tool_use");
     if (toolUseBlock) {
       const results = await runPubMedToolCall(JSON.stringify(toolUseBlock.input ?? {}));
+      for (const pmid of extractCitedPmids(results)) knownPmids.add(pmid);
       messages.push({ role: "assistant", content: data.content });
       messages.push({
         role: "user",
@@ -225,7 +229,7 @@ async function askClaude(systemPrompt: string, message: string, history: ChatTur
   if (typeof reply !== "string" || !reply.trim()) {
     throw new Error("Anthropic returned no reply content.");
   }
-  return reply.trim();
+  return sanitizeCitedPmids(reply.trim(), knownPmids);
 }
 
 async function callClaude(systemPrompt: string, messages: Record<string, unknown>[], withTools: boolean) {
