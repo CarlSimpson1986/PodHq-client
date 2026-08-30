@@ -6,7 +6,21 @@ import Link from "next/link";
 // did nothing). Habit has no separate edit screen of its own; it's set
 // as part of the weekly check-in, so that's where tapping this card
 // should take a member too.
-export function MemberHabitCard({ habit, streakWeeks }: { habit: string | null; streakWeeks: number }) {
+//
+// followThrough (2026-08-30, client-perspective review) — the "did you
+// keep last week's habit up?" question was answered every week and only
+// ever used once, in that week's own coach response. This rolls it into
+// a real stat next to the streak — "3 of your last 5" — real
+// accountability, not a line in a paragraph a member may not reread.
+export function MemberHabitCard({
+  habit,
+  streakWeeks,
+  followThrough,
+}: {
+  habit: string | null;
+  streakWeeks: number;
+  followThrough: { madeProgress: number; total: number } | null;
+}) {
   return (
     <Link href="/coach/checkin" prefetch={false} className="card-light block p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Your habit</p>
@@ -21,6 +35,11 @@ export function MemberHabitCard({ habit, streakWeeks }: { habit: string | null; 
             {streakWeeks > 1 ? `${streakWeeks} weeks running you've set a habit.` : "Set this week — keep it up next check-in to start a streak."}
           </p>
         </>
+      )}
+      {followThrough && followThrough.total > 0 && (
+        <p className="mt-1 text-xs text-card-light-muted">
+          Followed through on {followThrough.madeProgress}/{followThrough.total} recent weeks.
+        </p>
       )}
     </Link>
   );

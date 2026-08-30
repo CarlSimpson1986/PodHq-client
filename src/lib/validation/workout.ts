@@ -29,7 +29,7 @@ const amrapExerciseSchema = z.object({
 export const generateWorkoutSchema = z
   .object({
     bookingId: z.number().int().positive(),
-    mode: z.enum(["default", "focus", "custom", "custom-amrap", "custom-rft"]).default("default"),
+    mode: z.enum(["default", "focus", "custom", "custom-amrap", "custom-rft", "custom-hiit"]).default("default"),
     focusMuscleGroups: z.array(z.enum(MUSCLE_GROUPS)).min(1).max(2).optional(),
     customExerciseKeys: z.array(z.string().min(1).max(100)).min(1).max(6).optional(),
     customExerciseRests: z.record(z.string().min(1).max(100), z.number().int().min(0).max(600)).optional(),
@@ -40,8 +40,23 @@ export const generateWorkoutSchema = z
     // above any realistic RFT prescription (most real RFT workouts are
     // 3-5 rounds) without allowing a nonsense "200 rounds" entry.
     // Reuses amrapExercises as the exercise-list field for both circuit
-    // formats — same shape, no separate rftExercises needed.
+    // formats — same shape, no separate rftExercises needed. HIIT (Stage
+    // 4, 2026-08-30) reuses this same field for its own round count —
+    // same "generic, reused across formats" convention as timeCapSeconds.
     targetRounds: z.number().int().min(1).max(20).optional(),
+    // HIIT (Stage 4, 2026-08-30) — work/rest seconds are per-exercise
+    // interval durations, set once for the whole session (uniform across
+    // every exercise/round, no per-exercise override — Carl's own ask).
+    // 5-300s covers everything from a Tabata-style 20s interval to a
+    // generous 5-minute work block without allowing a nonsense value.
+    // restBetweenRoundsSeconds allows 0 (no extra pause wanted between
+    // rounds beyond the normal per-exercise rest). hiitExerciseKeys is
+    // deliberately plain string[] (own field, not amrapExercises) — HIIT
+    // has no per-exercise reps/duration/weight to carry.
+    workSeconds: z.number().int().min(5).max(300).optional(),
+    restSeconds: z.number().int().min(0).max(300).optional(),
+    restBetweenRoundsSeconds: z.number().int().min(0).max(300).optional(),
+    hiitExerciseKeys: z.array(z.string().min(1).max(100)).min(1).max(6).optional(),
   })
   // A chosen mode must actually carry its own picks — without this, a
   // request could claim mode "focus" with no focusMuscleGroups and the
@@ -84,6 +99,29 @@ export const generateWorkoutSchema = z
   .refine((data) => data.mode !== "custom-rft" || (data.amrapExercises ?? []).every((e) => e.durationSeconds === undefined), {
     message: "Rounds For Time exercises must be reps-based, not duration-based.",
     path: ["amrapExercises"],
+  })
+  // HIIT (Stage 4, 2026-08-30) — all four fields required together; none
+  // of AMRAP/RFT's reps-vs-duration checks apply since HIIT carries no
+  // per-exercise prescription at all.
+  .refine((data) => data.mode !== "custom-hiit" || data.workSeconds !== undefined, {
+    message: "workSeconds is required when mode is 'custom-hiit'.",
+    path: ["workSeconds"],
+  })
+  .refine((data) => data.mode !== "custom-hiit" || data.restSeconds !== undefined, {
+    message: "restSeconds is required when mode is 'custom-hiit'.",
+    path: ["restSeconds"],
+  })
+  .refine((data) => data.mode !== "custom-hiit" || data.targetRounds !== undefined, {
+    message: "targetRounds is required when mode is 'custom-hiit'.",
+    path: ["targetRounds"],
+  })
+  .refine((data) => data.mode !== "custom-hiit" || data.restBetweenRoundsSeconds !== undefined, {
+    message: "restBetweenRoundsSeconds is required when mode is 'custom-hiit'.",
+    path: ["restBetweenRoundsSeconds"],
+  })
+  .refine((data) => data.mode !== "custom-hiit" || (data.hiitExerciseKeys?.length ?? 0) > 0, {
+    message: "hiitExerciseKeys is required when mode is 'custom-hiit'.",
+    path: ["hiitExerciseKeys"],
   });
 
 // rpe is optional — asked once per exercise, on its last set, not on
@@ -135,3 +173,20 @@ export const completeRftSchema = z
     message: "partialRoundExerciseIndex and partialRoundReps must be provided together.",
     path: ["partialRoundReps"],
   });
+
+// HIIT reps tally (2026-08-30) — optional per-exercise self-report, sent
+// AFTER completeHiitSession has already run automatically (see
+// completeHiitSession's own comment on why this is a separate step, not
+// blocking). An empty array is valid — a member can skip logging
+// entirely. Capped at 6 entries, matching every other exercise-list cap
+// in this app (amrapExercises, customExerciseKeys).
+export const logHiitRepsSchema = z.object({
+  reps: z
+    .array(
+      z.object({
+        exerciseId: z.number().int().positive(),
+        reps: z.number().int().min(0).max(1000),
+      })
+    )
+    .max(6),
+});

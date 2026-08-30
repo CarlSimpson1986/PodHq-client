@@ -3,9 +3,11 @@ import { getWeeklyRecommendation } from "./weekly-recommendation";
 import type { CheckInState } from "./checkin-state";
 import type { RecoveryStatus } from "./recovery-status";
 import type { WeeklyReview } from "./weekly-review";
+import type { MoodTrend } from "./mood-trend";
 
 const NOT_DUE: CheckInState = { kind: "not_due", daysRemaining: 3, nextDueDate: "2026-09-06" };
 const NORMAL_RECOVERY: RecoveryStatus = { kind: "normal" };
+const NO_MOOD_TREND: MoodTrend = { kind: "none" };
 
 function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
   return {
@@ -30,37 +32,45 @@ function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
 
 describe("getWeeklyRecommendation", () => {
   it("prioritises completing an overdue check-in above everything else", () => {
-    const result = getWeeklyRecommendation({ kind: "overdue", daysOverdue: 2 }, 3, 3, NORMAL_RECOVERY, review(), "Sleep by 10pm");
+    const result = getWeeklyRecommendation({ kind: "overdue", daysOverdue: 2 }, 3, 3, NORMAL_RECOVERY, review(), "Sleep by 10pm", NO_MOOD_TREND);
     expect(result.kind).toBe("complete_checkin");
   });
 
   it("flags hitting the session target before recovery or the member's habit", () => {
-    const result = getWeeklyRecommendation(NOT_DUE, 1, 3, { kind: "low_recovery", reason: "low_sleep" }, review(), "Sleep by 10pm");
+    const result = getWeeklyRecommendation(NOT_DUE, 1, 3, { kind: "low_recovery", reason: "low_sleep" }, review(), "Sleep by 10pm", NO_MOOD_TREND);
     expect(result.kind).toBe("hit_sessions");
   });
 
+  it("flags a low mood trend before recovery or the member's habit", () => {
+    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, { kind: "low_recovery", reason: "elevated_resting_hr" }, review(), "Sleep by 10pm", {
+      kind: "low",
+      consecutiveWeeks: 3,
+    });
+    expect(result).toEqual({ kind: "low_mood", habit: expect.any(String), reason: expect.any(String) });
+  });
+
   it("flags low recovery even when the member has a stated habit", () => {
-    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, { kind: "low_recovery", reason: "elevated_resting_hr" }, review(), "Sleep by 10pm");
+    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, { kind: "low_recovery", reason: "elevated_resting_hr" }, review(), "Sleep by 10pm", NO_MOOD_TREND);
     expect(result.kind).toBe("prioritise_sleep");
   });
 
   it("surfaces the member's stated habit once sessions/recovery are clear", () => {
-    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review({ nutritionDaysLogged: 2 }), "Sleep by 10pm");
+    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review({ nutritionDaysLogged: 2 }), "Sleep by 10pm", NO_MOOD_TREND);
     expect(result).toEqual({ kind: "member_habit", habit: "Sleep by 10pm", reason: expect.any(String) });
   });
 
   it("falls through to log_nutrition when there's no stated habit", () => {
-    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review({ nutritionDaysLogged: 2 }), null);
+    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review({ nutritionDaysLogged: 2 }), null, NO_MOOD_TREND);
     expect(result.kind).toBe("log_nutrition");
   });
 
   it("falls through to hit_protein when nutrition logging is fine but protein is low", () => {
-    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review({ avgDailyProteinG: 100 }), null);
+    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review({ avgDailyProteinG: 100 }), null, NO_MOOD_TREND);
     expect(result.kind).toBe("hit_protein");
   });
 
   it("returns the honest on_track default when nothing is flagged and no habit is set", () => {
-    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review(), null);
+    const result = getWeeklyRecommendation(NOT_DUE, 3, 3, NORMAL_RECOVERY, review(), null, NO_MOOD_TREND);
     expect(result.kind).toBe("on_track");
   });
 });

@@ -156,6 +156,13 @@ export function CheckInView() {
   const [barriers, setBarriers] = useState("");
   const [habit, setHabit] = useState("");
   const [habitFollowUp, setHabitFollowUp] = useState<"yes" | "partially" | "no" | null>(null);
+  // Weekly weigh-in (2026-08-30) — "" means not answered, same convention
+  // as painDetail/barriers; never blocks submit, matching how those two
+  // are also optional. All three stand independently — a member can log
+  // any subset.
+  const [weightKg, setWeightKg] = useState("");
+  const [waistCm, setWaistCm] = useState("");
+  const [hipCm, setHipCm] = useState("");
 
   useEffect(() => {
     queueMicrotask(async () => {
@@ -201,6 +208,9 @@ export function CheckInView() {
           barriers: barriers.trim() || undefined,
           habit: habit.trim(),
           habitFollowUp: previousHabit !== null ? habitFollowUp : undefined,
+          weightKg: weightKg.trim() === "" ? undefined : Number(weightKg),
+          waistCm: waistCm.trim() === "" ? undefined : Number(waistCm),
+          hipCm: hipCm.trim() === "" ? undefined : Number(hipCm),
         }),
       });
       const body = await res.json();
@@ -374,6 +384,60 @@ export function CheckInView() {
               rows={2}
               className={`${textAreaClass} mt-2`}
             />
+          </div>
+
+          {/* Weekly weigh-in (2026-08-30) — every field stands alone and
+              optional, same posture as barriers/painDetail above; never
+              blocks submit. Recorded date, table, and trend chart live in
+              body-measurements.ts / /coach/profile, not here. */}
+          <div>
+            <p className="text-sm font-semibold">
+              Want to log this week&apos;s measurements? <span className="font-normal text-card-light-muted">(optional)</span>
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div>
+                <label htmlFor="checkin-weight-kg" className="mb-1 block text-xs text-card-light-muted">
+                  Weight (kg)
+                </label>
+                <input
+                  id="checkin-weight-kg"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  value={weightKg}
+                  onChange={(e) => setWeightKg(e.target.value)}
+                  className={`${textAreaClass} py-2`}
+                />
+              </div>
+              <div>
+                <label htmlFor="checkin-waist-cm" className="mb-1 block text-xs text-card-light-muted">
+                  Waist (cm)
+                </label>
+                <input
+                  id="checkin-waist-cm"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  value={waistCm}
+                  onChange={(e) => setWaistCm(e.target.value)}
+                  className={`${textAreaClass} py-2`}
+                />
+              </div>
+              <div>
+                <label htmlFor="checkin-hip-cm" className="mb-1 block text-xs text-card-light-muted">
+                  Hip (cm)
+                </label>
+                <input
+                  id="checkin-hip-cm"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  value={hipCm}
+                  onChange={(e) => setHipCm(e.target.value)}
+                  className={`${textAreaClass} py-2`}
+                />
+              </div>
+            </div>
           </div>
 
           {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}

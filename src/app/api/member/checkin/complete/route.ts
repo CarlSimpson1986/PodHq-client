@@ -6,6 +6,8 @@ import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { completeCheckIn, getPreviousHabit } from "@/lib/coach/check-ins";
 import { currentCheckInPeriod } from "@/lib/coach/checkin-state";
 import { getWeeklyReview } from "@/lib/coach/weekly-review";
+import { logBodyMeasurements } from "@/lib/coach/body-measurements";
+import { londonDateString } from "@/lib/london-time";
 import { narrateCheckInResponse, PAIN_ACKNOWLEDGMENT } from "@/lib/coach-bot";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -21,6 +23,10 @@ import { checkRateLimit } from "@/lib/rate-limit";
 // perspective review) only ever appears alongside a real previousHabit —
 // the UI only shows the question when one exists — so it's optional here
 // too, not required.
+// weightKg/waistCm/hipCm (2026-08-30) — the weekly weigh-in, same
+// "skip if you don't want to answer" posture as painDetail. Bounds match
+// coach-profile.ts's own weight validation (positive, capped at 400kg);
+// waist/hip capped generously at 300cm.
 const answersSchema = z.object({
   weekFeel: z.number().int().min(1).max(5),
   hadPain: z.boolean(),
@@ -28,6 +34,9 @@ const answersSchema = z.object({
   barriers: z.string().max(500).optional(),
   habit: z.string().trim().min(1).max(200),
   habitFollowUp: z.enum(["yes", "partially", "no"]).optional(),
+  weightKg: z.number().positive().max(400).optional(),
+  waistCm: z.number().positive().max(300).optional(),
+  hipCm: z.number().positive().max(300).optional(),
 });
 
 export async function POST(request: Request) {
@@ -108,6 +117,22 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[checkin-complete] failed", { error: (error as Error).message });
     return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });
+  }
+
+  // Weekly weigh-in (2026-08-30) — best-effort, same posture as narration
+  // above: the check-in itself is already saved by this point regardless
+  // of whether this succeeds. Recorded against today's actual date (not
+  // the check-in period's start), since weight/waist/hip are read as a
+  // real time series on /coach/profile, not tied to the check-in period
+  // the way habit/mood are.
+  try {
+    await logBodyMeasurements(member.id, londonDateString(new Date()), {
+      weightKg: parsed.data.weightKg,
+      waistCm: parsed.data.waistCm,
+      hipCm: parsed.data.hipCm,
+    });
+  } catch (error) {
+    console.error("[checkin-complete] body measurement logging failed", { error: (error as Error).message });
   }
 
   return NextResponse.json({ status: "ok", narrative, painAcknowledgment });

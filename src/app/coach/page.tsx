@@ -11,6 +11,8 @@ import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { getWeeklyConsistency } from "@/lib/coach/consistency";
 import { getWeeklyRecommendation } from "@/lib/coach/weekly-recommendation";
 import { computeHabitStreak } from "@/lib/coach/habit-streak";
+import { computeHabitFollowThrough } from "@/lib/coach/habit-follow-through";
+import { computeMoodTrend } from "@/lib/coach/mood-trend";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
@@ -66,13 +68,16 @@ export default async function CoachPage() {
   const sessionsCompleted = consistencyWeeks.find((w) => w.weeksAgo === 0)?.sessionsCompleted ?? 0;
   const currentHabit = recentCheckIns[0]?.habit ?? null;
   const habitStreak = computeHabitStreak(recentCheckIns);
+  const followThrough = computeHabitFollowThrough(recentCheckIns);
+  const moodTrend = computeMoodTrend(recentCheckIns);
   const recommendation = getWeeklyRecommendation(
     checkInState,
     sessionsCompleted,
     coachProfile.sessions_per_week,
     recoveryStatus,
     weeklyReview,
-    currentHabit
+    currentHabit,
+    moodTrend
   );
 
   return (
@@ -82,7 +87,7 @@ export default async function CoachPage() {
         <div className="mx-auto w-full max-w-md space-y-4">
           <WeeklyRecommendationCard recommendation={recommendation} />
 
-          <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} />
+          <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />
 
           <Link href="/coach/checkin" prefetch={false} className="card-light block p-5">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Check-in</p>

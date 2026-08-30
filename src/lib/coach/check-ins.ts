@@ -84,6 +84,13 @@ export async function getLatestCheckInResponse(memberId: number): Promise<Latest
 export interface RecentCheckIn {
   periodStart: string;
   habit: string | null;
+  // habitFollowUp/weekFeel (2026-08-30) — feed habit-follow-through.ts and
+  // mood-trend.ts respectively. Both null on a check-in that predates
+  // these questions (weekFeel: shouldn't happen, it's always been
+  // required) or, for habitFollowUp specifically, a member's first-ever
+  // check-in (nothing to follow up on yet — see getPreviousHabit).
+  habitFollowUp: "yes" | "partially" | "no" | null;
+  weekFeel: number | null;
 }
 
 // Feeds computeHabitStreak (habit-streak.ts) and the current "Your
@@ -118,9 +125,14 @@ export async function getRecentCheckIns(memberId: number, limit = 26): Promise<R
 
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => {
-    const raw = (row.answers as Record<string, unknown> | null)?.habit;
-    const habit = typeof raw === "string" && raw.trim().length > 0 ? raw : null;
-    return { periodStart: row.period_start, habit };
+    const answers = row.answers as Record<string, unknown> | null;
+    const rawHabit = answers?.habit;
+    const habit = typeof rawHabit === "string" && rawHabit.trim().length > 0 ? rawHabit : null;
+    const rawFollowUp = answers?.habitFollowUp;
+    const habitFollowUp = rawFollowUp === "yes" || rawFollowUp === "partially" || rawFollowUp === "no" ? rawFollowUp : null;
+    const rawWeekFeel = answers?.weekFeel;
+    const weekFeel = typeof rawWeekFeel === "number" ? rawWeekFeel : null;
+    return { periodStart: row.period_start, habit, habitFollowUp, weekFeel };
   });
 }
 

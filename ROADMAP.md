@@ -14,112 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-44.md`, covering the pilot
-mechanism proof (2026-08-05) through the AMRAP format and Weights/Cardio
-split (2026-08-29) — all split out to keep this file within Claude Code's
-~15,000-character `@`-import limit. Archives aren't always the strictly
-oldest material — the split point is "what's finished and stable" as much
-as "what's oldest" (see each archive's own header note for examples).
-Reference-only, not auto-loaded by CLAUDE.md; check them for full build
-history, or `git log` on this file for exact split points. Active content
-here starts at "Stage 3 of custom workouts — Rounds For Time" (2026-08-30).
-If this file grows too large again, split it the same way: move the most
-clearly finished section into `ROADMAP-ARCHIVE-45.md`, update this
-paragraph.
-
-## Stage 3 of custom workouts — Rounds For Time — 2026-08-30
-
-Rounds-For-Time joins AMRAP as the second Cardio sub-format: a member
-prescribes a round count and races the clock (a stopwatch counting up) to
-finish every round. Reused migration `0072`'s columns exactly as that
-migration's own comment anticipated, plus a new `0073_workout_rounds_
-for_time.sql` (podHq, shared DB) for `target_rounds`/`elapsed_seconds`.
-
-**Corrected same day** after Carl pushed back ("i dont think thats how
-rounds for time works") and a web check against real CrossFit RFT WODs:
-the first pass copied AMRAP's reps-or-duration exercise config wholesale
-and had no time cap at all — a stopwatch a member could stop after 15
-seconds for "4 rounds in 0:15". Real RFT is reps-only per round (a
-fixed-duration movement can't be raced) and always carries a time cap.
-Fixed: RFT's builder is reps-only (no Duration option), a required time
-cap was added, and the stopwatch now auto-transitions to a self-reported
-DNF tally (mirroring AMRAP's own tally UI, reusing the same
-`partial_round_exercise_index`/`partial_round_reps` columns) if it hits
-the cap before "Finished!" is tapped.
-
-Also fixed while reviewing the format alongside this: the Training page's
-"Last session" card (`last-session-card.tsx`) previously rendered any
-completed AMRAP/RFT session as a wall of "Not rated" badges with no
-weight — it had no per-set actuals to show for a circuit format. Now
-format-aware: shows a rounds/time result line instead.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (152/152), and
-`npm run build` all clean throughout both passes. Live-verified on the
-playground member/booking: a normal finish, a real time-cap DNF (ran the
-stopwatch past a 1-minute cap, confirmed the auto-transition and the
-"2 rounds, then 6 reps of Jumping Jacks in 1:00 (time cap)" summary), and
-the Last Session card showing both outcomes correctly.
-
-**Not built this stage**: mid-circuit exercise swap (matches AMRAP).
-
-## Coaching review — three training-engine gaps, check-in pain feedback loop — 2026-08-30
-
-Asked Claude to review the training/coaching engine and the weekly
-check-in "as an experienced coach," not just for code correctness — found
-real programming-quality and product gaps a lifting-savvy reviewer would
-catch that a code-only review wouldn't.
-
-**Training engine (`generate-workout.ts`, `types.ts`, `block-change-gate.ts`):**
-- `getInjuryExcludedKeys`'s substring match worked for every
-  `avoidIfInjury` keyword except `"shoulders"` — the one keyword stored
-  plural. A member typing the natural singular ("shoulder injury") matched
-  nothing and got zero exclusions: a real reported injury, silently
-  ignored. Fixed generally (strip a trailing "s" before matching) rather
-  than special-casing the one keyword.
-- `experience_level` (beginner/intermediate/advanced) was collected at
-  onboarding and never used anywhere in generation — identical RPE-driven
-  progression for everyone. Added `RPE_ADJUSTMENT_PERCENT_BY_EXPERIENCE`
-  (types.ts): beginner ±8%, intermediate ±5% (unchanged default), advanced
-  ±3% — deliberately the *opposite* of "protect beginners with smaller
-  jumps": beginners are furthest from their ceiling and tolerate bigger
-  jumps, advanced lifters need smaller ones since they're close to it.
-- The deload→strength fatigue gate silently skipped its check on a thin
-  recent-RPE sample, defaulting to "shift allowed" — and AMRAP/RFT
-  sessions never log per-set RPE (nothing to rate in a circuit), so this
-  increasingly matters as members adopt those formats. Now a thin sample
-  holds the member in their current block instead ("not enough recent
-  difficulty ratings to tell if you're ready for something harder").
-
-**Check-in pain feedback loop (new `pain-caution.ts`):** the weekly
-check-in's "any pain or discomfort that lingered beyond a normal
-workout?" question was captured (`check_ins.answers`) and never read by
-anything again — a real self-reported safety signal going nowhere, not
-even visible to gym staff (podHq has no admin view onto `check_ins` at
-all). Now the member's latest check-in pain report is checked against
-every workout on generation/load (all 7 call sites in
-`getOrCreateWorkoutSession`/`changeWorkoutMode`/`generateCircuitSession`/
-`swapExercise`/`applyRecoveryAdjustment`), naming which of *today's
-actual exercises* touch the reported area via the same `avoidIfInjury`
-keyword match generation's own injury filter already uses — no second,
-drifting implementation. Advisory only (never auto-excludes, same
-posture as the existing recovery-signal banner), and self-expiring (it's
-always just the latest check-in, so a clean report clears it with
-nothing to manually dismiss).
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (157/157, +9 new
-tests across the four fixes), and `npm run build` all clean. Live-verified
-the pain-caution loop end to end: reported "shoulder, when pressing
-overhead" at check-in, next workout correctly flagged **Barbell Front
-Squat** — not an obvious "shoulder exercise," but the front-rack position
-genuinely loads the shoulders, and the existing catalog data already knew
-that.
-
-**Not built this stage**: `weekFeel` (the 1-5 mood rating) and `barriers`
-(free-text "what got in the way") are still captured and unused — same
-gap as pain was, lower stakes, not addressed this pass. The habit
-question's accountability loop is also still half-built: it surfaces
-next week as "the habit you committed to," but nothing ever asks whether
-the member actually kept it up.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-45.md`, covering the pilot
+mechanism proof (2026-08-05) through Rounds For Time and the coaching
+review (2026-08-30) — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. Archives aren't always the
+strictly oldest material — the split point is "what's finished and
+stable" as much as "what's oldest" (see each archive's own header note
+for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
+for full build history, or `git log` on this file for exact split
+points. Active content here starts at "Injury-keyword coverage expanded
+to full body parts" (2026-08-30). If this file grows too large again,
+split it the same way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-46.md`, update this paragraph.
 
 ## Injury-keyword coverage expanded to full body parts — 2026-08-30
 
@@ -203,3 +109,130 @@ trigger anything). Habit streak still counts "weeks a habit was set",
 not "weeks it was actually kept" — evolving that needs the
 `habitFollowUp` data this stage just started collecting to accumulate
 first.
+
+## Stage 4 of custom workouts — HIIT interval timer + reps tally — 2026-08-30
+
+Fourth Cardio sub-format alongside AMRAP/RFT: a real work/rest interval
+timer (member sets work seconds, rest seconds, round count, rest-between-
+rounds seconds; the app cycles through the picked exercises automatically).
+Migration `0074_workout_hiit.sql` (podHq, shared DB) adds only
+`work_seconds`/`rest_seconds`/`rest_between_rounds_seconds` — reuses
+`target_rounds`/`rounds_completed`/`elapsed_seconds` from AMRAP/RFT
+unchanged. v1 has no early-exit/DNF (always completes every prescribed
+round), so completion needed no self-report at all — a plain "I finished"
+POST, server-computes `elapsed_seconds` from the stored prescription,
+never trusts the client.
+
+The sequencer (`workout-view.tsx`) is a small state machine — round,
+exercise index, sub-phase (work/rest/rest-between-rounds) — ticked every
+second via `setTimeout`, same pattern AMRAP/RFT's own timers use. Hit
+`react-hooks/set-state-in-effect` when every branch's setState ran
+synchronously in the effect body; fixed by moving the whole transition
+into the same `setTimeout` callback as the 1s tick (0ms delay when a
+transition is due immediately) rather than calling it inline.
+
+**Reps tally, added same day** after Carl asked "would you not want to
+track how many of each you did in the 30s?" — HIIT's auto-completion
+gave a member nothing to look back on. New optional post-completion
+screen (never blocks or delays the automatic completion above) logs one
+number per exercise into `workout_sets.reps_actual` — the same column
+every other format already uses, no new schema.
+
+**Found and fixed along the way**: the "Start" button on a *resumed*
+HIIT session (one generated in an earlier page load) wasn't syncing
+`hiitWorkSeconds`/`hiitRestSeconds`/`hiitRounds`/`hiitRestBetweenRoundsSeconds`
+from the server — it silently ran the component's useState defaults
+(30/15/4/30) instead of what was actually generated. Now seeded from
+`detail` on every Start tap, not just the one where the builder was used
+in the same render.
+
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (172/172), and
+`npm run build` all clean throughout. Live-verified twice on the
+playground member/booking — full work→rest→work→rest-between-rounds→
+next-round cycling, terminal auto-completion, and the reps-tally screen
+(one exercise logged, one left blank, confirmed both the DB write and
+the "skip if blank" behaviour). The first live-test attempt appeared to
+skip the tally screen entirely; root cause was a stale service-worker
+cache serving pre-tally JS, not a code bug — confirmed by diffing the
+actual served chunk against source, then reproduced correctly after
+clearing the SW/cache.
+
+**Not built this stage**: pause/skip/early-exit; per-exercise weight;
+warm-up/cool-down toggle for HIIT (matches AMRAP/RFT's own omissions).
+
+## Weekly weigh-in + body measurements — 2026-08-30
+
+Carl asked whether the app tracked body weight over time — it didn't;
+`coach_profiles.weight_kg` was a single current value, fully overwritten
+on every profile edit with no history. New `member_body_measurements`
+table (migration `0075`, podHq, shared DB) — `weight_kg`/`waist_cm`/
+`hip_cm`, all nullable, unique on `member_id, recorded_date`. Deliberately
+NOT part of `member_wearable_data`: that table is fully deleted the
+moment a member disconnects their wearable (right-to-erasure behaviour),
+which would silently wipe manually-entered measurements too.
+
+Logged as an optional step in the existing weekly check-in (Carl's
+choice — weekly cadence, not an always-available action, matching this
+app's existing pattern for reflective data and avoiding encouraging
+daily weigh-ins). A logged weight also syncs into
+`coach_profiles.weight_kg` via a new targeted partial-update
+(`updateProfileWeightKg`) — `nutrition-targets.ts`'s TDEE calculation
+already reads that column live on every call, so nutrition targets pick
+up a new weigh-in with zero extra wiring. Trend charts (reusing the
+existing `HealthTrendLine` component) show on `/coach/profile`, next to
+the weight field, one per metric, hidden entirely until that metric has
+at least one logged point.
+
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (172/172), and
+`npm run build` all clean. Live-verified on the playground member: a
+real check-in submission (backdated the previous check-in row 8 days to
+force "due" state for testing) with weight logged and waist/hip left
+blank — confirmed the `member_body_measurements` row, the
+`coach_profiles.weight_kg` sync, the profile form reflecting the new
+value, and the weight trend card rendering correctly with waist/hip
+cards absent (no data logged for either).
+
+**Not built this stage**: an always-available "log anytime" entry point
+outside the weekly check-in; a computed waist-to-hip ratio or any
+health-risk interpretation — this is logging + a trend line, not
+analysis.
+
+## Session history + workout stats — 2026-08-30
+
+Carl asked for a way to browse past sessions, then "what about workout
+stats?" — there was genuinely no session-history browsing anywhere
+(only the single "Last Session" card, always the most recent one) and no
+lifetime/recent totals at all. Also surfaced a dead function
+(`getRecentCompletedSessions`) clearly built for exactly this and never
+wired up.
+
+New `/training/history` — a stats summary (sessions completed, total
+volume, per-format breakdown, last 26 weeks — matches the `WEEKS_WINDOW`
+convention every other aggregate function in this codebase already uses,
+sidesteps unbounded pagination past PostgREST's 1000-row cap) above a
+capped last-20 list, each row linking to `/training/history/[sessionId]`.
+Reused and fixed the dead function (renamed `getSessionHistory`, made
+format-aware) rather than writing a third "list of sessions" query.
+
+**Found and fixed along the way**: `LastSessionFormat` was missing
+`"hiit"` from its union (the DB column could hold it regardless), and
+the Last Session card's non-straight-sets branch only ever rendered the
+prescription (`repsTarget`/`weightTargetKg`), never what was actually
+logged (`repsActual`/`weightActualKg`) — so a HIIT session was
+mislabeled "Rounds For Time" and always showed "— reps" even after a
+member logged reps via the same day's new tally screen. Extracted the
+fixed rendering into a shared `SessionDetailView` component so both the
+Last Session card and the new detail page render through one place, not
+two copies.
+
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (172/172), and
+`npm run build` all clean — no new migration, every field already
+existed. Live-verified on the playground member: `/training`'s Last
+Session card now correctly reads "HIIT — 2 rounds in 0:26" with "Burpee:
+8 reps"; `/training/history` showed the correct stats summary (38
+sessions, 108,952kg, format breakdown) and list; tapped into both a HIIT
+row and a straight-sets row, confirmed both render correctly with no
+regression to the existing straight-sets RPE-badge display.
+
+**Not built this stage**: pagination past the last 20 sessions; editing/
+deleting a past session; a stats page independent of the history list.

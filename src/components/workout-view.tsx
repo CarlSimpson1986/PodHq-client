@@ -67,13 +67,18 @@ type PainCaution = { kind: "none" } | { kind: "reported"; painDetail: string | n
 interface WorkoutSessionDetail {
   sessionId: number;
   status: string;
-  format: "straight_sets" | "amrap" | "rounds_for_time";
+  format: "straight_sets" | "amrap" | "rounds_for_time" | "hiit";
   timeCapSeconds: number | null;
   roundsCompleted: number | null;
   partialRoundExerciseIndex: number | null;
   partialRoundReps: number | null;
   targetRounds: number | null;
   elapsedSeconds: number | null;
+  // HIIT (Stage 4, 2026-08-30) — the interval prescription, null for
+  // every non-HIIT session.
+  workSeconds: number | null;
+  restSeconds: number | null;
+  restBetweenRoundsSeconds: number | null;
   exercises: WorkoutExercise[];
   excludedExerciseKeys: string[];
   recoveryAdvice: RecoveryAdvice;
@@ -118,7 +123,14 @@ type Phase =
   | "amrap-active"
   | "amrap-tally"
   | "rft-active"
-  | "rft-tally";
+  | "rft-tally"
+  | "hiit-active"
+  // HIIT reps tally (2026-08-30, Carl's own follow-up) — unlike AMRAP/
+  // RFT's tally, this never gates completion (completeHiitSession has
+  // already run automatically by the time this phase is reached); it's
+  // purely the optional "log what you remember" step. Reuses "summary"
+  // afterward like the other two formats do.
+  | "hiit-tally";
 
 type GenerateChoice =
   | { mode: "default" }
@@ -137,6 +149,19 @@ type GenerateChoice =
       targetRounds: number;
       timeCapSeconds: number;
       amrapExercises: { key: string; reps?: number; weightKg?: number }[];
+    }
+  // HIIT (Stage 4, 2026-08-30) — a genuinely different shape from
+  // AMRAP/RFT's amrapExercises: no per-exercise reps/duration/weight at
+  // all, just the picked keys (work/rest/rounds apply uniformly). Gets
+  // its own payload key, hiitExerciseKeys, deliberately NOT reusing
+  // amrapExercises — see the comment above about that exact mismatch bug.
+  | {
+      mode: "custom-hiit";
+      workSeconds: number;
+      restSeconds: number;
+      targetRounds: number;
+      restBetweenRoundsSeconds: number;
+      hiitExerciseKeys: string[];
     };
 
 // Rest defaults offered in the custom builder (Stage 1, 2026-08-29) — same
@@ -230,10 +255,13 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [customRests, setCustomRests] = useState<Record<string, number>>({});
   const [restSecondsRemaining, setRestSecondsRemaining] = useState(0);
   // AMRAP builder + taking-the-workout state (Stage 2, 2026-08-29).
-  // customFormat is 3-way (Stage 3, 2026-08-30) — "amrap"/"rounds_for_time"
-  // are both Cardio sub-modes, sharing customAmrapConfig/customSelection;
-  // only entering/leaving "straight_sets" clears the exercise picks.
-  const [customFormat, setCustomFormat] = useState<"straight_sets" | "amrap" | "rounds_for_time">("straight_sets");
+  // customFormat is 4-way (Stage 3, 2026-08-30; HIIT added Stage 4) —
+  // "amrap"/"rounds_for_time"/"hiit" are all Cardio sub-modes, sharing
+  // customSelection; only entering/leaving "straight_sets" clears the
+  // exercise picks. customAmrapConfig (per-exercise reps/duration/weight)
+  // is AMRAP/RFT-only — HIIT has no per-exercise config at all, its
+  // work/rest/rounds/rest-between-rounds fields (below) apply uniformly.
+  const [customFormat, setCustomFormat] = useState<"straight_sets" | "amrap" | "rounds_for_time" | "hiit">("straight_sets");
   const [amrapTimeCapMinutes, setAmrapTimeCapMinutes] = useState(12);
   const [customAmrapConfig, setCustomAmrapConfig] = useState<Record<string, { unit: "reps" | "duration"; value: number; weightKg: number | "" }>>({});
   const [amrapSecondsRemaining, setAmrapSecondsRemaining] = useState(0);
@@ -261,6 +289,34 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [rftPartialIndex, setRftPartialIndex] = useState<number | "">("");
   const [rftPartialReps, setRftPartialReps] = useState<number | "">("");
   const [rftSubmitting, setRftSubmitting] = useState(false);
+  // HIIT builder + taking-the-workout state (Stage 4, 2026-08-30). Unlike
+  // AMRAP/RFT there's no per-exercise config — work/rest/rounds/
+  // rest-between-rounds are set once and apply uniformly as the sequencer
+  // cycles the picked exercises. hiitCurrentRound/hiitCurrentExerciseIndex/
+  // hiitSubPhase are the sequencer's own state machine (see the tick
+  // effect below); hiitSecondsRemaining counts down within whichever
+  // sub-phase is currently active. Completion itself is a plain "I
+  // finished" POST with no self-reported data — hiitRepsInput below is a
+  // separate, optional follow-up (2026-08-30) that never gates or delays
+  // that POST, keyed by exerciseId, "" meaning "not filled in" (distinct
+  // from a genuine 0 reps).
+  const [hiitWorkSeconds, setHiitWorkSeconds] = useState(30);
+  const [hiitRestSeconds, setHiitRestSeconds] = useState(15);
+  const [hiitRounds, setHiitRounds] = useState(4);
+  const [hiitRestBetweenRoundsSeconds, setHiitRestBetweenRoundsSeconds] = useState(30);
+  const [hiitCurrentRound, setHiitCurrentRound] = useState(1);
+  const [hiitCurrentExerciseIndex, setHiitCurrentExerciseIndex] = useState(0);
+  const [hiitSubPhase, setHiitSubPhase] = useState<"work" | "rest" | "rest_between_rounds">("work");
+  const [hiitSecondsRemaining, setHiitSecondsRemaining] = useState(0);
+  const [hiitRepsInput, setHiitRepsInput] = useState<Record<number, string>>({});
+  const [hiitLoggedReps, setHiitLoggedReps] = useState<Record<number, number>>({});
+  const [hiitTallySubmitting, setHiitTallySubmitting] = useState(false);
+  // A ref, not state — this is a fire-once completion guard the UI never
+  // needs to reflect (HIIT's summary has no "Saving..." state the way
+  // RFT's manual Finished! button does), and reading+writing the same
+  // piece of state inside the effect that also depends on it is exactly
+  // the cascading-render pattern react-hooks/set-state-in-effect flags.
+  const hiitSubmittingRef = useRef(false);
   // Holds the latest applyAdvance closure — applyAdvance itself is only
   // defined later, after `detail` is known non-null, but the rest-timer
   // effect below has to be declared unconditionally up here alongside
@@ -471,6 +527,110 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return () => clearTimeout(timer);
   }, [phase, rftSecondsElapsed, rftCapSeconds]);
 
+  // HIIT sequencer (Stage 4, 2026-08-30) — ticks once a second while
+  // phase is "hiit-active", counting DOWN within whichever sub-phase is
+  // currently active (unlike AMRAP's single countdown or RFT's single
+  // stopwatch, this one has to advance a small state machine: work → rest
+  // → work → ... → work (last exercise, no trailing rest) → rest between
+  // rounds (skipped if 0s, and never played after the final round) → next
+  // round). Every branch's setState calls run inside the same setTimeout
+  // callback as the plain 1s tick (0ms delay when a transition is due
+  // right now) rather than synchronously in the effect body — same shape
+  // AMRAP/RFT's own tick effects already use for their single counter
+  // update, just applied to every branch here instead of one. Calling
+  // setState synchronously in an effect body trips
+  // react-hooks/set-state-in-effect (cascading-render risk); deferring
+  // via setTimeout sidesteps that the same way the existing 1000ms delay
+  // already does for the simple countdown case. The terminal transition
+  // (last exercise, last round, work phase ending) submits completion
+  // itself — hiitSubmittingRef guards against a duplicate POST while that
+  // request is in flight (a plain ref, not state, so it isn't itself a
+  // dependency this effect has to re-run for).
+  useEffect(() => {
+    if (phase !== "hiit-active") return;
+
+    const timer = setTimeout(
+      () => {
+        if (hiitSecondsRemaining > 0) {
+          setHiitSecondsRemaining((s) => s - 1);
+          return;
+        }
+
+        const exerciseCount = detail?.exercises.length ?? 0;
+
+        if (hiitSubPhase === "work") {
+          const isLastExercise = hiitCurrentExerciseIndex >= exerciseCount - 1;
+          if (isLastExercise) {
+            const isLastRound = hiitCurrentRound >= hiitRounds;
+            if (isLastRound) {
+              if (hiitSubmittingRef.current) return;
+              hiitSubmittingRef.current = true;
+              (async () => {
+                try {
+                  await fetch(`/api/member/workout/${detail!.sessionId}/complete-hiit`, { method: "POST" });
+                } catch {
+                  // The sequencer already ran the full prescription — a
+                  // failed POST just means the session stays "generated"
+                  // server-side rather than blocking the member from
+                  // seeing their summary.
+                } finally {
+                  // hiit-tally (2026-08-30) is purely optional logging —
+                  // completion above already happened unconditionally, so
+                  // a failed POST doesn't change where this goes next.
+                  setPhase("hiit-tally");
+                }
+              })();
+              return;
+            }
+            if (hiitRestBetweenRoundsSeconds > 0) {
+              setHiitSubPhase("rest_between_rounds");
+              setHiitSecondsRemaining(hiitRestBetweenRoundsSeconds);
+            } else {
+              setHiitCurrentRound((r) => r + 1);
+              setHiitCurrentExerciseIndex(0);
+              setHiitSecondsRemaining(hiitWorkSeconds);
+            }
+            return;
+          }
+          if (hiitRestSeconds > 0) {
+            setHiitSubPhase("rest");
+            setHiitSecondsRemaining(hiitRestSeconds);
+          } else {
+            setHiitCurrentExerciseIndex((i) => i + 1);
+            setHiitSecondsRemaining(hiitWorkSeconds);
+          }
+          return;
+        }
+
+        if (hiitSubPhase === "rest") {
+          setHiitCurrentExerciseIndex((i) => i + 1);
+          setHiitSubPhase("work");
+          setHiitSecondsRemaining(hiitWorkSeconds);
+          return;
+        }
+
+        // rest_between_rounds finished — next round starts back at the first exercise.
+        setHiitCurrentRound((r) => r + 1);
+        setHiitCurrentExerciseIndex(0);
+        setHiitSubPhase("work");
+        setHiitSecondsRemaining(hiitWorkSeconds);
+      },
+      hiitSecondsRemaining > 0 ? 1000 : 0
+    );
+    return () => clearTimeout(timer);
+  }, [
+    phase,
+    hiitSecondsRemaining,
+    hiitSubPhase,
+    hiitCurrentExerciseIndex,
+    hiitCurrentRound,
+    hiitRounds,
+    hiitWorkSeconds,
+    hiitRestSeconds,
+    hiitRestBetweenRoundsSeconds,
+    detail,
+  ]);
+
   if (phase === "change-warning") {
     return (
       <div className="space-y-5">
@@ -674,6 +834,21 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             >
               Rounds For Time
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                // HIIT has no per-exercise config at all — clear any
+                // leftover AMRAP/RFT entries same as switching between
+                // those two already does.
+                if (customFormat !== "hiit") setCustomAmrapConfig({});
+                setCustomFormat("hiit");
+              }}
+              className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                customFormat === "hiit" ? "border-card-light-foreground bg-card-light-foreground text-white" : "border-card-light-border"
+              }`}
+            >
+              HIIT
+            </button>
           </div>
         )}
 
@@ -729,6 +904,65 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                 className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
               />
               <span className="text-sm text-card-light-muted">minutes</span>
+            </div>
+          </>
+        )}
+
+        {customFormat === "hiit" && (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="hiit-work-seconds" className="text-sm text-card-light-muted">
+                Work
+              </label>
+              <input
+                id="hiit-work-seconds"
+                type="number"
+                inputMode="numeric"
+                min={5}
+                max={300}
+                value={hiitWorkSeconds}
+                onChange={(e) => setHiitWorkSeconds(Math.max(5, Math.min(300, Number(e.target.value))))}
+                className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+              />
+              <span className="text-sm text-card-light-muted">sec, rest</span>
+              <input
+                id="hiit-rest-seconds"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={300}
+                value={hiitRestSeconds}
+                onChange={(e) => setHiitRestSeconds(Math.max(0, Math.min(300, Number(e.target.value))))}
+                className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+              />
+              <span className="text-sm text-card-light-muted">sec, between exercises</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="hiit-rounds" className="text-sm text-card-light-muted">
+                Complete
+              </label>
+              <input
+                id="hiit-rounds"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={20}
+                value={hiitRounds}
+                onChange={(e) => setHiitRounds(Math.max(1, Math.min(20, Number(e.target.value))))}
+                className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+              />
+              <span className="text-sm text-card-light-muted">rounds, resting</span>
+              <input
+                id="hiit-rest-between-rounds"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={300}
+                value={hiitRestBetweenRoundsSeconds}
+                onChange={(e) => setHiitRestBetweenRoundsSeconds(Math.max(0, Math.min(300, Number(e.target.value))))}
+                className="w-16 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+              />
+              <span className="text-sm text-card-light-muted">sec between rounds</span>
             </div>
           </>
         )}
@@ -901,12 +1135,24 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                 ? { mode: "custom", customExerciseKeys: customSelection, customExerciseRests: customRests }
                 : customFormat === "amrap"
                   ? { mode: "custom-amrap", timeCapSeconds: amrapTimeCapMinutes * 60, amrapExercises: circuitExercises }
-                  : {
-                      mode: "custom-rft",
-                      targetRounds: rftTargetRounds,
-                      timeCapSeconds: rftTimeCapMinutes * 60,
-                      amrapExercises: circuitExercises.map(({ key, reps, weightKg }) => ({ key, reps, weightKg })),
-                    }
+                  : customFormat === "rounds_for_time"
+                    ? {
+                        mode: "custom-rft",
+                        targetRounds: rftTargetRounds,
+                        timeCapSeconds: rftTimeCapMinutes * 60,
+                        amrapExercises: circuitExercises.map(({ key, reps, weightKg }) => ({ key, reps, weightKg })),
+                      }
+                    : {
+                        // HIIT carries no per-exercise config at all — just
+                        // the picked keys, timing is uniform (see
+                        // GenerateChoice's own comment).
+                        mode: "custom-hiit",
+                        workSeconds: hiitWorkSeconds,
+                        restSeconds: hiitRestSeconds,
+                        targetRounds: hiitRounds,
+                        restBetweenRoundsSeconds: hiitRestBetweenRoundsSeconds,
+                        hiitExerciseKeys: customSelection,
+                      }
             );
           }}
         >
@@ -921,6 +1167,10 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             setCustomFormat("straight_sets");
             setRftTargetRounds(4);
             setRftTimeCapMinutes(12);
+            setHiitWorkSeconds(30);
+            setHiitRestSeconds(15);
+            setHiitRounds(4);
+            setHiitRestBetweenRoundsSeconds(30);
             setPhase("choose");
           }}
           className="block w-full text-center text-xs font-medium text-card-light-muted underline"
@@ -1063,6 +1313,59 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     );
   }
 
+  // HIIT overview (Stage 4, 2026-08-30) — same shape as AMRAP/RFT's above
+  // (no sets to preview, no warm-up/cool-down toggles, no swap), but
+  // shows the interval prescription instead of a time cap or round
+  // target alone. "Start" seeds the sequencer at round 1, exercise 0,
+  // work sub-phase, counting down from the session's own workSeconds.
+  if (phase === "overview" && detail.format === "hiit") {
+    return (
+      <div className="space-y-5">
+        <ExitLink />
+        <p className="text-lg font-semibold">
+          Work {detail.workSeconds}s / Rest {detail.restSeconds}s × {detail.targetRounds} rounds
+        </p>
+        <p className="text-sm text-card-light-muted">
+          Cycle through every exercise below, resting {detail.restSeconds}s between each. Rest {detail.restBetweenRoundsSeconds}s between rounds.
+        </p>
+        <PainCautionBanner detail={detail} allowSwap={false} />
+        <ul className="space-y-2">
+          {detail.exercises.map((ex, i) => (
+            <li key={ex.id} className="rounded-lg border border-card-light-border p-3">
+              <p className="text-sm font-semibold">
+                {i + 1}. {ex.name}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={() => {
+            // Seed the sequencer's own timing state from the session's
+            // real stored prescription, not whatever the builder's local
+            // state happens to hold — those only match when the builder
+            // was used in this exact page load; resuming an
+            // already-generated session on a fresh mount would otherwise
+            // silently run the useState defaults (30/15/4/30) instead of
+            // what was actually generated.
+            setHiitWorkSeconds(detail.workSeconds ?? 30);
+            setHiitRestSeconds(detail.restSeconds ?? 0);
+            setHiitRounds(detail.targetRounds ?? 1);
+            setHiitRestBetweenRoundsSeconds(detail.restBetweenRoundsSeconds ?? 0);
+            setHiitCurrentRound(1);
+            setHiitCurrentExerciseIndex(0);
+            setHiitSubPhase("work");
+            setHiitSecondsRemaining(detail.workSeconds ?? 0);
+            setPhase("hiit-active");
+          }}
+        >
+          Start →
+        </button>
+      </div>
+    );
+  }
+
   if (phase === "amrap-active" && detail.format === "amrap") {
     const minutes = Math.floor(amrapSecondsRemaining / 60);
     const seconds = amrapSecondsRemaining % 60;
@@ -1162,6 +1465,111 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
         <button type="button" disabled={rftSubmitting} className={buttonClass} onClick={submitRft}>
           {rftSubmitting ? "Saving..." : "Finished! →"}
+        </button>
+      </div>
+    );
+  }
+
+  // HIIT active phase (Stage 4, 2026-08-30) — fully automatic, no
+  // buttons: the sequencer effect above owns every transition, including
+  // the terminal one (submits completion itself and moves to
+  // "hiit-tally"). Matches the v1 no-early-exit scope decision — nothing
+  // here for the member to tap besides watching the countdown.
+  if (phase === "hiit-active" && detail.format === "hiit") {
+    const minutes = Math.floor(hiitSecondsRemaining / 60);
+    const seconds = hiitSecondsRemaining % 60;
+    const currentExercise = detail.exercises[hiitCurrentExerciseIndex];
+    const subPhaseLabel = hiitSubPhase === "work" ? "Work" : hiitSubPhase === "rest" ? "Rest" : "Rest before next round";
+    return (
+      <div className="space-y-5 text-center">
+        <ExitLink />
+        <p className="text-lg font-semibold">{subPhaseLabel}</p>
+        <p className="text-5xl font-bold tabular-nums">
+          {minutes}:{String(seconds).padStart(2, "0")}
+        </p>
+        <p className="text-sm text-card-light-muted">
+          Round {hiitCurrentRound} of {hiitRounds}
+        </p>
+        {currentExercise && <p className="text-base font-semibold">{currentExercise.name}</p>}
+        <ul className="space-y-2 text-left">
+          {detail.exercises.map((ex, i) => (
+            <li
+              key={ex.id}
+              className={`rounded-lg border p-3 ${
+                i === hiitCurrentExerciseIndex ? "border-card-light-foreground bg-card-light-foreground/5" : "border-card-light-border"
+              }`}
+            >
+              <p className="text-sm font-semibold">
+                {i + 1}. {ex.name}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  // HIIT reps tally (2026-08-30, Carl's own follow-up) — reached
+  // automatically once the sequencer finishes; completion already
+  // happened (completeHiitSession ran in the terminal transition above).
+  // Every field is optional — "Save" only submits exercises the member
+  // actually filled in, "Skip" submits nothing and moves on regardless.
+  // One number per exercise (not per round) — a member's own rough
+  // recollection, same single-post-hoc-estimate posture as AMRAP's tally
+  // or an RPE rating, not a live per-round count.
+  if (phase === "hiit-tally" && detail.format === "hiit") {
+    async function submitHiitTally() {
+      setHiitTallySubmitting(true);
+      const reps = detail!.exercises
+        .filter((ex) => hiitRepsInput[ex.id]?.trim() !== "" && hiitRepsInput[ex.id] !== undefined)
+        .map((ex) => ({ exerciseId: ex.id, reps: Number(hiitRepsInput[ex.id]) }));
+      try {
+        if (reps.length > 0) {
+          await fetch(`/api/member/workout/${detail!.sessionId}/log-hiit-reps`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reps }),
+          });
+        }
+      } catch {
+        // Logging reps is a nice-to-have — the session itself is already
+        // completed regardless.
+      } finally {
+        setHiitLoggedReps(Object.fromEntries(reps.map((r) => [r.exerciseId, r.reps])));
+        setHiitTallySubmitting(false);
+        setPhase("summary");
+      }
+    }
+
+    return (
+      <div className="space-y-5">
+        <p className="text-lg font-semibold">Nice work! How many reps did you get?</p>
+        <p className="text-sm text-card-light-muted">Roughly, per {hiitWorkSeconds}s interval — leave any blank if you&apos;re not sure.</p>
+        <ul className="space-y-2">
+          {detail.exercises.map((ex) => (
+            <li key={ex.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-light-border p-3">
+              <p className="text-sm font-semibold">{ex.name}</p>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                placeholder="reps"
+                value={hiitRepsInput[ex.id] ?? ""}
+                onChange={(e) => setHiitRepsInput((prev) => ({ ...prev, [ex.id]: e.target.value }))}
+                className="w-20 rounded-md border border-card-light-border bg-white px-2 py-1 text-center text-sm text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+              />
+            </li>
+          ))}
+        </ul>
+        <button type="button" disabled={hiitTallySubmitting} className={buttonClass} onClick={submitHiitTally}>
+          {hiitTallySubmitting ? "Saving..." : "Save →"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setPhase("summary")}
+          className="block w-full text-center text-xs font-medium text-card-light-muted underline"
+        >
+          Skip
         </button>
       </div>
     );
@@ -1736,6 +2144,41 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           {minutes}:{String(seconds).padStart(2, "0")}
           {capped ? " (time cap)" : ""}
         </p>
+        <Link href="/" className={`${buttonClass} block`}>
+          Back to Home
+        </Link>
+      </div>
+    );
+  }
+
+  // HIIT summary (Stage 4, 2026-08-30) — nothing self-reported, unlike
+  // AMRAP/RFT's summaries above: v1 always completes every prescribed
+  // round, so the total time is fully derivable from local state (same
+  // formula completeHiitSession computes server-side) rather than
+  // anything read back from a fresh fetch — same "read local state, not
+  // detail" pattern the AMRAP/RFT summaries above already follow.
+  if (phase === "summary" && detail.format === "hiit") {
+    const n = detail.exercises.length;
+    const totalSeconds = hiitRounds * (n * hiitWorkSeconds + Math.max(n - 1, 0) * hiitRestSeconds) + Math.max(hiitRounds - 1, 0) * hiitRestBetweenRoundsSeconds;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return (
+      <div className="space-y-5 text-center">
+        <p className="text-xl font-semibold">HIIT complete!</p>
+        <p className="text-sm text-card-light-muted">
+          {hiitRounds} round{hiitRounds === 1 ? "" : "s"} in {minutes}:{String(seconds).padStart(2, "0")}
+        </p>
+        {Object.keys(hiitLoggedReps).length > 0 && (
+          <ul className="space-y-1 text-left text-sm text-card-light-muted">
+            {detail.exercises
+              .filter((ex) => hiitLoggedReps[ex.id] !== undefined)
+              .map((ex) => (
+                <li key={ex.id}>
+                  {ex.name}: {hiitLoggedReps[ex.id]} reps
+                </li>
+              ))}
+          </ul>
+        )}
         <Link href="/" className={`${buttonClass} block`}>
           Back to Home
         </Link>

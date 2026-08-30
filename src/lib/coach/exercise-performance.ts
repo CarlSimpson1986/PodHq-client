@@ -16,7 +16,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // Per-exercise, week-by-week peak weight lifted — the most direct visual
 // signal of progressive overload, the same thing generate-workout.ts's
 // RPE-driven adjustments are already optimising for session to session.
-// Follows getRecentCompletedSessions's batching shape (sessions, then
+// Follows getSessionHistory's batching shape (sessions, then
 // exercises, then sets — three queries regardless of history size, not
 // one per session). Day-bucketing goes through londonMidnight (same
 // pattern as checkin-state.ts's daysBetweenMidnights) so a late-Sunday-
@@ -115,8 +115,12 @@ export interface LastSessionExercise {
 // without these a completed circuit session rendered as a wall of "Not
 // rated" badges with no weight, silently losing the one thing that
 // actually matters for it: the rounds/time result). Mirrors
-// WorkoutSessionDetail's own shape in workout-session.ts.
-export type LastSessionFormat = "straight_sets" | "amrap" | "rounds_for_time";
+// WorkoutSessionDetail's own shape in workout-session.ts. "hiit" added
+// same day HIIT itself shipped (Stage 4) — this type had been left at
+// its original two-circuit-format union, so a HIIT session's `format`
+// was silently outside its own declared type at runtime; SessionDetailView
+// (session-detail-view.tsx) is what actually reads this field now.
+export type LastSessionFormat = "straight_sets" | "amrap" | "rounds_for_time" | "hiit";
 
 export interface LastSessionDetail {
   sessionId: number;
@@ -131,22 +135,28 @@ export interface LastSessionDetail {
   exercises: LastSessionExercise[];
 }
 
-// The most recently completed session, exercises + sets + per-set RPE —
-// didn't exist before the 2026-08-25 redesign (getRecentCompletedSessions
-// in workout-session.ts only returns muscle groups + total volume, no
-// per-set detail, even though workout_sets.rpe is a real column). Same
-// three-query batching shape as getWorkoutHistory/getExercisePerformanceHistory.
-export async function getLastCompletedSessionDetail(memberId: number): Promise<LastSessionDetail | null> {
-  const admin = createAdminClient();
-
-  const { data: session, error: sessionError } = await admin
+// Shared by getLastCompletedSessionDetail (always the newest) and
+// getCompletedSessionDetail (a specific id, for the session-history
+// detail page, 2026-08-30) — same three-query batching shape as
+// getWorkoutHistory/getExercisePerformanceHistory either way, they only
+// differ in how the initial workout_sessions row is selected.
+async function loadCompletedSessionDetail(
+  admin: ReturnType<typeof createAdminClient>,
+  sessionQuery: { memberId: number; sessionId: number } | { memberId: number }
+): Promise<LastSessionDetail | null> {
+  let query = admin
     .from("workout_sessions")
     .select("id, created_at, format, time_cap_seconds, rounds_completed, target_rounds, elapsed_seconds, partial_round_exercise_index, partial_round_reps")
-    .eq("member_id", memberId)
-    .eq("status", "completed")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("member_id", sessionQuery.memberId)
+    .eq("status", "completed");
+
+  // Ownership is enforced by the eq("member_id", ...) above regardless of
+  // branch — a sessionId for a different member simply matches no row,
+  // never trusted as "found" on id alone (same posture as
+  // getSessionOwnerMemberId elsewhere in this codebase).
+  query = "sessionId" in sessionQuery ? query.eq("id", sessionQuery.sessionId) : query.order("created_at", { ascending: false }).limit(1);
+
+  const { data: session, error: sessionError } = await query.maybeSingle();
   if (sessionError) throw new Error(sessionError.message);
   if (!session) return null;
 
@@ -203,4 +213,22 @@ export async function getLastCompletedSessionDetail(memberId: number): Promise<L
       sets: setsByExercise.get(e.id) ?? [],
     })),
   };
+}
+
+// The most recently completed session, exercises + sets + per-set RPE —
+// used by the Last Session card on /training.
+export async function getLastCompletedSessionDetail(memberId: number): Promise<LastSessionDetail | null> {
+  const admin = createAdminClient();
+  return loadCompletedSessionDetail(admin, { memberId });
+}
+
+// A specific completed session's detail, for the session-history detail
+// page (2026-08-30) — same shape as getLastCompletedSessionDetail above,
+// just not limited to the newest one. Returns null both when the id
+// doesn't exist and when it belongs to a different member — the caller
+// can't distinguish the two, which is the point (never leak whether a
+// given id exists at all to someone who doesn't own it).
+export async function getCompletedSessionDetail(memberId: number, sessionId: number): Promise<LastSessionDetail | null> {
+  const admin = createAdminClient();
+  return loadCompletedSessionDetail(admin, { memberId, sessionId });
 }
