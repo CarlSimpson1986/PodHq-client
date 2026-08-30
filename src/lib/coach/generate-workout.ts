@@ -148,16 +148,35 @@ export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[
 // shoulder") matched nothing and got zero exclusions — a real member
 // reporting a real injury, silently ignored. Stripping a trailing "s"
 // before matching makes the check singular/plural-insensitive for every
-// keyword, not just a special case for this one.
+// regularly-pluralised keyword, not just a special case for this one.
 function singularize(keyword: string): string {
   return keyword.endsWith("s") ? keyword.slice(0, -1) : keyword;
 }
 
+// Irregular plurals (2026-08-30, caught while expanding the keyword list to
+// full body parts) — "calf" pluralises to "calves", not "calfs", so the
+// same substring bug "shoulders" had would silently recur for the far more
+// natural "my calves hurt" phrasing: singularize() only strips a trailing
+// "s", which doesn't touch this case at all. Rather than special-case the
+// match function again, list each keyword's irregular plural (if it has
+// one) here — every other current/future keyword stays covered by
+// singularize() alone.
+const IRREGULAR_INJURY_PLURALS: Record<string, string> = {
+  calf: "calves",
+};
+
+function injuryKeywordVariants(keyword: string): string[] {
+  const variants = [singularize(keyword)];
+  const irregular = IRREGULAR_INJURY_PLURALS[keyword];
+  if (irregular) variants.push(irregular);
+  return variants;
+}
+
 export function getInjuryExcludedKeys(injuries: string | null): string[] {
   const lower = (injuries ?? "").toLowerCase();
-  return EXERCISE_CATALOG.filter((exercise) => exercise.avoidIfInjury.some((keyword) => lower.includes(singularize(keyword)))).map(
-    (exercise) => exercise.key
-  );
+  return EXERCISE_CATALOG.filter((exercise) =>
+    exercise.avoidIfInjury.some((keyword) => injuryKeywordVariants(keyword).some((variant) => lower.includes(variant)))
+  ).map((exercise) => exercise.key);
 }
 
 // Mirrors getInjuryExcludedKeys above — extracted the same way so the
