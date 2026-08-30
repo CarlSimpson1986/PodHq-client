@@ -61,27 +61,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "error", message: "Answer the required questions first." }, { status: 400 });
   }
 
+  // Read BEFORE completeCheckIn inserts this week's row below — this is
+  // what makes it genuinely "last week's" habit, not the one just
+  // submitted.
   let previousHabit: string | null = null;
   try {
-    // Read BEFORE completeCheckIn inserts this week's row below — this is
-    // what makes it genuinely "last week's" habit, not the one just
-    // submitted.
     previousHabit = await getPreviousHabit(member.id);
-    const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-    await completeCheckIn(member.id, periodStart, periodEnd, parsed.data);
   } catch (error) {
-    console.error("[checkin-complete] failed", { error: (error as Error).message });
-    return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });
+    console.error("[checkin-complete] failed to read previous habit", { error: (error as Error).message });
   }
 
-  // Client-perspective review, 2026-08-30 — the check-in used to end here
-  // with a bare "saved", the member's own answers never actually reaching
-  // "their coach". Generates a real response now that those answers exist
-  // (see coach-bot.ts's narrateCheckInResponse for why pain isn't part of
-  // it — PAIN_ACKNOWLEDGMENT, fixed copy, covers that separately). A
+  // Client-perspective review, 2026-08-30 — generated BEFORE the insert
+  // now (was after, in a separate step that never got saved at all — see
+  // coach-bot.ts's narrateCheckInResponse for why pain isn't part of it;
+  // PAIN_ACKNOWLEDGMENT, fixed copy, covers that separately). A
   // Groq/Claude hiccup here must not fail the request — the check-in
-  // itself is already saved above; the member just sees the plain
-  // completion state without a personalised response.
+  // itself still gets saved below either way, just without a
+  // personalised response.
   let narrative: string | null = null;
   try {
     const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
@@ -98,6 +94,21 @@ export async function POST(request: Request) {
   }
 
   const painAcknowledgment = parsed.data.hadPain ? PAIN_ACKNOWLEDGMENT : null;
+
+  // Dashboard card, 2026-08-30 — narrative/painAcknowledgment used to be
+  // returned once here and never saved anywhere at all: real, "should
+  // this be actionable" feedback that vanished the moment the member
+  // navigated away. Saved into the same schemaless answers jsonb as
+  // everything else (see this file's own top comment on why there's no
+  // fixed answers table) — getLatestCheckInResponse (check-ins.ts) reads
+  // it back for the Home dashboard's CoachResponseCard.
+  try {
+    const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
+    await completeCheckIn(member.id, periodStart, periodEnd, { ...parsed.data, narrative, painAcknowledgment });
+  } catch (error) {
+    console.error("[checkin-complete] failed", { error: (error as Error).message });
+    return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });
+  }
 
   return NextResponse.json({ status: "ok", narrative, painAcknowledgment });
 }

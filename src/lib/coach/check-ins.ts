@@ -48,6 +48,39 @@ export async function getLatestPainReport(memberId: number): Promise<LatestPainR
   return { hadPain, painDetail };
 }
 
+export interface LatestCheckInResponse {
+  narrative: string | null;
+  painAcknowledgment: string | null;
+}
+
+// Home dashboard, 2026-08-30 — the coach's response used to be shown once
+// on the check-in completion screen and then genuinely gone: /complete
+// returned it but never saved it, so navigating away lost it for good.
+// It's now persisted alongside the answers that produced it (see
+// /complete's own comment) — this reads it back for CoachResponseCard.
+// Same self-expiring shape as getLatestPainReport above: always just the
+// latest check-in, so it updates on its own each week with nothing to
+// manually clear.
+export async function getLatestCheckInResponse(memberId: number): Promise<LatestCheckInResponse | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("check_ins")
+    .select("answers")
+    .eq("member_id", memberId)
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  const answers = data.answers as Record<string, unknown> | null;
+  const rawNarrative = answers?.narrative;
+  const rawPainAck = answers?.painAcknowledgment;
+  const narrative = typeof rawNarrative === "string" && rawNarrative.trim().length > 0 ? rawNarrative : null;
+  const painAcknowledgment = typeof rawPainAck === "string" && rawPainAck.trim().length > 0 ? rawPainAck : null;
+  return { narrative, painAcknowledgment };
+}
+
 export interface RecentCheckIn {
   periodStart: string;
   habit: string | null;
