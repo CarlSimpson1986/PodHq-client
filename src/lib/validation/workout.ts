@@ -29,12 +29,19 @@ const amrapExerciseSchema = z.object({
 export const generateWorkoutSchema = z
   .object({
     bookingId: z.number().int().positive(),
-    mode: z.enum(["default", "focus", "custom", "custom-amrap"]).default("default"),
+    mode: z.enum(["default", "focus", "custom", "custom-amrap", "custom-rft"]).default("default"),
     focusMuscleGroups: z.array(z.enum(MUSCLE_GROUPS)).min(1).max(2).optional(),
     customExerciseKeys: z.array(z.string().min(1).max(100)).min(1).max(6).optional(),
     customExerciseRests: z.record(z.string().min(1).max(100), z.number().int().min(0).max(600)).optional(),
     timeCapSeconds: z.number().int().min(60).max(3600).optional(),
     amrapExercises: z.array(amrapExerciseSchema).min(1).max(6).optional(),
+    // targetRounds (Stage 3, 2026-08-30) — 1-20 rounds: 1 is a degenerate
+    // but harmless single-circuit-for-time case, 20 is generous headroom
+    // above any realistic RFT prescription (most real RFT workouts are
+    // 3-5 rounds) without allowing a nonsense "200 rounds" entry.
+    // Reuses amrapExercises as the exercise-list field for both circuit
+    // formats — same shape, no separate rftExercises needed.
+    targetRounds: z.number().int().min(1).max(20).optional(),
   })
   // A chosen mode must actually carry its own picks — without this, a
   // request could claim mode "focus" with no focusMuscleGroups and the
@@ -48,16 +55,34 @@ export const generateWorkoutSchema = z
     message: "customExerciseKeys is required when mode is 'custom'.",
     path: ["customExerciseKeys"],
   })
-  .refine((data) => data.mode !== "custom-amrap" || data.timeCapSeconds !== undefined, {
-    message: "timeCapSeconds is required when mode is 'custom-amrap'.",
+  // timeCapSeconds is required for BOTH circuit formats now (corrected
+  // 2026-08-30 — real RFT WODs always carry a time cap, same as AMRAP).
+  .refine((data) => !(data.mode === "custom-amrap" || data.mode === "custom-rft") || data.timeCapSeconds !== undefined, {
+    message: "timeCapSeconds is required for this mode.",
     path: ["timeCapSeconds"],
   })
-  .refine((data) => data.mode !== "custom-amrap" || (data.amrapExercises?.length ?? 0) > 0, {
-    message: "amrapExercises is required when mode is 'custom-amrap'.",
+  .refine((data) => data.mode !== "custom-rft" || data.targetRounds !== undefined, {
+    message: "targetRounds is required when mode is 'custom-rft'.",
+    path: ["targetRounds"],
+  })
+  .refine((data) => !(data.mode === "custom-amrap" || data.mode === "custom-rft") || (data.amrapExercises?.length ?? 0) > 0, {
+    message: "amrapExercises is required when mode is 'custom-amrap' or 'custom-rft'.",
     path: ["amrapExercises"],
   })
-  .refine((data) => data.mode !== "custom-amrap" || (data.amrapExercises ?? []).every((e) => (e.reps === undefined) !== (e.durationSeconds === undefined)), {
-    message: "Each amrapExercises entry needs exactly one of reps or durationSeconds.",
+  .refine(
+    (data) =>
+      !(data.mode === "custom-amrap" || data.mode === "custom-rft") ||
+      (data.amrapExercises ?? []).every((e) => (e.reps === undefined) !== (e.durationSeconds === undefined)),
+    {
+      message: "Each amrapExercises entry needs exactly one of reps or durationSeconds.",
+      path: ["amrapExercises"],
+    }
+  )
+  // RFT is reps-only (corrected 2026-08-30 — real RFT WODs prescribe reps
+  // per round, never a timed hold; see generateCircuitSession's own
+  // comment for why duration doesn't fit the "race the clock" mechanic).
+  .refine((data) => data.mode !== "custom-rft" || (data.amrapExercises ?? []).every((e) => e.durationSeconds === undefined), {
+    message: "Rounds For Time exercises must be reps-based, not duration-based.",
     path: ["amrapExercises"],
   });
 
@@ -85,6 +110,24 @@ export const swapExerciseSchema = z.object({
 export const completeAmrapSchema = z
   .object({
     roundsCompleted: z.number().int().min(0).max(1000),
+    partialRoundExerciseIndex: z.number().int().min(0).max(5).optional(),
+    partialRoundReps: z.number().int().min(0).max(10000).optional(),
+  })
+  .refine((data) => (data.partialRoundExerciseIndex === undefined) === (data.partialRoundReps === undefined), {
+    message: "partialRoundExerciseIndex and partialRoundReps must be provided together.",
+    path: ["partialRoundReps"],
+  });
+
+// Rounds-For-Time completion (Stage 3, 2026-08-30; corrected same day —
+// real RFT WODs have a time cap, so a member can fail to finish). Mirrors
+// completeAmrapSchema's self-reported roundsCompleted/partial-round pair
+// for the capped-out case; elapsedSeconds is the client's own stopwatch
+// value (the real result when finished before the cap, or the cap itself
+// when capped out — completeRoundsForTimeSession clamps either way).
+export const completeRftSchema = z
+  .object({
+    elapsedSeconds: z.number().int().min(1).max(3600),
+    roundsCompleted: z.number().int().min(0).max(20),
     partialRoundExerciseIndex: z.number().int().min(0).max(5).optional(),
     partialRoundReps: z.number().int().min(0).max(10000).optional(),
   })

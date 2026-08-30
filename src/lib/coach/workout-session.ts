@@ -62,7 +62,12 @@ export interface WorkoutExercise {
 // completeAmrapSession writes them. format defaults to "straight_sets" at
 // the DB level, so every pre-existing session (and every default/focus/
 // straight-sets-custom one from here on) reads exactly that, unchanged.
-export type WorkoutFormat = "straight_sets" | "amrap";
+// Rounds-For-Time (Stage 3, 2026-08-30) reuses roundsCompleted (always
+// written equal to targetRounds once finished — v1 has no DNF) but leaves
+// timeCapSeconds/partialRoundExerciseIndex/partialRoundReps null, since
+// those are AMRAP-only concepts; targetRounds/elapsedSeconds below are
+// RFT's own fields, see completeRoundsForTimeSession.
+export type WorkoutFormat = "straight_sets" | "amrap" | "rounds_for_time";
 
 // What loadSessionDetail alone can produce — it has no coach-profile
 // access, so it can't compute excludedExerciseKeys itself. Callers that
@@ -76,6 +81,12 @@ interface SessionExerciseDetail {
   roundsCompleted: number | null;
   partialRoundExerciseIndex: number | null;
   partialRoundReps: number | null;
+  // Rounds-For-Time (Stage 3, 2026-08-30) — targetRounds is the prescription
+  // (set at generation), elapsedSeconds the member's stopwatch result (null
+  // until completeRoundsForTimeSession writes it). Both null for every
+  // non-RFT session.
+  targetRounds: number | null;
+  elapsedSeconds: number | null;
   exercises: WorkoutExercise[];
 }
 
@@ -161,11 +172,25 @@ export interface AmrapExercisePick {
   weightKg?: number;
 }
 
+// Rounds-For-Time (Stage 3, 2026-08-30; corrected same day after checking
+// real CrossFit RFT WODs — see ROADMAP.md) — same circuit shape as AMRAP,
+// but two real differences confirmed against actual RFT programming
+// (thewodgenerator.com's RFT guide, "5 rounds for time: 10 KB swings, 15
+// box jumps, 20 wall balls" style examples): every real RFT exercise is
+// reps-based, never a timed hold (durationSeconds is rejected for this
+// mode in generateCircuitSession — a fixed-duration movement can't be
+// raced), and every real RFT WOD carries its own time cap (a member who
+// doesn't finish by then gets a capped/DNF result, not an unbounded
+// stopwatch) — timeCapSeconds is required here exactly like AMRAP's.
+// targetRounds is still the prescription; the result is elapsed time
+// (finished before the cap) or a self-reported partial tally at the cap
+// (didn't finish) — see completeRoundsForTimeSession.
 export type WorkoutChoice =
   | { mode: "default" }
   | { mode: "focus"; focusMuscleGroups: MuscleGroup[] }
   | { mode: "custom"; customExerciseKeys: string[]; customExerciseRests?: Record<string, number> }
-  | { mode: "custom-amrap"; timeCapSeconds: number; exercises: AmrapExercisePick[] };
+  | { mode: "custom-amrap"; timeCapSeconds: number; exercises: AmrapExercisePick[] }
+  | { mode: "custom-rft"; targetRounds: number; timeCapSeconds: number; exercises: AmrapExercisePick[] };
 
 // A session the member already confirmed a recovery adjustment on must
 // never show the banner again or be re-discountable — without this,
@@ -385,11 +410,12 @@ async function generateAndPersistSession(
 ): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
   const admin = createAdminClient();
 
-  // AMRAP is a genuinely different shape from every other mode below — no
-  // RPE-driven weight/reps computation at all (the block/phase engine has
-  // nothing to say about a once-off member-authored circuit) — so it's a
-  // fully separate branch rather than another `if` alongside focus/custom.
-  if (choice.mode === "custom-amrap") {
+  // AMRAP/Rounds-For-Time are a genuinely different shape from every other
+  // mode below — no RPE-driven weight/reps computation at all (the
+  // block/phase engine has nothing to say about a once-off member-authored
+  // circuit) — so they're a fully separate branch rather than another `if`
+  // alongside focus/custom.
+  if (choice.mode === "custom-amrap" || choice.mode === "custom-rft") {
     return generateCircuitSession(admin, memberId, bookingId, resourceId, choice, availableEquipment);
   }
 
@@ -504,20 +530,23 @@ async function generateAndPersistSession(
   };
 }
 
-// AMRAP generation (Stage 2, 2026-08-29) — no coach-profile-missing
-// hard-block the way every other mode has: there's no weight/reps
-// computation needing profile data, only injury filtering, and a missing
-// profile there just means no exclusion data (same graceful-degradation
-// getExcludedExerciseKeysForBooking already uses). No intro narration
-// either — narrateSessionIntro expects a GeneratedExercise[] shaped by
-// the RPE-driven engine, which a member-authored circuit never goes
-// through; skipped rather than reshaping this into that engine's input.
+// AMRAP/Rounds-For-Time generation (Stage 2, 2026-08-29; RFT added Stage 3,
+// 2026-08-30) — no coach-profile-missing hard-block the way every other
+// mode has: there's no weight/reps computation needing profile data, only
+// injury filtering, and a missing profile there just means no exclusion
+// data (same graceful-degradation getExcludedExerciseKeysForBooking
+// already uses). No intro narration either — narrateSessionIntro expects a
+// GeneratedExercise[] shaped by the RPE-driven engine, which a
+// member-authored circuit never goes through; skipped rather than
+// reshaping this into that engine's input. Both circuit formats share
+// this one generator — they differ only in which session-level
+// prescription field gets written (time_cap_seconds vs target_rounds).
 async function generateCircuitSession(
   admin: ReturnType<typeof createAdminClient>,
   memberId: number,
   bookingId: number,
   resourceId: number,
-  choice: Extract<WorkoutChoice, { mode: "custom-amrap" }>,
+  choice: Extract<WorkoutChoice, { mode: "custom-amrap" | "custom-rft" }>,
   availableEquipment: EquipmentType[]
 ): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
   const profile = await getCoachProfile(memberId);
@@ -525,15 +554,21 @@ async function generateCircuitSession(
 
   // Never trust the client's list wholesale, same posture as every other
   // mode — re-validated against the live catalog and injury/equipment
-  // exclusions. An invalid/excluded/duplicate key, or one missing exactly
-  // one of reps/durationSeconds, is dropped rather than guessed at.
+  // exclusions. An invalid/excluded/duplicate key, or one missing its
+  // required prescription, is dropped rather than guessed at.
   const picks: { key: string; name: string; muscleGroup: string; reps: number | null; durationSeconds: number | null; weightKg: number | null }[] = [];
   for (const ex of choice.exercises) {
     const entry = EXERCISE_CATALOG.find((e) => e.key === ex.key);
     if (!entry || excludedKeys.includes(ex.key) || picks.some((p) => p.key === ex.key)) continue;
     const hasReps = typeof ex.reps === "number" && ex.reps > 0;
     const hasDuration = typeof ex.durationSeconds === "number" && ex.durationSeconds > 0;
-    if (hasReps === hasDuration) continue; // exactly one required, not both, not neither
+    // RFT is reps-only — real Rounds-For-Time WODs prescribe reps per
+    // round ("5 rounds for time: 10 KB swings..."), never a timed hold; a
+    // fixed-duration movement can't be raced against the clock the way
+    // RFT's whole scoring mechanic depends on. AMRAP keeps its original
+    // exactly-one-of-either rule (HIIT-style AMRAPs are legitimately
+    // duration-based).
+    if (choice.mode === "custom-rft" ? !hasReps || hasDuration : hasReps === hasDuration) continue;
     picks.push({
       key: entry.key,
       name: entry.name,
@@ -552,8 +587,11 @@ async function generateCircuitSession(
       booking_id: bookingId,
       resource_id: resourceId,
       status: "generated",
-      format: "amrap",
+      format: choice.mode === "custom-amrap" ? "amrap" : "rounds_for_time",
+      // Both circuit formats require a time cap now — RFT's is a real
+      // DNF cutoff (see completeRoundsForTimeSession), not left null.
       time_cap_seconds: choice.timeCapSeconds,
+      target_rounds: choice.mode === "custom-rft" ? choice.targetRounds : null,
     })
     .select("id")
     .single();
@@ -642,7 +680,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
 
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
-    .select("id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps")
+    .select("id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps, target_rounds, elapsed_seconds")
     .eq("id", sessionId)
     .single();
   if (sessionError) throw new Error(sessionError.message);
@@ -669,6 +707,8 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
     roundsCompleted: session.rounds_completed,
     partialRoundExerciseIndex: session.partial_round_exercise_index,
     partialRoundReps: session.partial_round_reps,
+    targetRounds: session.target_rounds,
+    elapsedSeconds: session.elapsed_seconds,
     exercises: (exercises ?? []).map((e) => ({
       id: e.id,
       key: e.exercise_key,
@@ -912,6 +952,51 @@ export async function completeAmrapSession(sessionId: number, tally: AmrapTally)
       rounds_completed: tally.roundsCompleted,
       partial_round_exercise_index: tally.partialRoundExerciseIndex,
       partial_round_reps: tally.partialRoundReps,
+    })
+    .eq("id", sessionId);
+  if (error) throw new Error(error.message);
+}
+
+// Rounds-For-Time completion (Stage 3, 2026-08-30; corrected same day —
+// real RFT WODs carry a time cap, so a member CAN fail to finish, unlike
+// the earlier no-DNF v1). Two real outcomes: finished before the cap
+// (roundsCompleted === the session's own targetRounds, elapsedSeconds is
+// the client's real stopwatch reading) or capped out (workout-view.tsx
+// auto-transitions to a tally screen once the stopwatch hits the cap,
+// same self-report trust posture as AMRAP's own tally — round count and
+// partial-round progress aren't sensor-measurable, only the member knows).
+// Either way this never trusts the client past the session's own stored
+// prescription: roundsCompleted is clamped to targetRounds and
+// elapsedSeconds to timeCapSeconds, so a normal early finish (always <
+// the cap) passes through unclamped while a bogus over-cap claim can't.
+export interface RftResult {
+  elapsedSeconds: number;
+  roundsCompleted: number;
+  partialRoundExerciseIndex: number | null;
+  partialRoundReps: number | null;
+}
+
+export async function completeRoundsForTimeSession(sessionId: number, result: RftResult): Promise<void> {
+  const admin = createAdminClient();
+  const { data: session, error: sessionError } = await admin
+    .from("workout_sessions")
+    .select("target_rounds, time_cap_seconds")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (sessionError) throw new Error(sessionError.message);
+  if (!session || session.target_rounds === null) throw new Error("session_not_found");
+
+  const roundsCompleted = Math.min(result.roundsCompleted, session.target_rounds);
+  const elapsedSeconds = session.time_cap_seconds !== null ? Math.min(result.elapsedSeconds, session.time_cap_seconds) : result.elapsedSeconds;
+
+  const { error } = await admin
+    .from("workout_sessions")
+    .update({
+      status: "completed",
+      rounds_completed: roundsCompleted,
+      elapsed_seconds: elapsedSeconds,
+      partial_round_exercise_index: result.partialRoundExerciseIndex,
+      partial_round_reps: result.partialRoundReps,
     })
     .eq("id", sessionId);
   if (error) throw new Error(error.message);
