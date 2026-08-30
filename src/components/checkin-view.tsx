@@ -55,6 +55,12 @@ const WEEK_FEEL_OPTIONS = [
   { value: 5, label: "Great" },
 ];
 
+const HABIT_FOLLOW_UP_OPTIONS: { value: "yes" | "partially" | "no"; label: string }[] = [
+  { value: "no", label: "No" },
+  { value: "partially", label: "Partially" },
+  { value: "yes", label: "Yes" },
+];
+
 function formatDateRange(start: string, end: string) {
   const fmt = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   return `${fmt(start)} – ${fmt(end)}`;
@@ -121,8 +127,14 @@ export function CheckInView() {
   const router = useRouter();
   const [state, setState] = useState<CheckInState | null>(null);
   const [review, setReview] = useState<WeeklyReview | null>(null);
-  const [narrative, setNarrative] = useState<string | null>(null);
   const [wearableReflection, setWearableReflection] = useState<WearableReflectionItem[]>([]);
+  // Client-perspective review, 2026-08-30 — previousHabit/habitStreakWeeks
+  // replace the old eagerly-fetched `narrative` here: the coach's response
+  // is no longer generated before the member has answered anything (see
+  // handleComplete below) — these two just drive the new "how did last
+  // week's habit go?" question and the streak shown alongside it.
+  const [previousHabit, setPreviousHabit] = useState<string | null>(null);
+  const [habitStreakWeeks, setHabitStreakWeeks] = useState(0);
   const [loading, setLoading] = useState(true);
   // Ceremonial "reviewing your data" beat before revealing the due/overdue
   // check-in — the data's already back from the fetch below by the time
@@ -131,12 +143,19 @@ export function CheckInView() {
   const [completing, setCompleting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // The coach's actual response to this check-in — populated by
+  // handleComplete's own POST response, once the member's answers exist
+  // for it to actually be built from. painAcknowledgment is fixed copy,
+  // never LLM-generated — see coach-bot.ts's PAIN_ACKNOWLEDGMENT.
+  const [responseNarrative, setResponseNarrative] = useState<string | null>(null);
+  const [responsePainAck, setResponsePainAck] = useState<string | null>(null);
 
   const [weekFeel, setWeekFeel] = useState<number | null>(null);
   const [hadPain, setHadPain] = useState<boolean | null>(null);
   const [painDetail, setPainDetail] = useState("");
   const [barriers, setBarriers] = useState("");
   const [habit, setHabit] = useState("");
+  const [habitFollowUp, setHabitFollowUp] = useState<"yes" | "partially" | "no" | null>(null);
 
   useEffect(() => {
     queueMicrotask(async () => {
@@ -146,8 +165,9 @@ export function CheckInView() {
         if (body.status === "ok") {
           setState(body.state);
           setReview(body.review);
-          setNarrative(body.narrative ?? null);
           setWearableReflection(body.wearableReflection ?? []);
+          setPreviousHabit(body.previousHabit ?? null);
+          setHabitStreakWeeks(body.habitStreakWeeks ?? 0);
         }
       } finally {
         setLoading(false);
@@ -163,6 +183,11 @@ export function CheckInView() {
 
   async function handleComplete() {
     if (weekFeel === null || hadPain === null || habit.trim().length === 0) return;
+    // Required whenever there's actually a previous habit to follow up on
+    // — same "the real boundary is server-side, this is just the UX
+    // nicety" posture as every other required field here, but skipping it
+    // would silently defeat the whole point of asking.
+    if (previousHabit !== null && habitFollowUp === null) return;
     setCompleting(true);
     setErrorMessage(null);
     try {
@@ -175,10 +200,13 @@ export function CheckInView() {
           painDetail: hadPain ? painDetail.trim() || undefined : undefined,
           barriers: barriers.trim() || undefined,
           habit: habit.trim(),
+          habitFollowUp: previousHabit !== null ? habitFollowUp : undefined,
         }),
       });
       const body = await res.json();
       if (body.status === "ok") {
+        setResponseNarrative(body.narrative ?? null);
+        setResponsePainAck(body.painAcknowledgment ?? null);
         setCompleted(true);
         router.refresh();
       } else {
@@ -258,13 +286,13 @@ export function CheckInView() {
         </div>
       )}
 
-      {narrative && (
-        <div className="rounded-xl bg-card-light-foreground p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Your coach&apos;s review</p>
-          <p className="mt-2 text-sm leading-relaxed text-white">{narrative}</p>
-        </div>
-      )}
-
+      {/* Client-perspective review, 2026-08-30 — the old "Your coach's
+          review" box used to render right here, before any of the
+          questions below. It's gone: with nothing generated yet to show,
+          the member goes straight into telling their coach how the week
+          actually went — the response now comes back after they submit
+          (see the completed block at the bottom), built from what they
+          just said instead of written before they said it. */}
       {!completed && (
         <div className="space-y-5 border-t border-card-light-border pt-5">
           <div>
@@ -310,8 +338,34 @@ export function CheckInView() {
             />
           </div>
 
+          {/* Client-perspective review, 2026-08-30 — only shown when a
+              previous check-in actually set a habit; a brand-new member's
+              first-ever check-in has nothing to follow up on. This is the
+              accountability step that was missing entirely before: every
+              week asked for a fresh commitment, nothing ever asked
+              whether the last one actually happened. */}
+          {previousHabit !== null && (
+            <div>
+              <p className="text-sm font-semibold">Last week you said: &ldquo;{previousHabit}&rdquo; — how did that go?</p>
+              <div className="mt-2 flex gap-2">
+                {HABIT_FOLLOW_UP_OPTIONS.map((o) => (
+                  <button key={o.value} type="button" onClick={() => setHabitFollowUp(o.value)} className={optionClass(habitFollowUp === o.value)}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
-            <p className="text-sm font-semibold">What&apos;s one habit that&apos;s going to push you forwards this week?</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold">What&apos;s one habit that&apos;s going to push you forwards this week?</p>
+              {habitStreakWeeks > 0 && (
+                <span className="flex-none rounded-full bg-card-light-foreground/10 px-2 py-0.5 text-xs font-semibold text-card-light-foreground">
+                  🔥 {habitStreakWeeks} week{habitStreakWeeks === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-xs text-card-light-muted">This becomes your coach&apos;s focus for the week ahead.</p>
             <textarea
               value={habit}
@@ -327,14 +381,44 @@ export function CheckInView() {
           <button
             type="button"
             onClick={handleComplete}
-            disabled={completing || weekFeel === null || hadPain === null || habit.trim().length === 0}
+            disabled={
+              completing ||
+              weekFeel === null ||
+              hadPain === null ||
+              habit.trim().length === 0 ||
+              (previousHabit !== null && habitFollowUp === null)
+            }
             className={buttonClass}
           >
             {completing ? "Saving..." : "Mark check-in complete"}
           </button>
         </div>
       )}
-      {completed && <p className="text-center text-sm text-success">Check-in complete. See you next Sunday.</p>}
+
+      {/* Client-perspective review, 2026-08-30 — this used to be a single
+          flat "Check-in complete" line regardless of what was just said.
+          Now it's the coach's actual response: the pain acknowledgment
+          (fixed copy, shown first — safety-relevant, never AI-improvised)
+          and the personalised narrative (built from this exact
+          submission), either of which can be null on a Groq/Claude hiccup
+          — the check-in itself is already saved either way, so the
+          closing line always shows regardless. */}
+      {completed && (
+        <div className="space-y-4">
+          {responsePainAck && (
+            <div className="rounded-xl border border-warning/40 bg-warning/5 p-4">
+              <p className="text-sm">{responsePainAck}</p>
+            </div>
+          )}
+          {responseNarrative && (
+            <div className="rounded-xl bg-card-light-foreground p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Your coach says</p>
+              <p className="mt-2 text-sm leading-relaxed text-white">{responseNarrative}</p>
+            </div>
+          )}
+          <p className="text-center text-sm text-success">Check-in complete. See you next Sunday.</p>
+        </div>
+      )}
     </div>
   );
 }

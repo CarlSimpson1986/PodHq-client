@@ -75,6 +75,21 @@ export async function getRecentCheckIns(memberId: number, limit = 26): Promise<R
   });
 }
 
+// Client-perspective review, 2026-08-30 — the check-in's habit question
+// never followed up on itself: a member sets a habit, and next week is
+// only ever asked to set a fresh one, with nothing asking whether they
+// actually kept the last one up. This is what makes that follow-up
+// question possible — "the most recent check-in's habit" is exactly
+// "last week's commitment" from the member's point of view, right up
+// until they complete a new one (called both before rendering the
+// question, in the checkin route, and again inside /complete before that
+// new row is inserted — so it's always genuinely last week's, never the
+// one currently being submitted).
+export async function getPreviousHabit(memberId: number): Promise<string | null> {
+  const [recent] = await getRecentCheckIns(memberId, 1);
+  return recent?.habit ?? null;
+}
+
 // No "pending" row concept — a check-in is only ever inserted once
 // actually completed, same convention as food_log_entries/habit_logs.
 export async function completeCheckIn(
