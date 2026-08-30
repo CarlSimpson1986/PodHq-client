@@ -282,10 +282,8 @@ export interface ActiveReservation {
 // slot_start reserved on one resource but free on another.
 export async function getActiveReservationsForDate(gym: string, date: Date): Promise<ActiveReservation[]> {
   const admin = createAdminClient();
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setDate(endOfDay.getDate() + 1);
+  const startOfDay = londonMidnight(date);
+  const endOfDay = addLondonDays(startOfDay, 1);
 
   const { data, error } = await admin
     .from("waitlist_entries")
@@ -302,10 +300,8 @@ export async function getActiveReservationsForDate(gym: string, date: Date): Pro
 
 export async function getBookingsForDate(gym: string, date: Date): Promise<Booking[]> {
   const admin = createAdminClient();
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setDate(endOfDay.getDate() + 1);
+  const startOfDay = londonMidnight(date);
+  const endOfDay = addLondonDays(startOfDay, 1);
 
   const { data, error } = await admin
     .from("bookings")
