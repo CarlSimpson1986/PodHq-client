@@ -3,8 +3,10 @@ import { z } from "zod";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
-import { completeCheckIn } from "@/lib/coach/check-ins";
+import { completeCheckIn, getPreviousHabit } from "@/lib/coach/check-ins";
 import { currentCheckInPeriod } from "@/lib/coach/checkin-state";
+import { getWeeklyReview } from "@/lib/coach/weekly-review";
+import { narrateCheckInResponse, PAIN_ACKNOWLEDGMENT } from "@/lib/coach-bot";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 // Matches the reflection-question set in checkin-view.tsx. Kept loose
@@ -15,13 +17,17 @@ import { checkRateLimit } from "@/lib/rate-limit";
 // (habit added 2026-08-28 — it's read back by weekly-recommendation.ts/
 // habit-streak.ts, so an empty habit would silently break both), all
 // validated here too since the client-side requirement is only ever a
-// UX nicety, never the real boundary.
+// UX nicety, never the real boundary. habitFollowUp (2026-08-30, client-
+// perspective review) only ever appears alongside a real previousHabit —
+// the UI only shows the question when one exists — so it's optional here
+// too, not required.
 const answersSchema = z.object({
   weekFeel: z.number().int().min(1).max(5),
   hadPain: z.boolean(),
   painDetail: z.string().max(500).optional(),
   barriers: z.string().max(500).optional(),
   habit: z.string().trim().min(1).max(200),
+  habitFollowUp: z.enum(["yes", "partially", "no"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -55,7 +61,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "error", message: "Answer the required questions first." }, { status: 400 });
   }
 
+  let previousHabit: string | null = null;
   try {
+    // Read BEFORE completeCheckIn inserts this week's row below — this is
+    // what makes it genuinely "last week's" habit, not the one just
+    // submitted.
+    previousHabit = await getPreviousHabit(member.id);
     const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
     await completeCheckIn(member.id, periodStart, periodEnd, parsed.data);
   } catch (error) {
@@ -63,5 +74,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });
   }
 
-  return NextResponse.json({ status: "ok" });
+  // Client-perspective review, 2026-08-30 — the check-in used to end here
+  // with a bare "saved", the member's own answers never actually reaching
+  // "their coach". Generates a real response now that those answers exist
+  // (see coach-bot.ts's narrateCheckInResponse for why pain isn't part of
+  // it — PAIN_ACKNOWLEDGMENT, fixed copy, covers that separately). A
+  // Groq/Claude hiccup here must not fail the request — the check-in
+  // itself is already saved above; the member just sees the plain
+  // completion state without a personalised response.
+  let narrative: string | null = null;
+  try {
+    const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
+    const review = await getWeeklyReview(member.id, periodStart, periodEnd, member.gender);
+    narrative = await narrateCheckInResponse(member.name, review, {
+      weekFeel: parsed.data.weekFeel,
+      barriers: parsed.data.barriers,
+      habit: parsed.data.habit,
+      habitFollowUp: parsed.data.habitFollowUp,
+      previousHabit,
+    });
+  } catch (error) {
+    console.error("[checkin-complete] narration failed", { error: (error as Error).message });
+  }
+
+  const painAcknowledgment = parsed.data.hadPain ? PAIN_ACKNOWLEDGMENT : null;
+
+  return NextResponse.json({ status: "ok", narrative, painAcknowledgment });
 }

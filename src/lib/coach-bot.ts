@@ -149,3 +149,73 @@ export async function narrateWeeklyReview(memberName: string, review: WeeklyRevi
   const userPrompt = `Write ${memberName}'s weekly performance review based on this week's actual figures: ${parts.join(", ")}.`;
   return askProvider(WEEKLY_REVIEW_SYSTEM_PROMPT, userPrompt);
 }
+
+// Client-perspective review, 2026-08-30 — narrateWeeklyReview above used
+// to run BEFORE the member answered anything (checkin route's GET), so
+// "your coach's review" could never actually respond to how the week
+// felt, what got in the way, or whether they kept last week's habit up —
+// a report, then a form, never a conversation. This replaces it: called
+// from /complete, after the member's own answers exist, so the response
+// can actually be built from them.
+//
+// Deliberately does NOT receive hadPain/painDetail — same "don't send
+// health data to a US LLM provider" boundary narrateWeeklyReview's own
+// comment already draws around wearable sleep/heart-rate data (a real
+// UK GDPR Art 9 special-category-data question, not resolved as of the
+// 2026-08-28 legal-review discussion this app already had once). A pain
+// report is squarely the same category. Pain gets acknowledged instead
+// via PAIN_ACKNOWLEDGMENT in the /complete route — fixed, reviewed copy,
+// same "nothing with real injury risk gets left to an LLM to improvise"
+// principle as this app's exercise safety tips and RPE-adjustment logic.
+// weekFeel/barriers/habit are motivational/lifestyle content, the same
+// category already sent via narrateSessionIntro/narratePostSession, so
+// no new exposure there.
+const CHECKIN_RESPONSE_SYSTEM_PROMPT =
+  "You are the AI Coach for My Fit Pod, a UK private-pod gym, responding directly to a member's weekly check-in. Write in a direct, confident, encouraging voice — never hedge, never say \"I'm an AI\". 3-5 short sentences: acknowledge how their week actually went using the figures and their own words, respond to anything that got in their way, and reference their habit commitment — praise following through, or reset encouragingly without guilt-tripping if they didn't. Plain language, no markdown, never invent a number or detail not present in the data. Do not mention pain, injury, or physical discomfort — that's handled separately.";
+
+// Mirrors checkin-view.tsx's WEEK_FEEL_OPTIONS labels — kept local since
+// this is presentation copy for the LLM prompt, not a shared constant
+// either side needs to import.
+const WEEK_FEEL_LABELS: Record<number, string> = { 1: "Rough", 2: "Tough", 3: "OK", 4: "Good", 5: "Great" };
+
+export interface CheckInAnswers {
+  weekFeel: number;
+  barriers?: string;
+  habit: string;
+  // Both present together or both absent — see completeCheckInSchema's
+  // own pairing rule in the /complete route. previousHabit is null when
+  // this is the member's first-ever check-in (nothing to follow up on).
+  habitFollowUp?: "yes" | "partially" | "no";
+  previousHabit?: string | null;
+}
+
+export async function narrateCheckInResponse(memberName: string, review: WeeklyReview, answers: CheckInAnswers): Promise<string> {
+  const parts = [
+    `${review.sessionsCompleted} workout session(s) completed`,
+    `${Math.round(review.totalVolumeKg)}kg total weight lifted`,
+    `rated the week "${WEEK_FEEL_LABELS[answers.weekFeel] ?? "OK"}"`,
+  ];
+  if (review.nutritionDaysLogged > 0) {
+    parts.push(`nutrition logged ${review.nutritionDaysLogged}/${review.nutritionDaysInWindow} days`);
+  } else {
+    parts.push("no nutrition logged this week");
+  }
+  if (answers.barriers) parts.push(`what got in their way this week: ${answers.barriers}`);
+  if (answers.previousHabit && answers.habitFollowUp) {
+    const followUpLabel = { yes: "kept up with it", partially: "partly kept up with it", no: "didn't keep up with it" }[answers.habitFollowUp];
+    parts.push(`last week's habit commitment was "${answers.previousHabit}" — they ${followUpLabel}`);
+  }
+  parts.push(`this week's new habit commitment: "${answers.habit}"`);
+
+  const userPrompt = `Write a direct response to ${memberName}'s weekly check-in based on: ${parts.join(", ")}.`;
+  return askProvider(CHECKIN_RESPONSE_SYSTEM_PROMPT, userPrompt);
+}
+
+// Fixed, reviewed copy — never LLM-generated, same principle as this
+// app's exercise safety tips (see narrateCheckInResponse's own comment
+// above for why). Deliberately doesn't try to weave painDetail's freeform
+// text into a natural sentence — that risks mangling a member's own words
+// into something that reads oddly, for no real benefit over a plain
+// acknowledgment.
+export const PAIN_ACKNOWLEDGMENT =
+  "Thanks for flagging that — go easy on anything that aggravates it this week, and I'll bear it in mind for your next session.";
