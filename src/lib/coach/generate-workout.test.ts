@@ -193,6 +193,17 @@ describe("getInjuryExcludedKeys", () => {
     expect(singular).toContain("dumbbell_shoulder_press");
     expect(singular).toEqual(plural);
   });
+
+  // Regression (2026-08-30) — "calf" pluralises irregularly to "calves",
+  // not "calfs". A plain trailing-"s" strip doesn't cover this, same class
+  // of bug as the shoulder one above but for the far more natural "my
+  // calves hurt" phrasing.
+  it("matches the irregular plural of a stored singular keyword (calf/calves)", () => {
+    const singular = getInjuryExcludedKeys("calf strain");
+    const plural = getInjuryExcludedKeys("my calves hurt");
+    expect(singular).toContain("dumbbell_calf_raise");
+    expect(singular).toEqual(plural);
+  });
 });
 
 describe("generateWorkout — equipment awareness", () => {
