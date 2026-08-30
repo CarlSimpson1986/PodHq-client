@@ -66,6 +66,27 @@ export const RPE_SCALE: { value: number; label: string }[] = [
   { value: 5, label: "Killer" },
 ];
 
+// How much an Effortless/Easy or Hard/Killer set moves the next suggested
+// weight, scaled by experience_level (2026-08-30 — coaching review flagged
+// that experience_level was collected at onboarding but never actually
+// used anywhere in generate-workout.ts). Deliberately the OPPOSITE of the
+// naive "protect beginners with smaller jumps" instinct: a beginner is
+// furthest from their ceiling and tolerates bigger, more frequent
+// increases (classic linear-progression territory — e.g. Starting
+// Strength adds a fixed increment nearly every session early on); an
+// advanced lifter is close to their genetic ceiling, so the same
+// percentage jump is a bigger absolute weight and a real overshoot risk,
+// and needs to move more cautiously. Intermediate keeps this app's
+// original flat 5% unchanged — every existing test/behavior for the
+// (unspecified-experience) default case is untouched. Same invented-but-
+// defensible category as this file's other program-design constants —
+// Carl's numbers to retune.
+export const RPE_ADJUSTMENT_PERCENT_BY_EXPERIENCE: Record<ExperienceLevel, number> = {
+  beginner: 0.08,
+  intermediate: 0.05,
+  advanced: 0.03,
+};
+
 // Daily calorie target hard floor — Carl's call to confirm (2026-08-23),
 // same kind of explicit sign-off as PROTEIN_TARGET_G_PER_KG above: without
 // this, a lighter member on an aggressive deficit (weight_loss goal, low

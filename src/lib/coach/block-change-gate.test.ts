@@ -25,13 +25,21 @@ describe("getBlockChangeRecommendation", () => {
     expect(result).toEqual({ kind: "shift", nextBlockType: "deload" });
   });
 
-  it("shifts to strength with good attendance and a thin RPE sample — too little data to gate on", () => {
+  // Corrected 2026-08-30 (coaching review) — a thin RPE sample used to
+  // silently fall through to "shift" ("no signal" treated the same as "no
+  // problem"). Now it holds instead, same as low attendance does.
+  it("recommends keep (insufficient data) with good attendance but a thin RPE sample heading into strength", () => {
     const result = getBlockChangeRecommendation(
       "strength",
       { completedSessions: 40, weeksElapsed: 12, sessionsPerWeek: 4 },
       [4, 5] // below BLOCK_MIN_RPE_SAMPLE
     );
-    expect(result).toEqual({ kind: "shift", nextBlockType: "strength" });
+    expect(result).toEqual({ kind: "keep", reason: "insufficient_data" });
+  });
+
+  it("recommends keep (insufficient data) with zero recent RPE heading into strength", () => {
+    const result = getBlockChangeRecommendation("strength", { completedSessions: 40, weeksElapsed: 12, sessionsPerWeek: 4 }, []);
+    expect(result).toEqual({ kind: "keep", reason: "insufficient_data" });
   });
 
   it("shifts to strength with good attendance and low recent RPE", () => {

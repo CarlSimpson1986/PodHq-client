@@ -9,9 +9,11 @@ import {
   SECONDS_PER_REP,
   SESSION_SECONDS,
   REST_SECONDS_BY_BLOCK,
+  RPE_ADJUSTMENT_PERCENT_BY_EXPERIENCE,
   type Goal,
   type BlockType,
   type EquipmentType,
+  type ExperienceLevel,
 } from "@/lib/coach/types";
 import { londonMidnight } from "@/lib/london-time";
 
@@ -137,9 +139,23 @@ export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[
 // (workout-session.ts) can validate a member-chosen replacement against
 // the exact same injury exclusion generation itself uses, rather than a
 // second copy of this logic that could drift.
+//
+// Singular/plural fix (2026-08-30) — every avoidIfInjury keyword except
+// "shoulders" is stored in a form a natural plural still contains as a
+// substring ("knee" ⊂ "knees"), so the raw substring check worked for
+// them by accident. "shoulders" is the one keyword stored plural, so a
+// member typing the far more natural singular ("shoulder injury", "bad
+// shoulder") matched nothing and got zero exclusions — a real member
+// reporting a real injury, silently ignored. Stripping a trailing "s"
+// before matching makes the check singular/plural-insensitive for every
+// keyword, not just a special case for this one.
+function singularize(keyword: string): string {
+  return keyword.endsWith("s") ? keyword.slice(0, -1) : keyword;
+}
+
 export function getInjuryExcludedKeys(injuries: string | null): string[] {
   const lower = (injuries ?? "").toLowerCase();
-  return EXERCISE_CATALOG.filter((exercise) => exercise.avoidIfInjury.some((keyword) => lower.includes(keyword))).map(
+  return EXERCISE_CATALOG.filter((exercise) => exercise.avoidIfInjury.some((keyword) => lower.includes(singularize(keyword)))).map(
     (exercise) => exercise.key
   );
 }
@@ -193,14 +209,16 @@ function selectExercises(
 }
 
 // null the very first time (see GeneratedExercise's own comment) — no
-// per-experience-level default is guessed at all, deliberately, since
-// even a "conservative" guess is still the app guessing on a beginner's
-// behalf rather than the beginner logging what they actually used.
+// per-experience-level *starting* weight is guessed at all, deliberately,
+// since even a "conservative" guess is still the app guessing on a
+// beginner's behalf rather than the beginner logging what they actually
+// used. experience_level only affects the RATE of change from the second
+// time on (adjustForRpe below), never the first-time blank.
 function computeWeightKg(exercise: CatalogExercise, profile: CoachProfile, prior: ExerciseHistoryEntry | undefined): number | null {
   if (!prior) {
     return null;
   }
-  return roundToNearestPlate(adjustForRpe(prior.lastWeightKg, prior.lastRpe));
+  return roundToNearestPlate(adjustForRpe(prior.lastWeightKg, prior.lastRpe, profile.experience_level));
 }
 
 // Blocks only ever change which repsTarget/exercise pool feed into the
@@ -230,12 +248,17 @@ export function computeWeightKgForBlock(
 // RPE 1-2 (Effortless/Easy) trends the weight up, 3 (Just Right) holds it,
 // 4-5 (Hard/Killer) holds or trends it down — the rule added to
 // MyFitPod-App-Brief.docx §9 this session. No RPE logged for the prior
-// set (member skipped it) holds the weight rather than guessing.
-function adjustForRpe(lastWeightKg: number, lastRpe: number | null): number {
+// set (member skipped it) holds the weight rather than guessing. The
+// magnitude of that up/down move is scaled by experience_level
+// (2026-08-30, see RPE_ADJUSTMENT_PERCENT_BY_EXPERIENCE's own comment in
+// types.ts for why beginners move faster, not slower) — intermediate's
+// 5% is unchanged from this rule's original single flat value.
+function adjustForRpe(lastWeightKg: number, lastRpe: number | null, experienceLevel: ExperienceLevel): number {
   if (lastRpe === null) return lastWeightKg;
-  if (lastRpe <= 2) return lastWeightKg * 1.05;
+  const delta = RPE_ADJUSTMENT_PERCENT_BY_EXPERIENCE[experienceLevel];
+  if (lastRpe <= 2) return lastWeightKg * (1 + delta);
   if (lastRpe === 3) return lastWeightKg;
-  return lastWeightKg * 0.95;
+  return lastWeightKg * (1 - delta);
 }
 
 function roundToNearestPlate(kg: number, increment = 1.25): number {
