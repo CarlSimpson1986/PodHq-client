@@ -21,6 +21,8 @@ import { getActiveBlock } from "@/lib/coach/training-block-state";
 import { DELOAD_WEIGHT_MULTIPLIER, type BlockType, type EquipmentType } from "@/lib/coach/types";
 import { getWearableConnection, getLatestWearableSnapshot, getRecentWearableSnapshots } from "@/lib/data/wearables";
 import { getRecoverySignal, type RecoverySignal } from "@/lib/coach/recovery-signal";
+import { getLatestPainReport } from "@/lib/coach/check-ins";
+import { getPainCaution, type PainCaution } from "@/lib/coach/pain-caution";
 
 export interface WorkoutSet {
   id: number;
@@ -101,6 +103,12 @@ export interface WorkoutSessionDetail extends SessionExerciseDetail {
   // on the overview screen as a member-confirmed suggestion only
   // (applyRecoveryAdjustment below), never applied automatically.
   recoveryAdvice: RecoverySignal;
+  // Whether the member's latest weekly check-in reported pain that's
+  // still relevant to today's session (2026-08-30, coaching review — see
+  // pain-caution.ts). Advisory only, same posture as recoveryAdvice —
+  // never excludes an exercise, just names which of today's picks touch
+  // the reported area so the member can go easy or swap it themselves.
+  painCaution: PainCaution;
 }
 
 // Stage 12c real risk: the safe fallback on any error resolving the
@@ -237,6 +245,22 @@ async function getRecoveryAdvice(memberId: number, sessionId: number | null): Pr
   }
 }
 
+// A check-in-fetch hiccup must not block a member from seeing their
+// workout, same fail-open posture as getRecoveryAdvice above — defaults
+// to "none" rather than surfacing an error for a purely advisory signal.
+async function getPainCautionForSession(memberId: number, sessionExerciseKeys: string[]): Promise<PainCaution> {
+  try {
+    const painReport = await getLatestPainReport(memberId);
+    return getPainCaution(painReport, sessionExerciseKeys);
+  } catch (error) {
+    console.error("[workout] failed to resolve pain caution, defaulting to none", {
+      memberId,
+      error: (error as Error).message,
+    });
+    return { kind: "none" };
+  }
+}
+
 // Persistent Hypertrophy A/B/C rotation (2026-08-27, see
 // generate-workout.ts's own comment on generateWorkoutTemplateSet for
 // the product reasoning). Resolves this member's A/B/C set for the
@@ -321,6 +345,10 @@ export async function getOrCreateWorkoutSession(
         ...detail,
         excludedExerciseKeys: combineExcludedKeys(existingProfile?.injuries ?? null, availableEquipment),
         recoveryAdvice: await getRecoveryAdvice(memberId, existing.id),
+        painCaution: await getPainCautionForSession(
+          memberId,
+          detail.exercises.map((e) => e.key)
+        ),
       },
       introNarration: null,
     };
@@ -501,6 +529,10 @@ async function generateAndPersistSession(
           ...detail,
           excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment),
           recoveryAdvice: await getRecoveryAdvice(memberId, winner.id),
+          painCaution: await getPainCautionForSession(
+            memberId,
+            detail.exercises.map((e) => e.key)
+          ),
         },
         introNarration: null,
       };
@@ -525,6 +557,10 @@ async function generateAndPersistSession(
       ...detail,
       excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment),
       recoveryAdvice: await getRecoveryAdvice(memberId, session.id),
+      painCaution: await getPainCautionForSession(
+        memberId,
+        detail.exercises.map((e) => e.key)
+      ),
     },
     introNarration,
   };
@@ -605,7 +641,15 @@ async function generateCircuitSession(
       if (winnerError) throw new Error(winnerError.message);
       const detail = await loadSessionDetail(winner.id);
       return {
-        detail: { ...detail, excludedExerciseKeys: excludedKeys, recoveryAdvice: { kind: "insufficient_data" } },
+        detail: {
+          ...detail,
+          excludedExerciseKeys: excludedKeys,
+          recoveryAdvice: { kind: "insufficient_data" },
+          painCaution: await getPainCautionForSession(
+            memberId,
+            detail.exercises.map((e) => e.key)
+          ),
+        },
         introNarration: null,
       };
     }
@@ -637,7 +681,15 @@ async function generateCircuitSession(
 
   const detail = await loadSessionDetail(session.id);
   return {
-    detail: { ...detail, excludedExerciseKeys: excludedKeys, recoveryAdvice: { kind: "insufficient_data" } },
+    detail: {
+      ...detail,
+      excludedExerciseKeys: excludedKeys,
+      recoveryAdvice: { kind: "insufficient_data" },
+      painCaution: await getPainCautionForSession(
+        memberId,
+        detail.exercises.map((e) => e.key)
+      ),
+    },
     introNarration: null,
   };
 }
@@ -832,7 +884,15 @@ export async function swapExercise(
   if (setsUpdateError) throw new Error(setsUpdateError.message);
 
   const updated = await loadSessionDetail(sessionId);
-  return { ...updated, excludedExerciseKeys: excludedKeys, recoveryAdvice: await getRecoveryAdvice(memberId, sessionId) };
+  return {
+    ...updated,
+    excludedExerciseKeys: excludedKeys,
+    recoveryAdvice: await getRecoveryAdvice(memberId, sessionId),
+    painCaution: await getPainCautionForSession(
+      memberId,
+      updated.exercises.map((e) => e.key)
+    ),
+  };
 }
 
 // Member-confirmed-only counterpart to the deload block's automatic
@@ -894,6 +954,10 @@ export async function applyRecoveryAdjustment(memberId: number, sessionId: numbe
     ...updated,
     excludedExerciseKeys: combineExcludedKeys(profile?.injuries ?? null, availableEquipment),
     recoveryAdvice: await getRecoveryAdvice(memberId, sessionId),
+    painCaution: await getPainCautionForSession(
+      memberId,
+      updated.exercises.map((e) => e.key)
+    ),
   };
 }
 

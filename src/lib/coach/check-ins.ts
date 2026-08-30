@@ -15,6 +15,39 @@ export async function getLastCheckIn(memberId: number): Promise<{ completedAt: s
   return data ? { completedAt: data.completed_at } : null;
 }
 
+export interface LatestPainReport {
+  hadPain: boolean;
+  // "" is treated the same as never having been given — a member can tap
+  // "Yes" and leave the detail blank (checkin-view.tsx's painDetail is
+  // optional even when hadPain is true).
+  painDetail: string | null;
+}
+
+// Feeds getPainCaution (pain-caution.ts) — the check-in's "any pain or
+// discomfort" question used to be stored and never read again anywhere
+// (coaching review, 2026-08-30). This is always just the LATEST check-in,
+// which is what makes the caution self-expiring: once a member reports no
+// pain (or simply completes a newer check-in), whatever this returns
+// updates automatically — nothing to manually clear.
+export async function getLatestPainReport(memberId: number): Promise<LatestPainReport | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("check_ins")
+    .select("answers")
+    .eq("member_id", memberId)
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  const answers = data.answers as Record<string, unknown> | null;
+  const hadPain = answers?.hadPain === true;
+  const rawDetail = answers?.painDetail;
+  const painDetail = typeof rawDetail === "string" && rawDetail.trim().length > 0 ? rawDetail : null;
+  return { hadPain, painDetail };
+}
+
 export interface RecentCheckIn {
   periodStart: string;
   habit: string | null;

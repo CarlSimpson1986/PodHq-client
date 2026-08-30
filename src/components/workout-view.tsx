@@ -51,6 +51,14 @@ interface WorkoutExercise {
 
 type RecoveryAdvice = { kind: "low_recovery"; reason: "elevated_resting_hr" | "low_sleep" } | { kind: "normal" } | { kind: "insufficient_data" };
 
+// Pain caution (2026-08-30, coaching review) — surfaces the member's own
+// latest weekly check-in "any pain or discomfort" answer on the very next
+// workout, naming which of today's actual exercises touch the reported
+// area. Advisory only, same posture as RecoveryAdvice — never excludes an
+// exercise, just a heads-up with a pointer to swap it out if it's still
+// bothering them.
+type PainCaution = { kind: "none" } | { kind: "reported"; painDetail: string | null; flaggedExerciseKeys: string[] };
+
 // AMRAP fields (Stage 2, 2026-08-29) — timeCapSeconds is the prescription
 // (set at generation), roundsCompleted/partialRoundExerciseIndex/
 // partialRoundReps are the self-reported tally, null until completed.
@@ -69,6 +77,7 @@ interface WorkoutSessionDetail {
   exercises: WorkoutExercise[];
   excludedExerciseKeys: string[];
   recoveryAdvice: RecoveryAdvice;
+  painCaution: PainCaution;
 }
 
 const RECOVERY_REASON_COPY: Record<"elevated_resting_hr" | "low_sleep", string> = {
@@ -150,6 +159,39 @@ function ExitLink() {
     <Link href="/" className="inline-block text-xs font-medium text-card-light-muted underline">
       ← Exit
     </Link>
+  );
+}
+
+// Pain caution banner (2026-08-30, coaching review) — shared across every
+// overview screen (straight-sets, AMRAP, RFT) rather than three near-copies,
+// since the only real difference between them is whether a swap is even
+// possible: straight-sets exercises can be swapped per-exercise on this
+// same screen (allowSwap points there); AMRAP/RFT exercises are fixed once
+// generated (see their own overview comments), so that screen just says
+// "go easy" instead of pointing at a control that doesn't exist there.
+function PainCautionBanner({ detail, allowSwap }: { detail: WorkoutSessionDetail; allowSwap: boolean }) {
+  if (detail.painCaution.kind !== "reported") return null;
+  const flaggedNames = detail.painCaution.flaggedExerciseKeys
+    .map((key) => detail.exercises.find((e) => e.key === key)?.name)
+    .filter((name): name is string => Boolean(name));
+
+  return (
+    <div className="rounded-lg border border-warning/40 bg-warning/5 p-4">
+      <p className="text-sm font-semibold">Heads up</p>
+      <p className="mt-1 text-sm text-card-light-muted">
+        {flaggedNames.length > 0 ? (
+          <>
+            You mentioned {detail.painCaution.painDetail ?? "some pain or discomfort"} at your last check-in. If it&apos;s still
+            bothering you, go easy on{allowSwap ? " (or swap out below)" : ""} {flaggedNames.join(", ")}.
+          </>
+        ) : (
+          <>
+            You mentioned some pain or discomfort at your last check-in. If it&apos;s still bothering you, go easy today
+            {allowSwap ? " and swap out anything that aggravates it" : ""}.
+          </>
+        )}
+      </p>
+    </div>
   );
 }
 
@@ -943,6 +985,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <ExitLink />
         <p className="text-lg font-semibold">AMRAP — {Math.round((detail.timeCapSeconds ?? 0) / 60)} minutes</p>
         <p className="text-sm text-card-light-muted">As many rounds as possible. Cycle through every exercise below, then repeat.</p>
+        <PainCautionBanner detail={detail} allowSwap={false} />
         <ul className="space-y-2">
           {detail.exercises.map((ex, i) => {
             const set = ex.sets[0];
@@ -988,6 +1031,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           Complete every exercise below, {detail.targetRounds} times through, as fast as you can. Time cap:{" "}
           {Math.round((detail.timeCapSeconds ?? 0) / 60)} minutes.
         </p>
+        <PainCautionBanner detail={detail} allowSwap={false} />
         <ul className="space-y-2">
           {detail.exercises.map((ex, i) => {
             const set = ex.sets[0];
@@ -1326,6 +1370,8 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             </button>
           )}
         </div>
+
+        <PainCautionBanner detail={detail} allowSwap={true} />
 
         {!hasProgress && !recoveryDismissed && detail.recoveryAdvice.kind === "low_recovery" && (
           <div className="rounded-lg border border-card-light-border bg-card-light-foreground/5 p-4">
