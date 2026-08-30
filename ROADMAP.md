@@ -14,161 +14,109 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-43.md`, covering the pilot
-mechanism proof (2026-08-05) through the Squat/Bench/Deadlift split and
-custom-workout rest timer (2026-08-29) — all split out to keep this file
-within Claude Code's ~15,000-character `@`-import limit. Archives aren't
-always the strictly oldest material — the split point is "what's finished
-and stable" as much as "what's oldest" (see each archive's own header note
-for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
-for full build history, or `git log` on this file for exact split
-points. Active content here starts at "Stage 2 of custom workouts —
-AMRAP format..." (2026-08-29). If this file grows too large again, split
-it the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-44.md`, update this paragraph.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-44.md`, covering the pilot
+mechanism proof (2026-08-05) through the AMRAP format and Weights/Cardio
+split (2026-08-29) — all split out to keep this file within Claude Code's
+~15,000-character `@`-import limit. Archives aren't always the strictly
+oldest material — the split point is "what's finished and stable" as much
+as "what's oldest" (see each archive's own header note for examples).
+Reference-only, not auto-loaded by CLAUDE.md; check them for full build
+history, or `git log` on this file for exact split points. Active content
+here starts at "Stage 3 of custom workouts — Rounds For Time" (2026-08-30).
+If this file grows too large again, split it the same way: move the most
+clearly finished section into `ROADMAP-ARCHIVE-45.md`, update this
+paragraph.
 
-## Stage 2 of custom workouts — AMRAP format — 2026-08-29
+## Stage 3 of custom workouts — Rounds For Time — 2026-08-30
 
-Full AMRAP ("As Many Rounds As Possible in X minutes") build, a genuinely
-separate session model from every other mode: no RPE-driven weight/reps
-computation at all, since the block/phase engine has nothing to say about
-a once-off member-authored circuit.
+Rounds-For-Time joins AMRAP as the second Cardio sub-format: a member
+prescribes a round count and races the clock (a stopwatch counting up) to
+finish every round. Reused migration `0072`'s columns exactly as that
+migration's own comment anticipated, plus a new `0073_workout_rounds_
+for_time.sql` (podHq, shared DB) for `target_rounds`/`elapsed_seconds`.
 
-**Migration `0072_workout_amrap.sql`** (podHq, shared DB) — `format`
-('straight_sets' | 'amrap', default 'straight_sets' — every existing row
-and every default/focus/straight-sets-custom session from here on reads
-exactly that, unchanged), `time_cap_seconds`/`rounds_completed`/
-`partial_round_exercise_index`/`partial_round_reps` on `workout_sessions`;
-`duration_seconds` on `workout_sets` (a circuit exercise is prescribed as
-EITHER reps OR duration, never both — enforced in application code).
-`workout_sets.reps_target`'s NOT NULL had to go too — a duration-based set
-genuinely has no rep count, same "blank, not a guessed placeholder"
-reasoning as `weight_target_kg`'s own NOT NULL drop a few sessions back.
+**Corrected same day** after Carl pushed back ("i dont think thats how
+rounds for time works") and a web check against real CrossFit RFT WODs:
+the first pass copied AMRAP's reps-or-duration exercise config wholesale
+and had no time cap at all — a stopwatch a member could stop after 15
+seconds for "4 rounds in 0:15". Real RFT is reps-only per round (a
+fixed-duration movement can't be raced) and always carries a time cap.
+Fixed: RFT's builder is reps-only (no Duration option), a required time
+cap was added, and the stopwatch now auto-transitions to a self-reported
+DNF tally (mirroring AMRAP's own tally UI, reusing the same
+`partial_round_exercise_index`/`partial_round_reps` columns) if it hits
+the cap before "Finished!" is tapped.
 
-**Generation** (`generateCircuitSession`, `workout-session.ts`) — a fully
-separate branch inside `generateAndPersistSession`, not another
-`WorkoutChoice` case bolted onto the existing RPE-driven path. One
-`workout_exercises` row per movement, exactly one `workout_sets` row each
-(set_number 1) holding that movement's round-prescription — no per-set
-completion the way straight sets has, since a circuit round repeats
-continuously. No coach-profile-missing hard-block the way every other
-mode has (no weight/reps computation needs profile data, only injury
-filtering) — a missing profile just means no exclusion data, same
-graceful degradation `getExcludedExerciseKeysForBooking` already uses. No
-intro narration either — `narrateSessionIntro` expects the RPE-engine's
-output shape, which a circuit never produces.
+Also fixed while reviewing the format alongside this: the Training page's
+"Last session" card (`last-session-card.tsx`) previously rendered any
+completed AMRAP/RFT session as a wall of "Not rated" badges with no
+weight — it had no per-set actuals to show for a circuit format. Now
+format-aware: shows a rounds/time result line instead.
 
-**Builder** (`custom-pick`, `workout-view.tsx`) — format picker (Straight
-Sets / AMRAP) added ahead of the exercise list; AMRAP mode swaps the
-per-exercise rest input for reps-or-duration + optional weight, plus a
-time-cap input (1-60 minutes) at the top.
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (152/152), and
+`npm run build` all clean throughout both passes. Live-verified on the
+playground member/booking: a normal finish, a real time-cap DNF (ran the
+stopwatch past a 1-minute cap, confirmed the auto-transition and the
+"2 rounds, then 6 reps of Jumping Jacks in 1:00 (time cap)" summary), and
+the Last Session card showing both outcomes correctly.
 
-**Taking it** — three new phases. Overview shows the round (exercise
-list, reps/duration/weight) and time cap, no warm-up/cool-down toggles
-or swap (out of scope for this stage — exercises are fixed once
-generated). "amrap-active": full-screen countdown from the time cap, the
-round listed for reference while the member cycles through it
-themselves, "Finish now" to stop early. Timer hitting zero auto-advances
-to "amrap-tally" — unlike Stage 1's rest-timer, this needed no `useRef`
-bridge since the target phase never depends on late-computed values, so
-a `useRef` holding `() => setPhase("amrap-tally")` (set once, since
-`setPhase` itself has a stable identity) was enough to dodge the
-`set-state-in-effect` lint rule without the extra indirection layer.
-Tally screen: self-reported "how many full rounds, and how far into the
-next one" (same trust posture as RPE/weight everywhere else in this
-app — no rep-counting sensors), submits to a new dedicated
-`completeAmrapSession`/`/api/member/workout/[sessionId]/complete-amrap`
-(separate from the existing `/complete` — nothing to derive from logged
-sets the way straight-sets volume is, since there are none).
+**Not built this stage**: mid-circuit exercise swap (matches AMRAP).
 
-**Not built this stage**: Rounds-For-Time (Stage 3), warm-up/cool-down
-for AMRAP, mid-circuit exercise swap.
+## Coaching review — three training-engine gaps, check-in pain feedback loop — 2026-08-30
 
-**Verified**: `npx tsc --noEmit`, `eslint`, `npx vitest run` (148/148),
-and `npm run build` all clean throughout. Code-reviewed and build/test-
-verified only, not live-clicked — same playground-member 0-credits
-blocker as Stage 1's rest timer and the earlier "Change today's workout"
-feature; the builder, overview, timer, tally, and summary screens all
-need a real booking to reach at all.
+Asked Claude to review the training/coaching engine and the weekly
+check-in "as an experienced coach," not just for code correctness — found
+real programming-quality and product gaps a lifting-savvy reviewer would
+catch that a code-only review wouldn't.
 
-**Live-verified end to end same day**, once Carl granted the playground
-member real credits (`insert into credits ... 'manual_grant'`) and
-booked a real session through `/book` — the actual flow, not a DB
-shortcut. Also needed migrations `0071`/`0072` actually pasted into
-Supabase (built and committed earlier, but never applied — should have
-flagged that explicitly at the time, not left it implicit). Caught and
-fixed a real bug this surfaced: the client sent the AMRAP exercise list
-as `exercises`, the server schema expected `amrapExercises` — silent
-field-name mismatch, `generateWorkoutSchema`'s cross-field refine
-correctly rejected it as "Invalid request." but the two names never
-matched to begin with. Full click-through afterwards confirmed: choose
-screen correctly shows only Focus day/Build your own (no stale "Today's
-session" option), format picker, per-exercise Reps/Duration toggle,
-live countdown timer (5:00 → 4:54, confirmed ticking), tally screen's
-conditional partial-reps field, and a correct final summary ("3 rounds,
-then 6 reps of Lat Pulldown"). One testing-tool gotcha worth remembering
-for next time, not an app bug: setting a controlled React input's
-`.value` directly and dispatching a plain `input` event doesn't reliably
-trigger its `onChange` — go through the native `HTMLInputElement`
-value-setter descriptor first, same trick used for React Testing
-Library's `fireEvent`.
+**Training engine (`generate-workout.ts`, `types.ts`, `block-change-gate.ts`):**
+- `getInjuryExcludedKeys`'s substring match worked for every
+  `avoidIfInjury` keyword except `"shoulders"` — the one keyword stored
+  plural. A member typing the natural singular ("shoulder injury") matched
+  nothing and got zero exclusions: a real reported injury, silently
+  ignored. Fixed generally (strip a trailing "s" before matching) rather
+  than special-casing the one keyword.
+- `experience_level` (beginner/intermediate/advanced) was collected at
+  onboarding and never used anywhere in generation — identical RPE-driven
+  progression for everyone. Added `RPE_ADJUSTMENT_PERCENT_BY_EXPERIENCE`
+  (types.ts): beginner ±8%, intermediate ±5% (unchanged default), advanced
+  ±3% — deliberately the *opposite* of "protect beginners with smaller
+  jumps": beginners are furthest from their ceiling and tolerate bigger
+  jumps, advanced lifters need smaller ones since they're close to it.
+- The deload→strength fatigue gate silently skipped its check on a thin
+  recent-RPE sample, defaulting to "shift allowed" — and AMRAP/RFT
+  sessions never log per-set RPE (nothing to rate in a circuit), so this
+  increasingly matters as members adopt those formats. Now a thin sample
+  holds the member in their current block instead ("not enough recent
+  difficulty ratings to tell if you're ready for something harder").
 
+**Check-in pain feedback loop (new `pain-caution.ts`):** the weekly
+check-in's "any pain or discomfort that lingered beyond a normal
+workout?" question was captured (`check_ins.answers`) and never read by
+anything again — a real self-reported safety signal going nowhere, not
+even visible to gym staff (podHq has no admin view onto `check_ins` at
+all). Now the member's latest check-in pain report is checked against
+every workout on generation/load (all 7 call sites in
+`getOrCreateWorkoutSession`/`changeWorkoutMode`/`generateCircuitSession`/
+`swapExercise`/`applyRecoveryAdjustment`), naming which of *today's
+actual exercises* touch the reported area via the same `avoidIfInjury`
+keyword match generation's own injury filter already uses — no second,
+drifting implementation. Advisory only (never auto-excludes, same
+posture as the existing recovery-signal banner), and self-expiring (it's
+always just the latest check-in, so a clean report clears it with
+nothing to manually dismiss).
 
-## "Build your own" split into Weights/Cardio, real HIIT/CrossFit content added — 2026-08-29
+**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (157/157, +9 new
+tests across the four fixes), and `npm run build` all clean. Live-verified
+the pain-caution loop end to end: reported "shoulder, when pressing
+overhead" at check-in, next workout correctly flagged **Barbell Front
+Squat** — not an obvious "shoulder exercise," but the front-rack position
+genuinely loads the shoulders, and the existing catalog data already knew
+that.
 
-Carl's reaction to the AMRAP builder once it was live: the single flat
-exercise list mixing strength and conditioning movements was confusing
-("its fucking all over the place") — asked for an overarching Weights vs.
-Cardio choice up front. Rather than reuse AMRAP's reps-vs-duration toggle
-as a proxy for the split (arbitrary — plenty of strength accessories are
-duration-based too, e.g. planks), added a real `isConditioning: boolean`
-field to `CatalogExercise` and tagged every entry against actual
-researched HIIT/CrossFit programming, not guessed: the 10 already-present
-ballistic/dynamic kettlebell and Russian-twist movements (swings, cleans,
-sumo deadlift, core rotation) flipped to `true`; the more controlled
-kettlebell entries (goblet squat, bottoms-up press, halo) stayed
-strength-tagged as the same slow pattern as their dumbbell/barbell
-equivalents. Added 6 new bodyweight conditioning entries — burpee,
-mountain climbers, jumping jacks, high knees, jump squats, plank jacks —
-real CrossFit/HIIT staples, cross-checked against what the pods actually
-have (bodyweight + kettlebells + dumbbells only; no rower, bike, pull-up
-bar, plyo box, or wall-ball target, so those movements were deliberately
-left out).
-
-`workout-view.tsx`'s format picker relabelled Straight Sets/AMRAP →
-**Weights**/**Cardio**, and the exercise list shown in the builder now
-filters on `isConditioning` matching the chosen mode (previously showed
-every exercise regardless of format) — switching format also clears the
-in-progress selection so a half-built Weights pick can't leak into
-Cardio. AMRAP's per-exercise default flipped from reps-first to
-duration-first (30s) to match how conditioning movements are actually
-programmed, in both places that seed it (the config-fallback function and
-the exercise-tap handler each had their own hardcoded default — found and
-fixed both). Also fixed the muscle-group heading rendering the literal
-string "FULL_BODY" instead of "FULL BODY" (`uppercase` class was already
-winning the cascade over `capitalize`, and neither handles underscores —
-switched to `.replace("_", " ")`).
-
-One existing unit test asserted that `injuries: "back"` alone empties the
-"core" exercise pool — broken by the new core-tagged bodyweight additions
-(mountain climbers, plank jacks), which are wrist-tagged rather than
-back-tagged. This is the third time this session the catalog has outgrown
-a test's literal assumption. Fixed by updating the test's injury text to
-`"back and wrist"`, verified against a full enumeration of every
-core-tagged entry's `avoidIfInjury` list rather than guessed.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (148/148), and
-`npm run build` all clean. Live-verified via Turbopack hot-reload on the
-same playground booking used for the AMRAP live test: Weights shows the
-full strength catalog, Cardio shows only conditioning-tagged exercises
-with a duration default already filled in, generating a Cardio session
-produced a real AMRAP overview ("8 minutes / 1. Burpee / 30s").
-
-**Not built this stage**: no way back from an in-progress AMRAP/Cardio
-session to Weights/straight-sets once generated — only the straight-sets
-overview screen has a "Change today's workout" link; also, that link's
-gating (`hasSessionStarted`) checks for a `completedAt` on any
-`workout_sets` row, which AMRAP sessions never set, so if the link were
-added to the AMRAP screens as-is a fully-finished AMRAP session would
-still read as "not started." Noted, not fixed — no user-facing report of
-this being hit yet.
+**Not built this stage**: `weekFeel` (the 1-5 mood rating) and `barriers`
+(free-text "what got in the way") are still captured and unused — same
+gap as pain was, lower stakes, not addressed this pass. The habit
+question's accountability loop is also still half-built: it surfaces
+next week as "the habit you committed to," but nothing ever asks whether
+the member actually kept it up.
