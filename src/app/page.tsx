@@ -15,9 +15,13 @@ import { UpcomingSessionCard } from "@/components/upcoming-session-card";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { AICoachSection } from "@/components/ai-coach-section";
 import { TodaysMissionCard } from "@/components/todays-mission-card";
+import { MemberHabitCard } from "@/components/member-habit-card";
+import { CoachResponseCard } from "@/components/coach-response-card";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
 import { getTodaysMission } from "@/lib/coach/todays-mission";
 import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
+import { getRecentCheckIns, getLatestCheckInResponse } from "@/lib/coach/check-ins";
+import { computeHabitStreak } from "@/lib/coach/habit-streak";
 import { TrophyIcon, UsersIcon } from "@/components/icons";
 
 export default async function HomePage() {
@@ -50,6 +54,17 @@ export default async function HomePage() {
     : [null, [], new Map<number, number>()];
   const habitsWithProgress = habits.map((h) => ({ ...h, todayCount: habitProgress.get(h.id) ?? 0 }));
 
+  // Check-in feedback on the Home dashboard (2026-08-30) — the weekly
+  // check-in's habit/streak and the coach's actual response used to only
+  // ever surface on /coach, a tab a member has to specifically go looking
+  // for; the response itself wasn't even saved anywhere before this. Same
+  // premium/trial gate as the rest of the AI Coach content on this page.
+  const [recentCheckIns, checkInResponse] = showTodaysMission
+    ? await Promise.all([getRecentCheckIns(member.id), getLatestCheckInResponse(member.id)])
+    : [[], null];
+  const currentHabit = recentCheckIns[0]?.habit ?? null;
+  const habitStreak = computeHabitStreak(recentCheckIns);
+
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
       <div id="tour-greeting" className="bg-card px-6 pb-8 pt-12 sm:pt-16">
@@ -62,6 +77,13 @@ export default async function HomePage() {
       <div className="flex-1 space-y-4 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-4">
           <AICoachSection state={coachState} />
+
+          {showTodaysMission && (
+            <>
+              <CoachResponseCard response={checkInResponse} />
+              <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} />
+            </>
+          )}
 
           {showTodaysMission && mission && <TodaysMissionCard mission={mission} initialHabits={habitsWithProgress} />}
 
