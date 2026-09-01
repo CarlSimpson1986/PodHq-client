@@ -4,6 +4,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { BottomNav } from "@/components/bottom-nav";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { IdCardIcon, CoinIcon, GiftIcon } from "@/components/icons";
 import type { ComponentType } from "react";
 
@@ -69,6 +70,7 @@ export default async function ShopPage() {
           ))}
         </div>
       </div>
+      <PodAssistBubble />
       <BottomNav />
     </main>
   );

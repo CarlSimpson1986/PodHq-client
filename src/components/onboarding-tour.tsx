@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import { useEffect, useRef } from "react";
 import { driver, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
-import { HelpChatView } from "@/components/help-chat-view";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 
 const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
   {
@@ -73,7 +72,6 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
 // with a "?" button, so that cross-page mechanism no longer has a caller.
 export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | null }) {
   const driverRef = useRef<Driver | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     driverRef.current = driver({
@@ -98,40 +96,5 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <div className="fixed right-4 top-4 z-20">
-      <button
-        type="button"
-        id="tour-help-button"
-        onClick={() => setChatOpen(true)}
-        aria-label="Pod Assist"
-        className="flex h-10 w-10 items-center justify-center drop-shadow-lg"
-      >
-        <Image src="/icons/features/pod-assist-mark.png" alt="" width={40} height={40} />
-      </button>
-      {chatOpen && (
-        <div className="fixed inset-x-4 bottom-4 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl sm:inset-x-auto sm:right-4 sm:w-96">
-          <div className="flex items-center justify-between border-b border-card-light-border px-4 py-3">
-            <p className="text-sm font-semibold text-card-light-foreground">Pod Assist</p>
-            <button
-              type="button"
-              onClick={() => setChatOpen(false)}
-              aria-label="Close chat"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-card-light-muted hover:bg-card-light-border"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            <HelpChatView
-              onReplayTour={() => {
-                setChatOpen(false);
-                driverRef.current?.drive();
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <PodAssistBubble onReplayTour={() => driverRef.current?.drive()} />;
 }

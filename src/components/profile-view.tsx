@@ -4,6 +4,7 @@ import { useState, type ComponentType } from "react";
 import Link from "next/link";
 import type { Membership } from "@/lib/data/member";
 import { BottomNav } from "@/components/bottom-nav";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { CoinIcon, IdCardIcon, GiftIcon, DumbbellIcon, ChevronRightIcon, LogoutIcon, PinIcon, LockIcon } from "@/components/icons";
 
 // timeZone pinned — see bookings-view.tsx's formatSlot for why (same
@@ -250,6 +251,7 @@ export function ProfileView({
           </button>
         </div>
       </div>
+      <PodAssistBubble />
       <BottomNav />
     </main>
   );

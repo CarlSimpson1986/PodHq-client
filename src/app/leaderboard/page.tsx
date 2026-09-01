@@ -5,6 +5,7 @@ import { getMonthlySessionsLeaderboard, getWeeklyStepsLeaderboard, getStreakLead
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { MoreMenu } from "@/components/more-menu";
 import { LeaderboardView } from "@/components/leaderboard-view";
 
@@ -53,6 +54,7 @@ export default async function LeaderboardPage() {
           <LeaderboardView initialOptedIn={member.leaderboard_opt_in} initialSessions={sessions} initialStreaks={streaks} initialSteps={steps} />
         </div>
       </div>
+      <PodAssistBubble />
       <BottomNav />
     </main>
   );

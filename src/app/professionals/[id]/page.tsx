@@ -5,6 +5,7 @@ import { getProfessional } from "@/lib/data/professionals";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { UsersIcon } from "@/components/icons";
 import { ProfessionalInquiryForm } from "@/components/professional-inquiry-form";
 
@@ -82,6 +83,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           <ProfessionalInquiryForm professionalId={professional.id} professionalName={professional.name} />
         </div>
       </div>
+      <PodAssistBubble />
       <BottomNav />
     </main>
   );

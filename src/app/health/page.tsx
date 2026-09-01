@@ -8,6 +8,7 @@ import { averageInWindow } from "@/lib/coach/wearable-averages";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { MoreMenu } from "@/components/more-menu";
 import { WearableConnectionCard } from "@/components/wearable-connection-card";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
@@ -155,6 +156,7 @@ export default async function HealthPage() {
           )}
         </div>
       </div>
+      <PodAssistBubble />
       <BottomNav />
     </main>
   );

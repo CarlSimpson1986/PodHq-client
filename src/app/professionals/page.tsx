@@ -5,6 +5,7 @@ import { getActiveProfessionals } from "@/lib/data/professionals";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { MoreMenu } from "@/components/more-menu";
 import { ProfessionalsDirectory } from "@/components/professionals-directory";
 
@@ -41,6 +42,7 @@ export default async function ProfessionalsPage() {
           <ProfessionalsDirectory professionals={professionals} />
         </div>
       </div>
+      <PodAssistBubble />
       <BottomNav />
     </main>
   );
