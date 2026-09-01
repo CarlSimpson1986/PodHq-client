@@ -52,7 +52,7 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
     element: "#tour-help-button",
     popover: {
       title: "Need this again?",
-      description: "Tap here any time to replay this tour or chat with our help assistant.",
+      description: "Tap here any time to replay this tour or chat with Pod Assist.",
     },
   },
 ];
@@ -103,7 +103,7 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
         type="button"
         id="tour-help-button"
         onClick={() => setChatOpen(true)}
-        aria-label="Help"
+        aria-label="Pod Assist"
         className="flex h-10 w-10 items-center justify-center text-white drop-shadow-lg"
       >
         <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none">
@@ -124,7 +124,7 @@ export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | 
       {chatOpen && (
         <div className="fixed inset-x-4 bottom-4 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl sm:inset-x-auto sm:right-4 sm:w-96">
           <div className="flex items-center justify-between border-b border-card-light-border px-4 py-3">
-            <p className="text-sm font-semibold text-card-light-foreground">Chat</p>
+            <p className="text-sm font-semibold text-card-light-foreground">Pod Assist</p>
             <button
               type="button"
               onClick={() => setChatOpen(false)}
