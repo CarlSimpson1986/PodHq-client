@@ -6,7 +6,11 @@ import { NextResponse, type NextRequest } from "next/server";
 // logged-out member on a dead connection would get bounced in a redirect
 // loop instead of seeing it, and the SW's install-time cache.addAll would
 // fail on the 307 it'd otherwise get back.
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/offline"];
+// /privacy has to be reachable without a session too — Health Connect's
+// own permission sheet links out to it (see android's strings.xml
+// health_connect_privacy_policy_url), and a privacy policy that requires
+// logging in to read defeats the point.
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/offline", "/privacy"];
 // /api/webhooks/ is called by Stripe's servers, not a member's browser —
 // there's no session cookie to check, so the auth gate below must not
 // redirect it to /login (the route authenticates via Stripe's own

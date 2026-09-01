@@ -15,6 +15,10 @@ export interface Member {
   address_postcode: string | null;
   waiver_signed_name: string | null;
   waiver_signed_at: string | null;
+  // Non-null timestamp is "accepted", same shape as waiver_signed_at.
+  // Gates Pod Coach specifically (see hasAcceptedPrivacyPolicy below),
+  // not general Access — separate from isAccessComplete's waiver gate.
+  privacy_policy_accepted_at: string | null;
   // Hove's Founding Member offer — staff-granted in podHq (member profile
   // page), never automatic here. Grants 20% off every PAYG purchase; see
   // podHq's 0043_founding_member.sql.
@@ -49,6 +53,12 @@ export function isAccessComplete(member: Member): boolean {
       member.address_postcode &&
       member.waiver_signed_at
   );
+}
+
+// Gate for Pod Coach specifically (chat, and Connect Health Connect/
+// Fitbit) — see privacy-policy.ts Section 8 / migration 0080's comment.
+export function hasAcceptedPrivacyPolicy(member: Member): boolean {
+  return Boolean(member.privacy_policy_accepted_at);
 }
 
 export interface Booking {

@@ -113,7 +113,11 @@ export default async function HealthPage() {
             <RecoveryStatusCard status={recoveryStatus} />
             <div className="mt-3 card-light">
               <Suspense fallback={null}>
-                <WearableConnectionCard connected={!!wearableConnection} lastSyncedDate={wearableSnapshot?.recordedDate ?? null} />
+                <WearableConnectionCard
+                  connected={!!wearableConnection}
+                  provider={wearableConnection?.provider ?? null}
+                  lastSyncedDate={wearableSnapshot?.recordedDate ?? null}
+                />
               </Suspense>
             </div>
           </section>

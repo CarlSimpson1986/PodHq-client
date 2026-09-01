@@ -35,8 +35,8 @@ export async function POST() {
   }
 
   const connection = await getWearableConnection(member.id);
-  if (!connection) {
-    return NextResponse.json({ status: "error", message: "No wearable connected." }, { status: 404 });
+  if (!connection || connection.provider !== "fitbit") {
+    return NextResponse.json({ status: "error", message: "No Fitbit connection to refresh." }, { status: 404 });
   }
 
   // Deliberately TODAY, not yesterday like the nightly cron — this was
