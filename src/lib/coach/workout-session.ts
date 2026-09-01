@@ -1483,3 +1483,17 @@ export async function getLifetimeWorkoutStats(memberId: number): Promise<Lifetim
 
   return { totalSessions: (sessions ?? []).length, totalVolumeKg, byFormat };
 }
+
+// Progress page's cumulative headline stat ("80,000kg lifted this year")
+// — a real calendar year, not a rolling window like the 26-week stat
+// above, so it goes through get_year_to_date_volume_kg (podHq migration
+// 0081) instead of fetching+summing rows here: a full year of sets for
+// an active member can exceed PostgREST's 1000-row cap, and aggregating
+// in Postgres itself sidesteps that entirely — see the migration's own
+// comment.
+export async function getYearToDateVolumeKg(memberId: number): Promise<number> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("get_year_to_date_volume_kg", { p_member_id: memberId });
+  if (error) throw new Error(error.message);
+  return Number(data ?? 0);
+}

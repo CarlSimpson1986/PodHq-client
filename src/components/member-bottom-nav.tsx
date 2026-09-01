@@ -14,7 +14,7 @@ const NAV_ITEMS = [
 // Paths MoreMenu's own dropdown links to (see more-menu.tsx's MENU_ITEMS)
 // that should count as "More" being active — excludes "/" (Home), since
 // every path starts with "/" and would make the tab permanently active.
-const MORE_ACTIVE_PREFIXES = ["/health", "/leaderboard", "/coach"];
+const MORE_ACTIVE_PREFIXES = ["/progress", "/coach"];
 
 // Replaces CoachBottomNav — flat 4-tab IA (2026-08-25 redesign), no
 // Exit/Profile items: these routes now sit at the top level (same tier as
@@ -56,7 +56,7 @@ export function MemberBottomNav() {
             </Link>
           );
         })}
-        <MoreMenu variant="tab" active={MORE_ACTIVE_PREFIXES.some((p) => pathname.startsWith(p))} />
+        <MoreMenu active={MORE_ACTIVE_PREFIXES.some((p) => pathname.startsWith(p))} />
       </div>
     </nav>
   );
