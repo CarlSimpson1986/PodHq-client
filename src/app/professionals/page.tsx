@@ -6,7 +6,6 @@ import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
 import { PodAssistBubble } from "@/components/pod-assist-bubble";
-import { MoreMenu } from "@/components/more-menu";
 import { ProfessionalsDirectory } from "@/components/professionals-directory";
 
 // "Find a Professional" (2026-08-27, modelled on Solo60's "Professional"
@@ -36,7 +35,7 @@ export default async function ProfessionalsPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Find a Professional" subtitle="Personal trainers at your gym" rightSlot={<MoreMenu />} />
+      <PageHero title="Find a Professional" subtitle="Personal trainers at your gym" />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
           <ProfessionalsDirectory professionals={professionals} />

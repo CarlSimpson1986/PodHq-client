@@ -9,7 +9,6 @@ import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
 import { PodAssistBubble } from "@/components/pod-assist-bubble";
-import { MoreMenu } from "@/components/more-menu";
 import { WearableConnectionCard } from "@/components/wearable-connection-card";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { StepGauge } from "@/components/step-gauge";
@@ -25,8 +24,11 @@ const TREND_FETCH_DAYS = MONTHLY_WINDOW_DAYS + 5;
 // Moved from /coach/health, then (same day, later) stopped being a
 // primary tab at all — Carl felt it "seemed a bit pointless" as a
 // standalone destination once Coach absorbed check-in/recommendations/
-// chat, so this is now reached via the MoreMenu overflow instead of the
-// bottom nav. RecoveryStatusCard (shared with Dashboard) leads the page
+// chat. Reached via Profile's Activity section now (2026-09-01) — see
+// profile-view.tsx — not the MoreMenu overflow this page used to render
+// in its own header (removed; Profile is always one tap away via the
+// bottom nav, which the dropdown never was here). RecoveryStatusCard
+// (shared with Dashboard) leads the page
 // so it's an actual signal, not just raw numbers. Never shows a
 // fabricated composite "readiness score" — see recovery-status-card.tsx's
 // comment for why no such field exists in the Google Health API.
@@ -106,7 +108,7 @@ export default async function HealthPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Health" subtitle="Your recovery data, connected" rightSlot={<MoreMenu />} />
+      <PageHero title="Health" subtitle="Your recovery data, connected" />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <section>
