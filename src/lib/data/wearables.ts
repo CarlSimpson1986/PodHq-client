@@ -2,11 +2,17 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/secret-encryption";
 
-export interface WearableConnection {
-  memberId: number;
-  provider: "fitbit";
-  refreshToken: string;
-}
+export type WearableProvider = "fitbit" | "health_connect";
+
+// Discriminated on provider, not a flat refreshToken: string | null — so
+// `connection.provider === "fitbit"` actually narrows refreshToken to
+// string at every call site (e.g. fitbit/refresh/route.ts), instead of
+// every caller needing its own null check/assertion on a field that's
+// only ever null for the other branch. health_connect has no token: the
+// OS holds the permission grant, this app has nothing to encrypt.
+export type WearableConnection =
+  | { memberId: number; provider: "fitbit"; refreshToken: string }
+  | { memberId: number; provider: "health_connect"; refreshToken: null };
 
 export interface WearableSnapshot {
   recordedDate: string;
@@ -27,27 +33,33 @@ export async function getWearableConnection(memberId: number): Promise<WearableC
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  return {
-    memberId: data.member_id,
-    provider: data.provider as "fitbit",
-    refreshToken: decryptSecret(data.refresh_token_encrypted),
-  };
+  if (data.provider === "health_connect") {
+    return { memberId: data.member_id, provider: "health_connect", refreshToken: null };
+  }
+  return { memberId: data.member_id, provider: "fitbit", refreshToken: decryptSecret(data.refresh_token_encrypted) };
 }
 
-// Every connected member, for the daily sync cron — never fails the
-// whole read for one bad row's decryption; a member whose token can't be
+// Every connected *fitbit* member, for the daily OAuth sync cron —
+// health_connect connections have no token and are synced by the native
+// app itself (see the health-connect/sync route), never by this cron, so
+// they're excluded at the query level rather than relying on the
+// per-row decrypt try/catch below to skip them. Never fails the whole
+// read for one bad row's decryption; a member whose token can't be
 // decrypted (e.g. a SECRET_ENCRYPTION_KEY rotation without re-auth) is
 // skipped for this sync rather than crashing the batch, same resilience
 // posture as the per-member try/catch in the sync route itself.
 export async function getAllWearableConnections(): Promise<WearableConnection[]> {
   const admin = createAdminClient();
-  const { data, error } = await admin.from("member_wearable_connections").select("member_id, provider, refresh_token_encrypted");
+  const { data, error } = await admin
+    .from("member_wearable_connections")
+    .select("member_id, provider, refresh_token_encrypted")
+    .eq("provider", "fitbit");
   if (error) throw new Error(error.message);
 
   const connections: WearableConnection[] = [];
   for (const row of data ?? []) {
     try {
-      connections.push({ memberId: row.member_id, provider: row.provider as "fitbit", refreshToken: decryptSecret(row.refresh_token_encrypted) });
+      connections.push({ memberId: row.member_id, provider: "fitbit", refreshToken: decryptSecret(row.refresh_token_encrypted) });
     } catch (err) {
       console.error("[wearables] failed to decrypt a connection's refresh token, skipping", { memberId: row.member_id, error: (err as Error).message });
     }
@@ -65,6 +77,25 @@ export async function saveWearableConnection(memberId: number, refreshToken: str
       member_id: memberId,
       provider: "fitbit",
       refresh_token_encrypted: encryptSecret(refreshToken),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "member_id" }
+  );
+  if (error) throw new Error(error.message);
+}
+
+// Same upsert-on-member_id shape as saveWearableConnection, but no token
+// — Health Connect's permission grant lives with the OS, not this app.
+// The row's existence is what getWearableConnection/getRecoveryStatus
+// key off of; readings themselves arrive separately via the native app
+// calling saveWearableSnapshot after each on-device read.
+export async function saveHealthConnectConnection(memberId: number): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("member_wearable_connections").upsert(
+    {
+      member_id: memberId,
+      provider: "health_connect",
+      refresh_token_encrypted: null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "member_id" }

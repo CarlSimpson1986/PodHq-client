@@ -28,6 +28,10 @@ export async function GET(request: NextRequest) {
   let synced = 0;
   let failed = 0;
   for (const connection of connections) {
+    // getAllWearableConnections already filters to provider='fitbit' at
+    // the query level — this narrows the type to match (refreshToken:
+    // string, not string | null) rather than asserting it.
+    if (connection.provider !== "fitbit") continue;
     try {
       const data = await fetchDailyData(connection.refreshToken, dateIso);
       await saveWearableSnapshot(connection.memberId, {

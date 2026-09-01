@@ -36,3 +36,18 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Capacitor native platforms — the android/ and ios/ project files ARE
+# committed (custom native config lives there), only their generated
+# build output isn't.
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/captures/
+android/app/release/
+android/.idea/
+ios/App/build/
+ios/App/Pods/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/DerivedData/

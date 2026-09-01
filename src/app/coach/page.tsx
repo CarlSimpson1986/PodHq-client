@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
+import { getMemberByAuthUserId, hasPremium, hasAcceptedPrivacyPolicy } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getCoachConversation } from "@/lib/coach/coach-conversations";
 import { getLastCheckIn, getRecentCheckIns } from "@/lib/coach/check-ins";
@@ -20,6 +20,7 @@ import { MoreMenu } from "@/components/more-menu";
 import { WeeklyRecommendationCard } from "@/components/weekly-recommendation-card";
 import { MemberHabitCard } from "@/components/member-habit-card";
 import { CoachChatView } from "@/components/coach-chat-view";
+import { PrivacyConsentForm } from "@/components/privacy-consent-form";
 
 // The Coach tab (2026-08-25 redesign, replacing the standalone Health
 // tab — Carl: "the Health tab still seems a bit pointless... check in,
@@ -117,7 +118,13 @@ export default async function CoachPage() {
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ask your coach</p>
-            <CoachChatView initialMessages={conversation.map((m) => ({ role: m.role, content: m.content }))} />
+            {hasAcceptedPrivacyPolicy(member) ? (
+              <CoachChatView initialMessages={conversation.map((m) => ({ role: m.role, content: m.content }))} />
+            ) : (
+              <div className="card-light p-5">
+                <PrivacyConsentForm />
+              </div>
+            )}
           </div>
         </div>
       </div>
