@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MEALS, MEAL_LABELS, type Meal, type NutritionTrackingMode } from "@/lib/coach/types";
 import { gramsToPortions } from "@/lib/coach/portions";
-import { MoreMenu } from "@/components/more-menu";
 
 interface NutritionTargets {
   calories: number;
@@ -174,12 +173,9 @@ export function NutritionView({
           it was wrongly nested inside originally (found live 2026-08-27,
           Carl: "can you see the difference i want uniformity"). */}
       <div className="bg-card px-6 pb-8 pt-12 sm:pt-16">
-        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Nutrition</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Your daily diary</p>
-          </div>
-          <MoreMenu />
+        <div className="mx-auto w-full max-w-md">
+          <h1 className="text-2xl font-semibold text-foreground">Nutrition</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Your daily diary</p>
         </div>
         <div
           ref={dayStripRef}
