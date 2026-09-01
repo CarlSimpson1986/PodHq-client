@@ -6,7 +6,6 @@ import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { BottomNav } from "@/components/bottom-nav";
 import { PodAssistBubble } from "@/components/pod-assist-bubble";
-import { MoreMenu } from "@/components/more-menu";
 import { LeaderboardView } from "@/components/leaderboard-view";
 
 // Multi-site leaderboard (2026-08-25) — one shared board across every
@@ -48,7 +47,7 @@ export default async function LeaderboardPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Leaderboard" subtitle="Every gym, one board" rightSlot={<MoreMenu />} />
+      <PageHero title="Leaderboard" subtitle="Every gym, one board" />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
           <LeaderboardView initialOptedIn={member.leaderboard_opt_in} initialSessions={sessions} initialStreaks={streaks} initialSteps={steps} />

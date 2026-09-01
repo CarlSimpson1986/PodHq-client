@@ -5,7 +5,18 @@ import Link from "next/link";
 import type { Membership } from "@/lib/data/member";
 import { BottomNav } from "@/components/bottom-nav";
 import { PodAssistBubble } from "@/components/pod-assist-bubble";
-import { CoinIcon, IdCardIcon, GiftIcon, DumbbellIcon, ChevronRightIcon, LogoutIcon, PinIcon, LockIcon } from "@/components/icons";
+import {
+  CoinIcon,
+  IdCardIcon,
+  GiftIcon,
+  DumbbellIcon,
+  ChevronRightIcon,
+  LogoutIcon,
+  PinIcon,
+  LockIcon,
+  HeartPulseIcon,
+  TrophyIcon,
+} from "@/components/icons";
 
 // timeZone pinned — see bookings-view.tsx's formatSlot for why (same
 // hydration-mismatch bug, found live 2026-08-17).
@@ -210,6 +221,19 @@ export function ProfileView({
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Booking</h2>
             <div className="card-light">
               <ListRow href="/bookings" label="Bookings" icon={DumbbellIcon} />
+            </div>
+          </section>
+
+          {/* Health/Leaderboard's real home now (2026-09-01) — Profile is
+              always reachable via the bottom nav, unlike the MoreMenu
+              dropdown these used to live behind on Health/Leaderboard/
+              Professionals themselves, which is removed now that this
+              exists (see those pages). */}
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity</h2>
+            <div className="card-light">
+              <ListRow href="/health" label="Health" icon={HeartPulseIcon} />
+              <ListRow href="/leaderboard" label="Leaderboard" icon={TrophyIcon} />
             </div>
           </section>
 
