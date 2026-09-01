@@ -10,6 +10,22 @@ import type { WaiverBlock } from "@/lib/waiver-terms";
 // LLM provider, etc.), not generic boilerplate. It has NOT had legal
 // review — treat it as a first draft for Carl/a solicitor to check
 // before it's relied on as the business's actual, final policy.
+//
+// Updated same day (later) once Pod Coach/Pod Assist and /progress
+// existed as real, separate, named things — Section 1's chat bullet and
+// Section 4's provider entry previously said "AI Coach" generically and
+// didn't distinguish the two: Pod Coach (premium, personalised, sees
+// training/recovery/nutrition/body data) and Pod Assist (every member,
+// scoped to bookings/credits/gym policy only per help-bot.ts's own
+// system prompt — genuinely never touches health data at all, worth
+// stating plainly rather than leaving it implied). Both currently run on
+// whichever of Groq/Anthropic is configured (coach-chat.ts and
+// help-bot.ts use the identical fallback order) — not fixed to one
+// provider each, so this doesn't claim otherwise. Added a Training/
+// workout data bullet to Section 1 too — reps, weight lifted and RPE
+// were being collected already (hypertrophy/custom-format training) but
+// were never actually listed as their own category, not something new
+// this session added.
 export const PRIVACY_POLICY: WaiverBlock[] = [
   { type: "heading", text: "Privacy Policy" },
   {
@@ -39,11 +55,23 @@ export const PRIVACY_POLICY: WaiverBlock[] = [
       },
       {
         title: "Health and fitness data (optional)",
-        body: "if you choose to connect a wearable (Fitbit or, on Android, Health Connect) or log data yourself: steps, sleep, resting heart rate, heart-rate variability, workouts, nutrition entries, and body measurements (weight, waist, hip) you enter. See Section 5.",
+        body: "if you choose to connect a wearable (Fitbit or, on Android, Health Connect) or log data yourself: steps, sleep, resting heart rate, heart-rate variability, and body measurements (weight, waist, hip) you enter. See Section 5.",
       },
       {
-        title: "AI Coach chat content",
-        body: "questions you ask, and the training/recovery/nutrition context needed to answer them, are sent to a third-party AI provider to generate a response. See Section 8.",
+        title: "Training and workout data",
+        body: "your workout sessions, and per-set detail (reps, weight, RPE) for exercises you complete, used to track your progress and personalise future sessions.",
+      },
+      {
+        title: "Nutrition entries",
+        body: "meals you log and your calculated daily targets, used to show your own nutrition history and by Pod Coach to personalise guidance.",
+      },
+      {
+        title: "Pod Coach chat content (premium members)",
+        body: "questions you ask Pod Coach, and the training/recovery/nutrition/body-measurement context needed to answer them, are sent to a third-party AI provider to generate a response. See Section 8.",
+      },
+      {
+        title: "Pod Assist chat content (all members)",
+        body: "questions you ask Pod Assist — scoped to bookings, credits and gym policy only, never your health data — are sent to a third-party AI provider to generate a response.",
       },
       {
         title: "Device and technical data",
@@ -55,13 +83,13 @@ export const PRIVACY_POLICY: WaiverBlock[] = [
   { type: "subheading", text: "2. WHY WE COLLECT IT" },
   {
     type: "paragraph",
-    text: "We use your data to: provide and administer your Account and bookings; process payments; operate physical door access (Kisi); personalise AI Coach's training, nutrition and recovery guidance; send service messages (booking confirmations, reminders); and maintain the security of the Website, Mobile Application and Network. We do not sell your personal data.",
+    text: "We use your data to: provide and administer your Account and bookings; process payments; operate physical door access (Kisi); personalise Pod Coach's training, nutrition and recovery guidance; answer questions via Pod Assist; send service messages (booking confirmations, reminders); and maintain the security of the Website, Mobile Application and Network. We do not sell your personal data.",
   },
 
   { type: "subheading", text: "3. LAWFUL BASIS" },
   {
     type: "paragraph",
-    text: "We process your data under UK GDPR on the following bases: performance of our contract with you (Account, bookings, payments, access); legitimate interests (security, fraud prevention, service improvement); and your consent, which you can withdraw at any time, for optional features — connecting a wearable, and using AI Coach (see Section 8).",
+    text: "We process your data under UK GDPR on the following bases: performance of our contract with you (Account, bookings, payments, access); legitimate interests (security, fraud prevention, service improvement); and your consent, which you can withdraw at any time, for optional features — connecting a wearable, and using Pod Coach (see Section 8).",
   },
 
   { type: "subheading", text: "4. WHO WE SHARE IT WITH" },
@@ -71,8 +99,8 @@ export const PRIVACY_POLICY: WaiverBlock[] = [
       { title: "Stripe", body: "processes your payments and card details under its own Privacy Policy and Terms — we don't store full card details ourselves." },
       { title: "Kisi", body: "our door-access provider, receives what's needed to grant/log physical entry to a My Fit Pod facility." },
       {
-        title: "Our AI Coach provider",
-        body: "your coach-chat messages and relevant health/training context are sent to Anthropic (Claude) or, for the general help assistant, Groq — both process this only to generate a response, not to build a profile of you for their own purposes.",
+        title: "Our AI providers (Pod Coach and Pod Assist)",
+        body: "depending on configuration, your messages are processed by Groq or Anthropic (Claude) to generate a response — Pod Assist only ever sees booking/policy questions, never health data. Neither provider builds a profile of you for their own purposes.",
       },
       { title: "Resend", body: "sends transactional emails on our behalf (booking confirmations, reminders)." },
       {
@@ -89,7 +117,7 @@ export const PRIVACY_POLICY: WaiverBlock[] = [
   { type: "subheading", text: "5. HEALTH DATA SPECIFICALLY" },
   {
     type: "paragraph",
-    text: "Connecting a wearable (Fitbit or Health Connect) is entirely optional and off by default. If you connect one, we read steps, sleep, resting heart rate and heart-rate variability to personalise your AI Coach recovery status and weekly check-in — nothing else, and nothing is shared beyond what Section 4 describes. Disconnecting a wearable at any time (Health page → Disconnect) permanently deletes every data point we've stored from it, immediately — not just future syncing. Body measurements and nutrition/workout logs you enter yourself follow the same principle: visible to you and to AI Coach for personalisation, deletable via a request to hello@myfitpod.co.uk.",
+    text: "Connecting a wearable (Fitbit or Health Connect) is entirely optional and off by default. If you connect one, we read steps, sleep, resting heart rate and heart-rate variability to personalise your Pod Coach recovery status and weekly check-in — nothing else, and nothing is shared beyond what Section 4 describes. Disconnecting a wearable at any time (Health page for non-premium members, Progress page for premium members → Disconnect) permanently deletes every data point we've stored from it, immediately — not just future syncing. Body measurements and nutrition/workout logs you enter yourself follow the same principle: visible to you and to Pod Coach for personalisation, deletable via a request to hello@myfitpod.co.uk.",
   },
 
   { type: "subheading", text: "6. HOW LONG WE KEEP IT" },
@@ -107,7 +135,7 @@ export const PRIVACY_POLICY: WaiverBlock[] = [
   { type: "subheading", text: "8. POD COACH AND AI-GENERATED ADVICE" },
   {
     type: "paragraph",
-    text: "Pod Coach (our AI Coach chat) uses a third-party AI model to generate personalised training, nutrition and recovery guidance based on data described in Sections 1 and 5. It is not a substitute for medical advice, and My Fit Pod accepts no responsibility for actions taken based on its output — the same principle as Clause 18 (Waiver) and Clause 19 (Limitation of Liability) of our Terms & Conditions.",
+    text: "Pod Coach uses a third-party AI model to generate personalised training, nutrition and recovery guidance based on data described in Sections 1 and 5. It is not a substitute for medical advice, and My Fit Pod accepts no responsibility for actions taken based on its output — the same principle as Clause 18 (Waiver) and Clause 19 (Limitation of Liability) of our Terms & Conditions.",
   },
   {
     type: "paragraph",
