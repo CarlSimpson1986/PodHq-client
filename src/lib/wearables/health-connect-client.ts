@@ -1,7 +1,7 @@
 "use client";
 
 import { Capacitor } from "@capacitor/core";
-import { Health, type AggregatedSample, type HealthDataType } from "@capgo/capacitor-health";
+import { Health, type HealthSample, type HealthDataType } from "@capgo/capacitor-health";
 
 // Health Connect only exists as a native Android API — there's no web/PWA
 // fallback (unlike Fitbit, which is a plain OAuth flow that works in any
@@ -37,8 +37,8 @@ interface DailySnapshot {
 // AggregatedSample.startDate is an ISO 8601 bucket start; bucket: 'day'
 // buckets by the device's local calendar day, so the date portion of
 // startDate is already the right key — no separate timezone conversion.
-function toDateKey(sample: AggregatedSample): string {
-  return sample.startDate.slice(0, 10);
+function toDateKey(startDate: string): string {
+  return startDate.slice(0, 10);
 }
 
 async function queryDailyAggregate(
@@ -50,9 +50,39 @@ async function queryDailyAggregate(
   const result = await Health.queryAggregated({ dataType, startDate, endDate, bucket: "day", aggregation });
   const byDate = new Map<string, number>();
   for (const sample of result.samples) {
-    byDate.set(toDateKey(sample), Math.round(sample.value));
+    byDate.set(toDateKey(sample.startDate), Math.round(sample.value));
   }
   return byDate;
+}
+
+// sleep/heartRateVariability aren't supported by Health Connect's native
+// aggregation API on Android at all — confirmed live, not documented:
+// queryAggregated throws "Aggregated queries are not supported for sleep
+// data. Use readSamples instead." (same for heartRateVariability). Reads
+// raw samples and buckets by calendar day client-side instead — sum for
+// sleep (total minutes that day, matching what a 'day'/'sum' aggregate
+// would have produced), average for HRV.
+async function queryDailySamples(
+  dataType: HealthDataType,
+  reduce: "sum" | "average",
+  startDate: string,
+  endDate: string
+): Promise<Map<string, number>> {
+  const result = await Health.readSamples({ dataType, startDate, endDate, limit: 500 });
+  const byDate = new Map<string, HealthSample[]>();
+  for (const sample of result.samples) {
+    const key = toDateKey(sample.startDate);
+    const existing = byDate.get(key) ?? [];
+    existing.push(sample);
+    byDate.set(key, existing);
+  }
+
+  const reduced = new Map<string, number>();
+  for (const [date, samples] of byDate) {
+    const total = samples.reduce((sum, s) => sum + s.value, 0);
+    reduced.set(date, Math.round(reduce === "sum" ? total : total / samples.length));
+  }
+  return reduced;
 }
 
 async function readRecentSnapshots(days: number): Promise<DailySnapshot[]> {
@@ -64,9 +94,9 @@ async function readRecentSnapshots(days: number): Promise<DailySnapshot[]> {
 
   const [steps, sleep, restingHeartRate, hrv] = await Promise.all([
     queryDailyAggregate("steps", "sum", startDate, endDate),
-    queryDailyAggregate("sleep", "sum", startDate, endDate),
+    queryDailySamples("sleep", "sum", startDate, endDate),
     queryDailyAggregate("restingHeartRate", "average", startDate, endDate),
-    queryDailyAggregate("heartRateVariability", "average", startDate, endDate),
+    queryDailySamples("heartRateVariability", "average", startDate, endDate),
   ]);
 
   const dates = new Set([...steps.keys(), ...sleep.keys(), ...restingHeartRate.keys(), ...hrv.keys()]);
