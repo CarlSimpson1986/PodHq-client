@@ -14,7 +14,6 @@ import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { WeekCalendarStrip } from "@/components/week-calendar-strip";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { TrialBanner } from "@/components/trial-banner";
-import { MoreMenu } from "@/components/more-menu";
 import { TrophyIcon } from "@/components/icons";
 
 // The new Dashboard — replaces /coach's old hub content (2026-08-25
@@ -75,12 +74,9 @@ export default async function DashboardPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
       <div className="bg-card px-6 pb-6 pt-12 sm:pt-16">
-        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Today</p>
-          </div>
-          <MoreMenu />
+        <div className="mx-auto w-full max-w-md">
+          <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Today</p>
         </div>
         <div className="mx-auto mt-6 w-full max-w-md">
           <WeekCalendarStrip />
