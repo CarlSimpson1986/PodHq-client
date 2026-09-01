@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, hasPremium, getNextUpcomingBooking } from "@/lib/data/member";
+import { getMemberByAuthUserId, hasPremium, hasAcceptedPrivacyPolicy, getNextUpcomingBooking } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getExercisePerformanceHistory } from "@/lib/coach/exercise-performance";
 import { getWeeklyConsistency } from "@/lib/coach/consistency";
 import { getLastCompletedSessionDetail } from "@/lib/coach/exercise-performance";
 import { getBlockWorkoutPreview } from "@/lib/coach/training-block-preview";
+import { getLastCheckIn } from "@/lib/coach/check-ins";
+import { getCheckInDueState } from "@/lib/coach/checkin-state";
+import { getCoachConversation } from "@/lib/coach/coach-conversations";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { BlockWorkoutPreview } from "@/components/block-workout-preview";
 import { PageHero } from "@/components/page-hero";
@@ -15,6 +18,7 @@ import { ExerciseProgressPicker } from "@/components/exercise-progress-picker";
 import { LastSessionCard } from "@/components/last-session-card";
 import { ConsistencyChart } from "@/components/consistency-chart";
 import { TrainingBlockView } from "@/components/training-block-view";
+import { PodCoachBubble } from "@/components/pod-coach-bubble";
 
 // Moved from /coach/training (2026-08-25 redesign — flat top-level tabs,
 // see ROADMAP.md). Functional change from the old page: the exercise
@@ -46,13 +50,16 @@ export default async function TrainingPage() {
     redirect("/coach-onboarding");
   }
 
-  const [upcomingBooking, performanceHistory, consistency, lastSession, blockPreview] = await Promise.all([
+  const [upcomingBooking, performanceHistory, consistency, lastSession, blockPreview, lastCheckIn, conversation] = await Promise.all([
     getNextUpcomingBooking(member.id),
     getExercisePerformanceHistory(member.id),
     getWeeklyConsistency(member.id),
     getLastCompletedSessionDetail(member.id),
     getBlockWorkoutPreview(member.id, member.gym),
+    getLastCheckIn(member.id),
+    getCoachConversation(member.id),
   ]);
+  const checkInState = getCheckInDueState(coachProfile, lastCheckIn, new Date());
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
@@ -123,6 +130,11 @@ export default async function TrainingPage() {
           </section>
         </div>
       </div>
+      <PodCoachBubble
+        checkInState={checkInState}
+        initialMessages={conversation.map((m) => ({ role: m.role, content: m.content }))}
+        hasAcceptedPrivacyPolicy={hasAcceptedPrivacyPolicy(member)}
+      />
       <MemberBottomNav />
     </main>
   );

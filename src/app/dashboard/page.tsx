@@ -1,20 +1,28 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
+import { getMemberByAuthUserId, getActiveMembership, hasAcceptedPrivacyPolicy } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
-import { getLastCheckIn } from "@/lib/coach/check-ins";
+import { getLastCheckIn, getRecentCheckIns } from "@/lib/coach/check-ins";
 import { getCheckInDueState, currentCheckInPeriod } from "@/lib/coach/checkin-state";
 import { getRecoveryStatus } from "@/lib/coach/recovery-status";
 import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { getWeeklyConsistency } from "@/lib/coach/consistency";
+import { getWeeklyRecommendation } from "@/lib/coach/weekly-recommendation";
+import { computeHabitStreak } from "@/lib/coach/habit-streak";
+import { computeHabitFollowThrough } from "@/lib/coach/habit-follow-through";
+import { computeMoodTrend } from "@/lib/coach/mood-trend";
+import { getCoachConversation } from "@/lib/coach/coach-conversations";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { WeekCalendarStrip } from "@/components/week-calendar-strip";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { TrialBanner } from "@/components/trial-banner";
 import { TrophyIcon } from "@/components/icons";
+import { WeeklyRecommendationCard } from "@/components/weekly-recommendation-card";
+import { MemberHabitCard } from "@/components/member-habit-card";
+import { PodCoachBubble } from "@/components/pod-coach-bubble";
 
 // The new Dashboard — replaces /coach's old hub content (2026-08-25
 // redesign, see ROADMAP.md). Same trial/subscriber gating as before
@@ -58,17 +66,39 @@ export default async function DashboardPage() {
   let recoveryStatus = null;
   let weeklyReview = null;
   let consistency = null;
+  let recommendation = null;
+  let currentHabit = null;
+  let habitStreak = 0;
+  let followThrough = null;
+  let conversation: { role: "user" | "assistant"; content: string }[] = [];
 
   if (showFullDashboard && coachProfile) {
     const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-    const [recovery, review, weeks] = await Promise.all([
+    const [recovery, review, weeks, recentCheckIns, conv] = await Promise.all([
       getRecoveryStatus(member.id),
       getWeeklyReview(member.id, periodStart, periodEnd, member.gender),
       getWeeklyConsistency(member.id),
+      getRecentCheckIns(member.id),
+      getCoachConversation(member.id),
     ]);
     recoveryStatus = recovery;
     weeklyReview = review;
     consistency = weeks.find((w) => w.weeksAgo === 0) ?? { weeksAgo: 0, sessionsCompleted: 0 };
+    conversation = conv.map((m) => ({ role: m.role, content: m.content }));
+
+    currentHabit = recentCheckIns[0]?.habit ?? null;
+    habitStreak = computeHabitStreak(recentCheckIns);
+    followThrough = computeHabitFollowThrough(recentCheckIns);
+    const moodTrend = computeMoodTrend(recentCheckIns);
+    recommendation = getWeeklyRecommendation(
+      checkInState,
+      consistency.sessionsCompleted,
+      coachProfile.sessions_per_week,
+      recoveryStatus,
+      weeklyReview,
+      currentHabit,
+      moodTrend
+    );
   }
 
   return (
@@ -147,33 +177,11 @@ export default async function DashboardPage() {
                 </div>
               </div>
 
-              {coachProfile && (
-                <Link href="/coach/checkin" prefetch={false} className="card-light block p-5">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Check-in</p>
-                  {checkInState.kind === "not_due" && (
-                    <>
-                      <p className="text-sm font-semibold">
-                        {checkInState.daysRemaining} {checkInState.daysRemaining === 1 ? "day" : "days"} to your next check-in
-                      </p>
-                      <p className="mt-1 text-sm text-card-light-muted">Due {checkInState.nextDueDate}.</p>
-                    </>
-                  )}
-                  {checkInState.kind === "due" && (
-                    <>
-                      <p className="text-sm font-semibold text-warning">Check-in ready</p>
-                      <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
-                    </>
-                  )}
-                  {checkInState.kind === "overdue" && (
-                    <>
-                      <p className="text-sm font-semibold text-danger">
-                        Check-in overdue by {checkInState.daysOverdue} {checkInState.daysOverdue === 1 ? "day" : "days"}
-                      </p>
-                      <p className="mt-1 text-sm text-card-light-muted">See how your week went →</p>
-                    </>
-                  )}
-                </Link>
-              )}
+              {/* Check-in moved into the Pod Coach bubble (2026-09-01) —
+                  see pod-coach-bubble.tsx. This card duplicated it. */}
+              {recommendation && <WeeklyRecommendationCard recommendation={recommendation} />}
+
+              {coachProfile && <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />}
 
               <Link href="/leaderboard" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
                 <TrophyIcon className="h-6 w-6 text-card-light-foreground" />
@@ -198,6 +206,13 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+      {coachProfile && (
+        <PodCoachBubble
+          checkInState={checkInState}
+          initialMessages={conversation}
+          hasAcceptedPrivacyPolicy={hasAcceptedPrivacyPolicy(member)}
+        />
+      )}
       <MemberBottomNav />
     </main>
   );

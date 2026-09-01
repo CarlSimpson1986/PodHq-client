@@ -1,11 +1,15 @@
 import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
-import { getMemberByAuthUserId, hasPremium } from "@/lib/data/member";
+import { getMemberByAuthUserId, hasPremium, hasAcceptedPrivacyPolicy } from "@/lib/data/member";
 import { getCoachProfile } from "@/lib/coach/coach-profile";
 import { computeNutritionTargets } from "@/lib/coach/nutrition-targets";
+import { getLastCheckIn } from "@/lib/coach/check-ins";
+import { getCheckInDueState } from "@/lib/coach/checkin-state";
+import { getCoachConversation } from "@/lib/coach/coach-conversations";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { NutritionView } from "@/components/nutrition-view";
+import { PodCoachBubble } from "@/components/pod-coach-bubble";
 
 // Moved from /coach/nutrition (2026-08-25 redesign, see ROADMAP.md).
 // NutritionView owns its own full page body — dark hero (with the date
@@ -39,10 +43,17 @@ export default async function NutritionPage() {
   }
 
   const targets = computeNutritionTargets(coachProfile, member.gender);
+  const [lastCheckIn, conversation] = await Promise.all([getLastCheckIn(member.id), getCoachConversation(member.id)]);
+  const checkInState = getCheckInDueState(coachProfile, lastCheckIn, new Date());
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
       <NutritionView targets={targets} trackingMode={coachProfile.nutrition_tracking_mode} />
+      <PodCoachBubble
+        checkInState={checkInState}
+        initialMessages={conversation.map((m) => ({ role: m.role, content: m.content }))}
+        hasAcceptedPrivacyPolicy={hasAcceptedPrivacyPolicy(member)}
+      />
       <MemberBottomNav />
     </main>
   );
