@@ -11,7 +11,6 @@ import { NoMemberProfile } from "@/components/no-member-profile";
 import { BlockWorkoutPreview } from "@/components/block-workout-preview";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { MoreMenu } from "@/components/more-menu";
 import { ExerciseProgressPicker } from "@/components/exercise-progress-picker";
 import { LastSessionCard } from "@/components/last-session-card";
 import { ConsistencyChart } from "@/components/consistency-chart";
@@ -57,7 +56,7 @@ export default async function TrainingPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Training" subtitle="Your progress" rightSlot={<MoreMenu />} />
+      <PageHero title="Training" subtitle="Your progress" />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <section>

@@ -6,7 +6,6 @@ import { getSessionHistory, getLifetimeWorkoutStats, type SessionHistoryEntry, t
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { MoreMenu } from "@/components/more-menu";
 
 const FORMAT_LABEL: Record<WorkoutFormat, string> = {
   straight_sets: "Straight Sets",
@@ -62,7 +61,7 @@ export default async function TrainingHistoryPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="History" subtitle="Your past sessions" rightSlot={<MoreMenu />} />
+      <PageHero title="History" subtitle="Your past sessions" />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <Link href="/training" prefetch={false} className="text-xs font-medium text-muted-foreground underline">

@@ -5,7 +5,6 @@ import { getEnabledCardioEquipmentForGym } from "@/lib/coach/cardio-equipment";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { MoreMenu } from "@/components/more-menu";
 import { CardioLogView } from "@/components/cardio-log-view";
 
 // Cardio equipment logging (2026-08-30) — tap-through target from Today's
@@ -32,7 +31,7 @@ export default async function CardioLogPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Log Cardio" subtitle="Which machine did you use?" rightSlot={<MoreMenu />} />
+      <PageHero title="Log Cardio" subtitle="Which machine did you use?" />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md">
           <CardioLogView equipment={equipment} />

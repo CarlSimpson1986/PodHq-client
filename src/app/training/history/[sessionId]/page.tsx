@@ -6,7 +6,6 @@ import { getCompletedSessionDetail } from "@/lib/coach/exercise-performance";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { MoreMenu } from "@/components/more-menu";
 import { SessionDetailView } from "@/components/session-detail-view";
 
 // Session-history detail (2026-08-30) — a specific past session, reached
@@ -47,7 +46,7 @@ export default async function TrainingHistorySessionPage({ params }: { params: P
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Session" subtitle="Past workout detail" rightSlot={<MoreMenu />} />
+      <PageHero title="Session" subtitle="Past workout detail" />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <Link href="/training/history" prefetch={false} className="text-xs font-medium text-muted-foreground underline">

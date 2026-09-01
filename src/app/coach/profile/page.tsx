@@ -7,7 +7,6 @@ import { getBodyMeasurementHistory } from "@/lib/coach/body-measurements";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { PageHero } from "@/components/page-hero";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
-import { MoreMenu } from "@/components/more-menu";
 import { CoachProfileEditForm } from "@/components/coach-profile-edit-form";
 import { DailyHabitsCard } from "@/components/daily-habits-card";
 import { BodyMeasurementTrends } from "@/components/body-measurement-trends";
@@ -47,7 +46,7 @@ export default async function CoachProfilePage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col pb-20">
-      <PageHero title="Profile" subtitle="Your metrics, goals and plan" rightSlot={<MoreMenu />} />
+      <PageHero title="Profile" subtitle="Your metrics, goals and plan" />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
           <div className="space-y-8 card-light p-6">
