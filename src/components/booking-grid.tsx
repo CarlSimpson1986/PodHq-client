@@ -9,6 +9,7 @@ import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { londonDateParts, londonHour, londonHourOf } from "@/lib/london-time";
 import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 import { BottomNav } from "@/components/bottom-nav";
+import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { GYM_NAMES } from "@/lib/gym";
 
 // Slots for a day at the resource's own duration — a 60-minute resource
@@ -485,6 +486,7 @@ export function BookingGrid({
           })}
         </div>
       </div>
+      <PodAssistBubble />
       <BottomNav />
     </>
   );
