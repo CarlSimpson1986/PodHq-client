@@ -14,48 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-50.md`, covering the pilot
-mechanism proof (2026-08-05) through session history + workout stats
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-51.md`, covering the pilot
+mechanism proof (2026-08-05) through cardio equipment logging
 (2026-08-30) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see each archive's own header note for
 examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
 full build history, or `git log` on this file for exact split points.
-Active content here starts at "Cardio equipment logging" (2026-08-30).
-If this file grows too large again, split it the same way: move the
-most clearly finished section into `ROADMAP-ARCHIVE-51.md`, update this
-paragraph.
-
-## Cardio equipment logging — 2026-08-30
-
-Scoped 2026-08-29, never built until Carl asked "cardio wise — I can add
-that via the UI right?" — confirmed nothing existed on either side.
-Gym staff name individual machines on podHq's `/setup` (new
-`gym_cardio_equipment` table, `0076` shared DB, owner-editable with
-admin fallback, mirrors the pricing catalog's exact pattern —
-soft-disable not delete, so history stays meaningful). Members log which
-one they used as a 5th row on Today's Mission ("2/5 today" →
-"3/5 today" etc.), tapping through to `/cardio-log`, a plain named-button
-list; `member_cardio_logs` is insert-only, same convention `habit_logs`
-already established (no stateful "completed" flag, "done today" is
-`count(*) > 0`). Binary log only, no duration/distance this stage —
-matches Carl's own framing ("counts toward missions"), not a fitness
-tracker.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (172/172), and
-`npm run build` all clean in both repos. Live-verified end to end on the
-Aylesbury Berryfields gym: added Treadmill 1 + Rower 1 on `/setup`,
-disabled Treadmill 1, confirmed podhq-client's picker showed only Rower
-1; logged it, confirmed the Today's Mission Cardio row flipped to
-"Logged" and the `member_cardio_logs` row matched exactly. Hit and
-resolved an incidental blocker: the playground member's browser session
-had expired mid-test with no stored password — reset it via the same
-service-role script pattern podHq already has for its own pilot account.
-
-**Not built this stage**: duration/distance tracking; cross-gym equipment
-visibility for members training at a different network gym; equipment
-type/category taxonomy.
+Active content here starts at "PubMed citations made independently
+verifiable" (2026-08-30). If this file grows too large again, split it
+the same way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-52.md`, update this paragraph.
 
 ## PubMed citations made independently verifiable — 2026-08-30
 
@@ -242,16 +212,23 @@ checked too — both already either throw-and-let-the-caller-handle-it
 (single-connection lookup, an intentional existing contract) or already
 catch-and-skip (the sync cron's batch loop), so left alone.
 
-**Still outstanding, Carl's to fix in Vercel** (manual, not done here —
-matches how account-level Vercel/Supabase/Stripe settings get handled on
-this project): add `SECRET_ENCRYPTION_KEY` to podhq-client's own Vercel
-Production env, matching the exact value used when Hove's Resend key was
-originally saved via podHq's `/setup` (both apps' `secret-encryption.ts`
-must stay byte-for-byte identical, same key). Until that's set, staff
-just silently won't get "new signup" emails — no crash, no false error,
-everything else works — confirmed by this fix's own design.
+**Resolved 2026-09-02, Carl (manual, in Vercel — matches how
+account-level Vercel/Supabase/Stripe settings get handled on this
+project)**: turned out podHq's existing `SECRET_ENCRYPTION_KEY` couldn't
+be copied across — Vercel's Sensitive variable type can't be read back
+once saved, which is almost certainly what actually caused the original
+2026-08-22 Aylesbury incident (a value that could never be verified,
+not just a paste slip). Generated a fresh key instead and rotated it
+properly: set in both podHq's and podhq-client's Vercel (Production +
+Preview), both redeployed, then Hove's Resend API key re-saved through
+podHq's `/setup` so its stored ciphertext actually matches the new key.
+Full writeup of the parity requirement (and why a value alone can't be
+trusted) now lives in CLAUDE.md's own "Deployment" section, not just
+here, so it survives this file's own archiving.
 
 **Verified**: `tsc --noEmit`/`eslint` clean. Root cause and impact
 confirmed by direct DB inspection (`members`/`leads`/`auth_events`/
-`notification_log` for the actual live signup), not just code reading.
-Not yet re-tested live post-fix (deploy pending).
+`notification_log` for the actual live signup that surfaced this).
+Live re-test of the actual fix (a fresh Hove signup, checked against
+`notification_log` landing as `sent`) still outstanding as of this
+write-up.

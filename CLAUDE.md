@@ -22,6 +22,42 @@ working across both apps in the same session.
   (confirmed live 2026-08-23 at `podhq-client.vercel.app` — this line
   previously said "not yet deployed", which had gone stale)
 
+## Deployment — `SECRET_ENCRYPTION_KEY` parity (real incident, twice)
+- podHq and podhq-client are **separate Vercel projects with separate env
+  vars** — `SECRET_ENCRYPTION_KEY` must be set to the *exact same value*
+  in both Production (and Preview) environments. podHq's `/setup` UI
+  encrypts a gym's Resend API key (`gym_resend_config`, migration `0037`)
+  using podHq's copy; podhq-client only ever decrypts it, using its own
+  copy (`src/lib/data/resend-config.ts`) — a mismatch fails AES-GCM's
+  auth-tag check with `"Unsupported state or unable to authenticate
+  data"`, not a clean "wrong key" error. The same key also
+  encrypts/decrypts podhq-client's own Fitbit wearable OAuth tokens
+  (`src/lib/data/wearables.ts`).
+- **Rotating the key is a 3-step, both-sides operation**: set the new
+  value in podHq's Vercel *and* podhq-client's Vercel, redeploy both,
+  then re-save every already-encrypted secret through its normal UI
+  (Hove's Resend key via podHq's `/setup`) so the stored ciphertext
+  actually matches the new key. A new key alone does nothing for
+  ciphertext that was encrypted under the old one.
+- **Don't verify via `vercel env pull`/`vercel env ls`** — a Vercel
+  variable marked Sensitive can't be read back once saved, so those
+  commands can look "wrong" even when the value is correct (a past
+  investigation wasted real time on this false signal). The only real
+  verification is a live functional test — a real signup at a gym with
+  its own `gym_resend_config` row, checked against `notification_log`
+  ending up `sent` (not just "no crash": `resend-config.ts` now catches a
+  decrypt failure and silently falls back to the shared Resend account
+  instead of crashing, so absence of an error no longer proves the key
+  is right).
+- **History**: this exact mismatch crashed real Aylesbury signups
+  2026-08-22 (never root-caused at the time — "fixed" by removing
+  Aylesbury's own `gym_resend_config` row rather than resolving the key)
+  and crashed real Hove signups again some time before 2026-09-02, when
+  it was finally root-caused, made non-crashing in code, and the key
+  properly rotated on both sides. If a third gym's Resend connection
+  ever breaks the same way, check this first before re-investigating
+  from scratch.
+
 ## Session handoff
 - Before any `git commit`/`git push` that wraps up a working session, add a
   short summary of that session to `ROADMAP.md` (matching its existing
