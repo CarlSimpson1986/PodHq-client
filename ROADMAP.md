@@ -14,62 +14,19 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-51.md`, covering the pilot
-mechanism proof (2026-08-05) through cardio equipment logging
-(2026-08-30) — all split out to keep this file within Claude Code's
-~15,000-character `@`-import limit. Archives aren't always the strictly
-oldest material — the split point is "what's finished and stable" as
-much as "what's oldest" (see each archive's own header note for
-examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
-full build history, or `git log` on this file for exact split points.
-Active content here starts at "PubMed citations made independently
-verifiable" (2026-08-30). If this file grows too large again, split it
-the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-52.md`, update this paragraph.
-
-## PubMed citations made independently verifiable — 2026-08-30
-
-Carl asked how anyone could check the AI Coach's PubMed citations were
-correct — until now the model was only *instructed* not to invent one
-(`coach-chat.ts`'s system prompt), with no technical backstop and nothing
-in the UI a member or Carl could actually click to verify.
-
-**Model now tags every real citation with its PMID**, copied verbatim
-from `search_pubmed`'s own tool output (which already prefixed each
-result with `[PMID n]` — the model just wasn't asked to echo it back).
-**Server-side backstop, not just a prompt change**: `pubmed.ts` gained
-`extractCitedPmids()` (reads the real PMIDs out of a formatted tool
-result) and `sanitizeCitedPmids()` (strips any `[PMID n]` tag in the
-model's reply that isn't in that set). Both `askGroq` and `askClaude`
-now accumulate a `knownPmids` set from every `search_pubmed` call made
-that turn and run the final reply through the sanitizer before
-returning it — a hallucinated PMID degrades to an unlinked sentence
-(same as before this stage), never a fake-but-clickable citation.
-
-**UI renders the tag as a real link** (`coach-chat-view.tsx`): assistant
-messages are split on the `[PMID n]` pattern and each match becomes an
-`<a href="https://pubmed.ncbi.nlm.nih.gov/{n}/">` — one tap confirms the
-study is real.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (178/178, +6 new
-for `extractCitedPmids`/`sanitizeCitedPmids` covering the known/unknown/
-empty-set cases), and `npm run build` all clean. Live-tested against the
-real Groq + PubMed APIs in local dev (not the deployed preview) with
-debug logging temporarily added and removed after: a no-results query
-correctly produced no citation and no tag; a real query returned 5 real
-PMIDs and the model's reply cited `[PMID 35986981]` — a genuine 2022
-*Nutrition* meta-analysis actually in that result set — which rendered
-as a working link in the UI. Also root-caused why two earlier live tests
-that session had shown citations with no PMID tag at all: they'd hit a
-dev server process still running the pre-edit code (Turbopack doesn't
-always hot-reload a `server-only` lib change for an API route) — killing
-and restarting it fixed it, consistent with prior stale-bundle issues
-this project has hit before.
-
-**Not built this stage**: no check that the citation's *claim* (not just
-the PMID) accurately reflects the abstract — the sanitizer guarantees
-the PMID is real, not that the summary is a faithful one; that still
-needs an occasional human spot-check.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-52.md`, covering the pilot
+mechanism proof (2026-08-05) through PubMed citations made independently
+verifiable (2026-08-30) — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. Archives aren't always the
+strictly oldest material — the split point is "what's finished and
+stable" as much as "what's oldest" (see each archive's own header note
+for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
+for full build history, or `git log` on this file for exact split
+points. Active content here starts at "`getBookingsForDate`/
+`getActiveReservationsForDate` timezone bug fixed" (2026-08-30). If this
+file grows too large again, split it the same way: move the most
+clearly finished section into `ROADMAP-ARCHIVE-53.md`, update this
+paragraph.
 
 ## `getBookingsForDate`/`getActiveReservationsForDate` timezone bug fixed — 2026-08-30
 
@@ -155,6 +112,27 @@ production signup → email confirmation → first-login path end-to-end (a
 separate, unrelated confirmation-email deliverability question raised
 the same session, not yet resolved) — this stage only exercised the
 onboarding UI itself via a pre-confirmed test account.
+
+**Follow-up fixes, same day (Carl, after actually using it live)**: the
+welcome's own quick-question FAQ chips were still rendering underneath
+the seeded greeting (`HelpChatView`'s chip condition was "no user
+message yet," which a seeded assistant message doesn't clear) — buried
+the one thing that screen was for under four unrelated FAQ buttons. Now
+gated on `!welcomeMessage`. Also had no way out besides the small header
+✕, which read as the tour being mandatory — added an explicit "Maybe
+later" next to "Show me around", same "Not now" pattern as the trial
+preview modal. And the panel itself just snapped into place with no
+sense of coming from the Pod Assist icon — `pod-assist-bubble.tsx` now
+mounts scaled-down/transparent and transitions to full size from
+`origin-top-right` (matching the icon's own position) on a `rAF`-delayed
+next frame, including on the very first auto-open, not just later taps.
+Separately, both post-login redirects (`login/page.tsx`,
+`auth/callback/page.tsx`) still pointed at `/book` — a leftover from
+before Home (`/`) existed as its own page (see this file's own earlier
+note: "New Home page (`/`) replaces the old plain redirect-to-`/book`")
+that never got updated when Home was built, so login was skipping the
+welcome entirely. Both now land on `/`. All four re-verified live in
+local dev via a fresh synthetic test member.
 
 ## Trial preview copy strengthened — 2026-09-02
 

@@ -75,7 +75,7 @@ function AuthCallbackInner() {
           }
         }
 
-        window.location.href = "/book";
+        window.location.href = "/";
       } catch {
         setError(true);
       }

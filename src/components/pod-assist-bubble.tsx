@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { HelpChatView } from "@/components/help-chat-view";
 
@@ -26,9 +26,21 @@ export function PodAssistBubble({
   onClose?: () => void;
 }) {
   const [chatOpen, setChatOpen] = useState(initialOpen);
+  // Two-phase mount so the panel actually transitions in from the icon's
+  // corner (transform-origin top-right, matching the button's position)
+  // instead of snapping straight to full size — including on the very
+  // first paint when initialOpen is already true, not just on later taps.
+  const [animateIn, setAnimateIn] = useState(false);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    const id = requestAnimationFrame(() => setAnimateIn(true));
+    return () => cancelAnimationFrame(id);
+  }, [chatOpen]);
 
   function closeChat() {
     setChatOpen(false);
+    setAnimateIn(false);
     onClose?.();
   }
 
@@ -44,7 +56,11 @@ export function PodAssistBubble({
         <Image src="/icons/features/pod-assist-mark.png" alt="" width={40} height={40} />
       </button>
       {chatOpen && (
-        <div className="fixed inset-x-4 bottom-4 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl sm:inset-x-auto sm:right-4 sm:w-96">
+        <div
+          className={`fixed inset-x-4 bottom-4 top-20 z-30 flex origin-top-right flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl transition-all duration-200 ease-out sm:inset-x-auto sm:right-4 sm:w-96 ${
+            animateIn ? "scale-100 opacity-100" : "scale-95 opacity-0"
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-card-light-border px-4 py-3">
             <p className="text-sm font-semibold text-card-light-foreground">Pod Assist</p>
             <button
@@ -60,6 +76,7 @@ export function PodAssistBubble({
             <HelpChatView
               welcomeMessage={welcomeMessage}
               tourCtaLabel={tourCtaLabel}
+              onDismiss={closeChat}
               onReplayTour={
                 onReplayTour &&
                 (() => {

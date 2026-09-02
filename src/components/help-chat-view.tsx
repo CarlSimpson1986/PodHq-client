@@ -11,10 +11,12 @@ export function HelpChatView({
   onReplayTour,
   tourCtaLabel = "Replay app tour",
   welcomeMessage,
+  onDismiss,
 }: {
   onReplayTour?: () => void;
   tourCtaLabel?: string;
   welcomeMessage?: string;
+  onDismiss?: () => void;
 }) {
   // Lazy initializer, not useEffect — the seeded greeting must be there on
   // the very first paint (the bubble can auto-open already showing it), not
@@ -100,7 +102,7 @@ export function HelpChatView({
           </div>
         ))}
         {!messages.some((m) => m.role === "user") && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Tour replay is a UI action, not a policy question the LLM can
                 answer — bypasses /api/member/help-chat entirely and calls
                 the existing driver.js replay via this prop instead. */}
@@ -113,17 +115,29 @@ export function HelpChatView({
                 {tourCtaLabel}
               </button>
             )}
-            {quickQuestions.map((question) => (
-              <button
-                key={question}
-                type="button"
-                onClick={() => sendMessage(question)}
-                disabled={sending}
-                className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
-              >
-                {question}
+            {/* Not mandatory — an explicit, equally-visible way out of the
+                first-login welcome, same "Not now" pattern as the trial
+                preview modal, rather than only the header's small ✕. */}
+            {welcomeMessage && onDismiss && (
+              <button type="button" onClick={onDismiss} className="px-2 py-1.5 text-xs font-medium text-card-light-muted hover:underline">
+                Maybe later
               </button>
-            ))}
+            )}
+            {/* FAQ shortcuts only make sense on a genuinely blank chat —
+                stacked under the welcome greeting they buried the one
+                thing that screen is actually for (the tour offer). */}
+            {!welcomeMessage &&
+              quickQuestions.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  onClick={() => sendMessage(question)}
+                  disabled={sending}
+                  className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
+                >
+                  {question}
+                </button>
+              ))}
           </div>
         )}
         {sending && <p className="text-sm text-card-light-muted">Thinking…</p>}

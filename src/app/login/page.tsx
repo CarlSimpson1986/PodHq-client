@@ -35,7 +35,7 @@ export default function LoginPage() {
         // bleed into this new session. router.refresh() alone only
         // clears the cache for the route it's called on, not every
         // previously-cached route.
-        window.location.href = "/book";
+        window.location.href = "/";
       } else {
         setError(body.message ?? "Something went wrong.");
       }
