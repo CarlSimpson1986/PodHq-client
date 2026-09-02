@@ -14,58 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-49.md`, covering the pilot
-mechanism proof (2026-08-05) through weekly weigh-in + body measurements
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-50.md`, covering the pilot
+mechanism proof (2026-08-05) through session history + workout stats
 (2026-08-30) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see each archive's own header note for
 examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
 full build history, or `git log` on this file for exact split points.
-Active content here starts at "Session history + workout stats"
-(2026-08-30). If this file grows too large again, split it the same
-way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-50.md`, update this paragraph.
-
-## Session history + workout stats — 2026-08-30
-
-Carl asked for a way to browse past sessions, then "what about workout
-stats?" — there was genuinely no session-history browsing anywhere
-(only the single "Last Session" card, always the most recent one) and no
-lifetime/recent totals at all. Also surfaced a dead function
-(`getRecentCompletedSessions`) clearly built for exactly this and never
-wired up.
-
-New `/training/history` — a stats summary (sessions completed, total
-volume, per-format breakdown, last 26 weeks — matches the `WEEKS_WINDOW`
-convention every other aggregate function in this codebase already uses,
-sidesteps unbounded pagination past PostgREST's 1000-row cap) above a
-capped last-20 list, each row linking to `/training/history/[sessionId]`.
-Reused and fixed the dead function (renamed `getSessionHistory`, made
-format-aware) rather than writing a third "list of sessions" query.
-
-**Found and fixed along the way**: `LastSessionFormat` was missing
-`"hiit"` from its union (the DB column could hold it regardless), and
-the Last Session card's non-straight-sets branch only ever rendered the
-prescription (`repsTarget`/`weightTargetKg`), never what was actually
-logged (`repsActual`/`weightActualKg`) — so a HIIT session was
-mislabeled "Rounds For Time" and always showed "— reps" even after a
-member logged reps via the same day's new tally screen. Extracted the
-fixed rendering into a shared `SessionDetailView` component so both the
-Last Session card and the new detail page render through one place, not
-two copies.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (172/172), and
-`npm run build` all clean — no new migration, every field already
-existed. Live-verified on the playground member: `/training`'s Last
-Session card now correctly reads "HIIT — 2 rounds in 0:26" with "Burpee:
-8 reps"; `/training/history` showed the correct stats summary (38
-sessions, 108,952kg, format breakdown) and list; tapped into both a HIIT
-row and a straight-sets row, confirmed both render correctly with no
-regression to the existing straight-sets RPE-badge display.
-
-**Not built this stage**: pagination past the last 20 sessions; editing/
-deleting a past session; a stats page independent of the history list.
+Active content here starts at "Cardio equipment logging" (2026-08-30).
+If this file grows too large again, split it the same way: move the
+most clearly finished section into `ROADMAP-ARCHIVE-51.md`, update this
+paragraph.
 
 ## Cardio equipment logging — 2026-08-30
 
@@ -245,3 +205,53 @@ fresh `next dev` + cleared `.next` — unrelated to this change, but real;
 `navigator.serviceWorker.getRegistrations()` + unregister + `caches`
 clear fixed it. Worth remembering if a change ever "doesn't show up" in
 local dev again.
+
+## Signup crash from an undecryptable gym Resend key — 2026-09-02
+
+**Real production bug, found live**: Carl signed up on `podhq-client.vercel.app`
+and got "Something went wrong. Try again." — but the account was actually
+created successfully (auth user, `members` row, `leads` row, `auth_events`
+row all committed; Supabase's own confirmation email genuinely sent).
+
+Root cause: `/api/auth/signup` creates the member, then tries to email
+gym staff (`staffNewSignupEmail`/`notifyFireAndForget`). Hove has a
+`gym_resend_config` row, so that path calls `getGymResendConfig('Hove')`,
+which calls `decryptSecret()` on the stored API key —
+`SECRET_ENCRYPTION_KEY` was never set in **podhq-client's own** Vercel
+Production env (confirmed by Carl checking directly; it's a separate
+Vercel project from podHq, so podHq having its own copy set doesn't
+cover this app — same convention noted in `secret-encryption.ts`'s own
+header comment). `decryptSecret` throws when the key's missing, and that
+throw was uncaught — propagating out of `sendEmail` (whose own docstring
+promises "never throws") through `notifyFireAndForget` and crashing the
+whole request *after* the member row had already committed, so the
+client got a raw 500 it couldn't parse instead of the app's normal JSON
+response. Confirmed via `notification_log`: zero `staff_new_signup` rows
+since 2026-08-22 (the last one before this was found), while Hove picked
+up 2 new members since then with no notification row for either — this
+had been silently breaking every Hove signup's staff notification, and
+showing this false error to the member, for over a week.
+
+**Fixed**: `getGymResendConfig` (`resend-config.ts`) now catches the
+`decryptSecret` throw the same way it already handled a Supabase query
+error — logs it, returns `null`, falls back to the shared Resend
+account. A gym's broken/missing encryption key can never crash a
+signup (or any other caller of `sendEmail`) again, regardless of the
+Vercel env cause. `wearables.ts`'s own `decryptSecret` call sites were
+checked too — both already either throw-and-let-the-caller-handle-it
+(single-connection lookup, an intentional existing contract) or already
+catch-and-skip (the sync cron's batch loop), so left alone.
+
+**Still outstanding, Carl's to fix in Vercel** (manual, not done here —
+matches how account-level Vercel/Supabase/Stripe settings get handled on
+this project): add `SECRET_ENCRYPTION_KEY` to podhq-client's own Vercel
+Production env, matching the exact value used when Hove's Resend key was
+originally saved via podHq's `/setup` (both apps' `secret-encryption.ts`
+must stay byte-for-byte identical, same key). Until that's set, staff
+just silently won't get "new signup" emails — no crash, no false error,
+everything else works — confirmed by this fix's own design.
+
+**Verified**: `tsc --noEmit`/`eslint` clean. Root cause and impact
+confirmed by direct DB inspection (`members`/`leads`/`auth_events`/
+`notification_log` for the actual live signup), not just code reading.
+Not yet re-tested live post-fix (deploy pending).

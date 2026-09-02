@@ -36,9 +36,27 @@ export async function getGymResendConfig(gym: string): Promise<ResendConfig | nu
   }
   if (!data) return null;
 
-  return {
-    apiKey: decryptSecret(data.api_key_encrypted),
-    fromAddress: data.from_address,
-    fromName: data.from_name,
-  };
+  // decryptSecret throws (missing/malformed SECRET_ENCRYPTION_KEY, or
+  // ciphertext that no longer matches it) rather than returning an error —
+  // caught here, not left to propagate. Found 2026-09-02: an uncaught
+  // throw here was reaching all the way up through sendEmail (whose own
+  // docstring promises "never throws") into notifyFireAndForget and then
+  // the calling route, crashing an otherwise-successful signup response
+  // after the member/auth rows had already committed — the member got a
+  // false "Something went wrong" while their account had actually been
+  // created. Same "log and fall back to the shared account" treatment as
+  // the query error above, not a rethrow.
+  try {
+    return {
+      apiKey: decryptSecret(data.api_key_encrypted),
+      fromAddress: data.from_address,
+      fromName: data.from_name,
+    };
+  } catch (err) {
+    console.error("[resend-config] failed to decrypt gym_resend_config", {
+      gym,
+      error: err instanceof Error ? err.message : err,
+    });
+    return null;
+  }
 }
