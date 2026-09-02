@@ -306,7 +306,7 @@ actual UI and clicked **Cancel session** for real, triggering
 `offerNextWaitlistEntry()`. Confirmed via `notification_log`: the
 `waitlist_offered` email sent successfully with a real Resend message ID.
 First attempt addressed the waiting member with a Yahoo `+alias`
-(`carlsimpson83+podhqwaitlisttest@yahoo.co.uk`) and the user never
+(`owner+podhqwaitlisttest@example.com`) and the user never
 received it — consistent with Yahoo's known-unreliable plus-addressing
 (see podHq's ROADMAP Stage 9/22 notes on the same thing). Re-ran addressed
 to the user's real member account (id 12) directly instead — confirmed

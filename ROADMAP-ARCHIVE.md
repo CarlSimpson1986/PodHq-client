@@ -73,9 +73,9 @@ onward; see it first for anything recent.
    No migration needed — `auth_events.event_type`'s CHECK constraint was already dropped in podHq's `0006_auth_events_lockout_reset.sql` (validated at the app layer via the `AuthEventType` union instead), so the three new event types (`signup`, `password_reset_requested`, `password_reset_completed`) needed no schema change.
 
    **Partially live-tested 2026-08-09; blocked on Brevo's daily quota, not a code issue.** Found and fixed two real bugs along the way:
-   - `members` insert crashed (foreign key violation, 500) when `signUp()`'s returned `user.id` wasn't real — Supabase's anti-enumeration behavior for an email already registered elsewhere in this shared project (confirmed via `carlsimpson83@yahoo.co.uk`, which already exists as a podHq login) returns a masked "success" whose id was never persisted. Fixed: treat FK violation (`23503`) the same as the existing unique-violation (`23505`) case — both mean "not actually a new member," not an error.
+   - `members` insert crashed (foreign key violation, 500) when `signUp()`'s returned `user.id` wasn't real — Supabase's anti-enumeration behavior for an email already registered elsewhere in this shared project (confirmed via `owner@example.com`, which already exists as a podHq login) returns a masked "success" whose id was never persisted. Fixed: treat FK violation (`23503`) the same as the existing unique-violation (`23505`) case — both mean "not actually a new member," not an error.
    - Brevo SMTP was initially configured with the **dashboard login** (`admin@myfitpod...`) instead of the dedicated SMTP credentials (SMTP login `xxxxxxx@smtp-brevo.com` + a separate generated SMTP key) — an easy mix-up Brevo's UI doesn't make obvious. `signUp()` failed with `"Error sending confirmation email"` until corrected.
-   - After fixing the credentials, one signup (`carlossimpson83+podtest1@gmail.com`) did create a real (unconfirmed) `auth.users` row — confirming the credentials now work — before the account hit Brevo's free-tier daily send limit. Two further attempts failed without even creating a row, an inconsistency worth re-checking once quota resets rather than assuming it's understood.
+   - After fixing the credentials, one signup (`owner-test+podtest1@example.com`) did create a real (unconfirmed) `auth.users` row — confirming the credentials now work — before the account hit Brevo's free-tier daily send limit. Two further attempts failed without even creating a row, an inconsistency worth re-checking once quota resets rather than assuming it's understood.
    - Temporary debug logging left in `src/app/api/auth/signup/route.ts` (server-side console only, clearly marked `TEMP`) to make any future `signUp()` failure visible without weakening the client-facing anti-enumeration message — remove once a full signup→confirm→`/book` walkthrough succeeds.
 
    **Fully live-tested 2026-08-10, Stage 5 complete.** Brevo's quota reset; ran the full remaining walkthrough against the real running app. Signup → confirmation email → click → `/book` succeeded cleanly (removed the `TEMP` debug logging from `signup/route.ts` per the note above once it did). Forgot-password → reset → sign-in-with-new-password also verified, but only after finding and fixing a real bug: `request-password-reset/route.ts`'s `redirectTo` didn't include `type=recovery`, and Supabase doesn't forward that marker onto our own redirect URL by itself (it only forwards `code`) — so `/auth/callback` couldn't tell a recovery link apart from a signup confirmation and sent users straight to `/book` without ever showing the "set new password" screen, silently leaving the old password in place. Fixed by embedding `type=recovery` directly in the `redirectTo` URL itself, which survives the round-trip. Also confirmed Supabase's own "new password can't match the old one" rejection surfaces correctly as a clean error rather than a silent failure.
@@ -403,7 +403,7 @@ into a profile that doesn't exist pre-login.
 
 **Live-verified** (local dev, via claude-in-chrome) — with a real
 detour: initial testing accidentally landed on a leftover session for
-`carlossimpson83+podtest2@gmail.com` (member "Pod Test", last signed in
+`owner-test+podtest2@example.com` (member "Pod Test", last signed in
 2026-08-10) still valid in the local Chrome profile's cookies, which
 `proxy.ts` was silently honouring — the *new* login attempts weren't
 actually failing, they were never being submitted at all, since the
@@ -492,7 +492,7 @@ instead, so it always resets even when no click follows the drag.
 
 ## Cross-app account collision — found and partially fixed 2026-08-11
 
-Signing into podhq-client with `carlsimpson83@yahoo.co.uk` (a real podHq
+Signing into podhq-client with `owner@example.com` (a real podHq
 staff/admin login) succeeded at the Supabase Auth level — both apps share
 one Auth project — but hit a bare "No member profile found for this
 account." dead end, since that email had never been through podhq-client's
@@ -520,7 +520,7 @@ profile linked to that person's real account with zero verification.
 `podHq/link-existing-account-as-member.mjs <email> [name]` looks up an
 existing auth user by email and inserts the `members` row directly (no new
 credentials, no email sent) — used live to link
-`carlsimpson83@yahoo.co.uk` (`member_id` 12). Fine at pilot scale (one or
+`owner@example.com` (`member_id` 12). Fine at pilot scale (one or
 two known collision cases); would need a real verified-link flow (e.g. a
 confirmation email specifically for "link this existing account to a
 member profile") before this could happen at real signup volume.

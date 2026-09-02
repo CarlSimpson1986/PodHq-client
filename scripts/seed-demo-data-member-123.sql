@@ -1,5 +1,5 @@
 -- One-off demo-data seed for member 123 ("carl simpson", Aylesbury
--- Berryfields, carlossimpson83@gmail.com) — requested by Carl 2026-08-25
+-- Berryfields, owner-test@example.com) — requested by Carl 2026-08-25
 -- so the redesigned Dashboard/Training/Nutrition/Health tabs have
 -- something real to look at instead of every section showing its
 -- empty state. Run once against the live Supabase project (SQL Editor,
