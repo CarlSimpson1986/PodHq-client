@@ -12,7 +12,7 @@ export interface ChatTurn {
   content: string;
 }
 
-const GOAL_COPY: Record<CoachProfile["goal"], string> = {
+export const GOAL_COPY: Record<CoachProfile["goal"], string> = {
   weight_loss: "losing weight",
   muscle_gain: "building muscle",
   fitness: "general fitness",

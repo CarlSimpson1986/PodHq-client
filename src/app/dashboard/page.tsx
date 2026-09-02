@@ -13,7 +13,8 @@ import { getWeeklyRecommendation } from "@/lib/coach/weekly-recommendation";
 import { computeHabitStreak } from "@/lib/coach/habit-streak";
 import { computeHabitFollowThrough } from "@/lib/coach/habit-follow-through";
 import { computeMoodTrend } from "@/lib/coach/mood-trend";
-import { getCoachConversation } from "@/lib/coach/coach-conversations";
+import { getCoachConversation, seedCoachWelcomeMessage } from "@/lib/coach/coach-conversations";
+import { GOAL_COPY } from "@/lib/coach/coach-chat";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { WeekCalendarStrip } from "@/components/week-calendar-strip";
@@ -71,6 +72,7 @@ export default async function DashboardPage() {
   let habitStreak = 0;
   let followThrough = null;
   let conversation: { role: "user" | "assistant"; content: string }[] = [];
+  let showCoachWelcome = false;
 
   if (showFullDashboard && coachProfile) {
     const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
@@ -85,6 +87,21 @@ export default async function DashboardPage() {
     weeklyReview = review;
     consistency = weeks.find((w) => w.weeksAgo === 0) ?? { weeksAgo: 0, sessionsCompleted: 0 };
     conversation = conv.map((m) => ({ role: m.role, content: m.content }));
+
+    // First-ever look at Pod Coach during the 7-day trial (2026-09-02) —
+    // mirrors OnboardingTour's Pod Assist welcome on Home. Gated on an
+    // empty conversation, not a dedicated flag column: an empty
+    // coach_conversations row already means "never chatted with Pod Coach
+    // yet," so it doubles as the one-time trigger. Trial-only per Carl's
+    // ask, not subscribers — matches getCoachHomeState's "conversion
+    // moments" framing (see ai-coach-section.tsx).
+    if (state.kind === "trial_active" && conversation.length === 0) {
+      const firstName = member.name.split(" ")[0] || member.name;
+      const welcome = `Hi ${firstName}! I'm Pod Coach. You're on the 7-day free trial, training for ${GOAL_COPY[coachProfile.goal]} — I'll build your sessions, track your recovery, and answer questions about your plan along the way. Check today's session on the Home tab, or ask me anything here.`;
+      const seeded = await seedCoachWelcomeMessage(member.id, welcome);
+      conversation = seeded.map((m) => ({ role: m.role, content: m.content }));
+      showCoachWelcome = true;
+    }
 
     currentHabit = recentCheckIns[0]?.habit ?? null;
     habitStreak = computeHabitStreak(recentCheckIns);
@@ -211,6 +228,7 @@ export default async function DashboardPage() {
           checkInState={checkInState}
           initialMessages={conversation}
           hasAcceptedPrivacyPolicy={hasAcceptedPrivacyPolicy(member)}
+          initialOpen={showCoachWelcome}
         />
       )}
       <MemberBottomNav />

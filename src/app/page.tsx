@@ -138,7 +138,7 @@ export default async function HomePage() {
           <p id="tour-credits" className="text-center text-sm text-muted-foreground">{credits} credits available</p>
         </div>
       </div>
-      <OnboardingTour tourCompletedAt={member.tour_completed_at} />
+      <OnboardingTour tourCompletedAt={member.tour_completed_at} memberName={member.name} gym={member.gym} />
       <BottomNav />
     </main>
   );

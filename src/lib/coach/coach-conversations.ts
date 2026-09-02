@@ -35,3 +35,22 @@ export async function appendCoachConversationTurn(
   );
   if (error) throw new Error(error.message);
 }
+
+// A lone assistant-authored opener, not a user/assistant pair like
+// appendCoachConversationTurn above — for the trial-start welcome message
+// (Dashboard, 2026-09-02). Guarded on the existing conversation being
+// empty, same "only ever once" idempotency as start-trial's
+// trial_activated_at check, so a concurrent page load can't double-seed.
+export async function seedCoachWelcomeMessage(memberId: number, content: string): Promise<CoachChatMessage[]> {
+  const existing = await getCoachConversation(memberId);
+  if (existing.length > 0) return existing;
+
+  const admin = createAdminClient();
+  const message: CoachChatMessage = { role: "assistant", content, timestamp: new Date().toISOString() };
+  const { error } = await admin.from("coach_conversations").upsert(
+    { member_id: memberId, messages: [message], updated_at: new Date().toISOString() },
+    { onConflict: "member_id" }
+  );
+  if (error) throw new Error(error.message);
+  return [message];
+}

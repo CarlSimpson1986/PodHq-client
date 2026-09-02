@@ -27,12 +27,14 @@ export function PodCoachBubble({
   checkInState,
   initialMessages,
   hasAcceptedPrivacyPolicy,
+  initialOpen = false,
 }: {
   checkInState: CheckInState;
   initialMessages: ChatMessage[];
   hasAcceptedPrivacyPolicy: boolean;
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
 
   return (
     <div className="fixed right-4 top-4 z-20">

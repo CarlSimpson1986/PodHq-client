@@ -57,12 +57,17 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
   },
 ];
 
-// Guided first-login walkthrough (driver.js). Auto-runs once per member —
-// tourCompletedAt is null until the tour finishes or is closed early.
-// The "?" button opens Chat directly (2026-08-26 — was a two-item
-// dropdown menu with "Replay app tour"/"Chat", but the tour option was
-// redundant with the "Replay app tour" chip already inside the chat
-// panel itself, so the member saw the same option twice on the very
+// Guided first-login walkthrough (driver.js), fronted by a Pod Assist
+// welcome (2026-09-02) — first login no longer launches the tour cold;
+// Pod Assist opens with a personalised greeting first ("who you are, and
+// I'll show you around"), and driver.js only runs once the member taps
+// through from there. tourCompletedAt is null until that first welcome is
+// dismissed (closing the chat) or the tour itself finishes — whichever
+// happens first — so it never nags a returning member. The "?" button
+// still opens Chat directly on every later visit (2026-08-26 — was a
+// two-item dropdown menu with "Replay app tour"/"Chat", but the tour
+// option was redundant with the "Replay app tour" chip already inside the
+// chat panel itself, so the member saw the same option twice on the very
 // first tap). v1 is deliberately scoped to the home screen only (no
 // cross-page steps) — see podhq-client's ROADMAP.md for why. The static
 // FAQ page (and its own "Replay app tour" button, which used to
@@ -70,31 +75,53 @@ const STEPS: NonNullable<Parameters<typeof driver>[0]>["steps"] = [
 // was removed 2026-08-22 once Chat graduated to a real LLM covering the
 // same 3 questions plus the full Ts & Cs — this is now the only page
 // with a "?" button, so that cross-page mechanism no longer has a caller.
-export function OnboardingTour({ tourCompletedAt }: { tourCompletedAt: string | null }) {
+export function OnboardingTour({
+  tourCompletedAt,
+  memberName,
+  gym,
+}: {
+  tourCompletedAt: string | null;
+  memberName: string;
+  gym: string;
+}) {
   const driverRef = useRef<Driver | null>(null);
+  const firstLogin = tourCompletedAt === null;
+  const tourCompleteCalled = useRef(false);
+
+  function markTourComplete() {
+    if (tourCompleteCalled.current) return;
+    tourCompleteCalled.current = true;
+    fetch("/api/member/tour-complete", { method: "POST" }).catch(() => {
+      // Non-critical — worst case the welcome/tour auto-launches again
+      // next session. Not surfaced to the member.
+    });
+  }
 
   useEffect(() => {
     driverRef.current = driver({
       showProgress: true,
       allowClose: true,
       onDestroyed: () => {
-        if (tourCompletedAt === null) {
-          fetch("/api/member/tour-complete", { method: "POST" }).catch(() => {
-            // Non-critical — worst case the tour auto-launches again next
-            // session. Not surfaced to the member.
-          });
-        }
+        if (firstLogin) markTourComplete();
       },
       steps: STEPS,
     });
-
-    if (tourCompletedAt === null) {
-      // Let the home screen finish rendering before highlighting elements.
-      const timer = setTimeout(() => driverRef.current?.drive(), 300);
-      return () => clearTimeout(timer);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <PodAssistBubble onReplayTour={() => driverRef.current?.drive()} />;
+  const firstName = memberName.split(" ")[0] || memberName;
+
+  return (
+    <PodAssistBubble
+      initialOpen={firstLogin}
+      welcomeMessage={
+        firstLogin
+          ? `Hi ${firstName}, welcome to My Fit Pod! You're all set up at ${gym}. I'm Pod Assist — ask me anything about bookings, credits, or gym policies any time. Want the 30-second tour of the app first?`
+          : undefined
+      }
+      tourCtaLabel={firstLogin ? "Show me around" : "Replay app tour"}
+      onReplayTour={() => driverRef.current?.drive()}
+      onClose={firstLogin ? markTourComplete : undefined}
+    />
+  );
 }
