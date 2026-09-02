@@ -167,3 +167,16 @@ Turbopack-bundle issue again mid-test (edits made after `next dev` was
 already running) — full process kill + `.next` clear + service-worker
 unregister fixed it, consistent with prior notes on this exact failure
 mode in local dev.
+
+**Follow-up, same day, live-verified on production**: re-ran the whole
+trial-start → onboarding → Pod Coach welcome flow against the real
+`podhq-client.vercel.app` deploy (not just local dev) — confirmed
+identical to local: straight into `/coach-onboarding`, correct
+`trial_pending`-aware Pod Coach welcome on Dashboard, both bubble icons
+rendering distinctly. Carl, on the actual onboarding page: `/coach-
+onboarding`'s header still read "Set up your AI Coach" — inconsistent
+with the trial now being framed as "Free upgrade to Premium," not just
+an AI Coach trial. Changed to "Set up your Premium profile"
+(`coach-onboarding/page.tsx`'s `PageHero` title only — the handful of
+"Set up your AI Coach first" *error* messages elsewhere, e.g.
+`coach-chat/route.ts`, are a different surface and weren't touched).

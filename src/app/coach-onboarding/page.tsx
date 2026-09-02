@@ -30,7 +30,7 @@ export default async function CoachOnboardingPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col">
-      <PageHero title="Set up your AI Coach" subtitle="A few questions, one time only." icon={DumbbellIcon} iconHref="/profile" />
+      <PageHero title="Set up your Premium profile" subtitle="A few questions, one time only." icon={DumbbellIcon} iconHref="/profile" />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md card-light p-6">
           <CoachOnboardingForm />
