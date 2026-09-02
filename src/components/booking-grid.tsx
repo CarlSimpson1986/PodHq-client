@@ -10,6 +10,7 @@ import { londonDateParts, londonHour, londonHourOf } from "@/lib/london-time";
 import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 import { BottomNav } from "@/components/bottom-nav";
 import { PodAssistBubble } from "@/components/pod-assist-bubble";
+import { TourContinuation } from "@/components/tour-continuation";
 import { GYM_NAMES } from "@/lib/gym";
 
 // Slots for a day at the resource's own duration — a 60-minute resource
@@ -318,6 +319,7 @@ export function BookingGrid({
             <p className="text-xs text-muted-foreground">credits available</p>
           </div>
           <Link
+            id="tour-book-credits"
             href={isVisiting ? `/buy-credits?gym=${encodeURIComponent(gym)}` : "/buy-credits"}
             className="rounded-lg border border-card-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-foreground hover:text-background"
           >
@@ -333,6 +335,7 @@ export function BookingGrid({
           {formatMonthYear(selectedDayDate)}
         </p>
         <div
+          id="tour-book-dates"
           ref={dayStripRef}
           onPointerDown={onDayStripPointerDown}
           onPointerMove={onDayStripPointerMove}
@@ -387,7 +390,7 @@ export function BookingGrid({
       </div>
 
       <div className="flex-1 px-6 pb-24 pt-8">
-        <div className="mx-auto w-full max-w-md card-light space-y-3 p-6">
+        <div id="tour-book-slots" className="mx-auto w-full max-w-md card-light space-y-3 p-6">
           <p className="text-sm font-semibold text-card-light-muted">{formatDayHeading(selectedDayDate)}</p>
           {purchaseSuccess && <p className="text-sm text-success">Payment received — credits added.</p>}
           {membershipSuccess && (
@@ -487,6 +490,7 @@ export function BookingGrid({
         </div>
       </div>
       <PodAssistBubble />
+      <TourContinuation path="/book" />
       <BottomNav />
     </>
   );

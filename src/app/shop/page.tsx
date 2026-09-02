@@ -5,6 +5,7 @@ import { getMemberByAuthUserId } from "@/lib/data/member";
 import { NoMemberProfile } from "@/components/no-member-profile";
 import { BottomNav } from "@/components/bottom-nav";
 import { PodAssistBubble } from "@/components/pod-assist-bubble";
+import { TourContinuation } from "@/components/tour-continuation";
 import { IdCardIcon, CoinIcon, GiftIcon } from "@/components/icons";
 import type { ComponentType } from "react";
 
@@ -13,12 +14,14 @@ const SHOP_ITEMS: {
   title: string;
   description: string;
   icon: ComponentType<{ className?: string }>;
+  tourId?: string;
 }[] = [
   {
     href: "/buy-membership",
     title: "Memberships",
     description: "Browse membership options available to join our club.",
     icon: IdCardIcon,
+    tourId: "tour-shop-membership",
   },
   {
     href: "/buy-credits",
@@ -60,7 +63,12 @@ export default async function ShopPage() {
       <div className="flex-1 space-y-3 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-3">
           {SHOP_ITEMS.map((item) => (
-            <Link key={item.href} href={item.href} className="card-light flex items-start gap-4 p-5 hover:opacity-90">
+            <Link
+              key={item.href}
+              id={item.tourId}
+              href={item.href}
+              className="card-light flex items-start gap-4 p-5 hover:opacity-90"
+            >
               <item.icon className="mt-0.5 h-8 w-8 shrink-0 text-card-light-foreground" />
               <div>
                 <p className="text-base font-semibold">{item.title}</p>
@@ -71,6 +79,7 @@ export default async function ShopPage() {
         </div>
       </div>
       <PodAssistBubble />
+      <TourContinuation path="/shop" />
       <BottomNav />
     </main>
   );
