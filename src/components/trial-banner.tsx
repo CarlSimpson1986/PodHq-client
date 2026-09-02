@@ -7,16 +7,21 @@ import { DumbbellIcon } from "@/components/icons";
 type Step = "banner" | "preview" | "confirmation";
 
 const OUTCOMES = [
-  "Your session is planned before you arrive",
-  "Gets harder as you get stronger",
-  "Every session tracked and remembered",
+  "Your next session is planned for you — no more guessing what to do",
+  "Gets harder automatically as you get stronger, based on how each set actually felt",
+  "Personalised calorie and protein targets for your goal, not generic advice",
+  "Ask your coach anything — answers grounded in real research, not vague AI filler",
 ];
 
-// State 1's trial pitch (brief §7) — deliberately only lists what this
-// beta actually builds (AI Coach workout generation + RPE-based
-// progression). Nutrition, community challenges, and HealthKit/Health
-// Connect integrations are out of scope for the Hove beta; see
-// ROADMAP.md's "Hove AI Coach trial beta" entry.
+// State 1's trial pitch (brief §7). Copy updated 2026-09-02 (Carl: "give
+// them reasons to do the trial") — the original 3 bullets undersold what
+// the trial actually includes by now: nutrition targets and the
+// research-grounded coach chat were both out of scope when this list was
+// first written, and have since shipped (see ROADMAP.md). The trial
+// genuinely runs the full premium feature set for 7 days, not a limited
+// demo — getCoachHomeState treats trial_active identically to subscriber
+// everywhere else in the app — so the intro line below says exactly
+// that rather than listing tiers/pricing this component has no access to.
 export function TrialBanner() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("banner");
@@ -62,6 +67,9 @@ export function TrialBanner() {
                   7 days · Free · No card needed
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">Your free AI Coach trial</h2>
+                <p className="mt-1 text-sm text-card-light-muted">
+                  Full Premium access for a week — not a stripped-down preview.
+                </p>
                 <ul className="mt-4 space-y-3">
                   {OUTCOMES.map((outcome, i) => (
                     <li key={outcome} className="flex items-start gap-3 text-sm">
