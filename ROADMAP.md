@@ -14,45 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-54.md`, covering the pilot
-mechanism proof (2026-08-05) through the first pass of Pod Assist/Pod
-Coach first-time welcomes (2026-09-02) — all split out to keep this file
-within Claude Code's ~15,000-character `@`-import limit. Archives aren't
-always the strictly oldest material — the split point is "what's
-finished and stable" as much as "what's oldest" (see each archive's own
-header note for examples). Reference-only, not auto-loaded by CLAUDE.md;
-check them for full build history, or `git log` on this file for exact
-split points. Active content here starts at "Trial preview copy
-strengthened" (2026-09-02). If this file grows too large again, split
-it the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-55.md`, update this paragraph.
-
-## Trial preview copy strengthened — 2026-09-02
-
-Carl: give members more reasons to actually start the 7-day trial. The
-existing tap-through preview (`trial-banner.tsx`, already built — not a
-new flow) had 3 generic bullets from before nutrition tracking and the
-research-grounded Pod Coach chat existed. Rewrote all 4 to be specific
-and current, and added an explicit "Full Premium access for a week — not
-a stripped-down preview" line, since `getCoachHomeState` already treats
-`trial_active` identically to `subscriber` everywhere else in the app —
-no pricing shown (this component has no access to catalog pricing, and
-"free/no card" is the stronger anchor already on screen).
-
-**Verified**: `tsc --noEmit`/`eslint` clean, confirmed live in local dev
-via a synthetic test member. Note for next time: the PWA service worker
-(`public/sw.js`) served a stale cached Home page mid-test even after a
-fresh `next dev` + cleared `.next` — unrelated to this change, but real;
-`navigator.serviceWorker.getRegistrations()` + unregister + `caches`
-clear fixed it (hit again, same fix, on the follow-up copy pass below).
-
-**Second pass, same day**: Carl, after actually reading the modal live —
-"it's not just your free AI Coach trial, it's a free upgrade to
-Premium." Reframed the header ("Free upgrade to Premium") and subtitle
-around that positioning, and swapped the 4 bullets from feature-level
-copy to outcome-level selling points: personalised coaching journey,
-accountability, results, wearable sync. Same `tsc`/`eslint`/local-dev
-verification as the first pass.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-55.md`, covering the pilot
+mechanism proof (2026-08-05) through the trial preview copy strengthening
+(2026-09-02) — all split out to keep this file within Claude Code's
+~15,000-character `@`-import limit. Archives aren't always the strictly
+oldest material — the split point is "what's finished and stable" as
+much as "what's oldest" (see each archive's own header note for
+examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
+full build history, or `git log` on this file for exact split points.
+Active content here starts at "Signup crash from an undecryptable gym
+Resend key" (2026-09-02). If this file grows too large again, split it
+the same way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-56.md`, update this paragraph.
 
 ## Signup crash from an undecryptable gym Resend key — 2026-09-02
 
@@ -237,3 +210,19 @@ through its 4 steps handed off to `/shop` (1 of 2, real Memberships
 card), finished on the real Pod Assist icon there (2 of 2) — confirmed
 `tour_completed_at` only got stamped at the very end of that full
 sequence, not after Home's portion alone. `tsc`/`eslint` clean throughout.
+
+**Reordered same day, third pass**: Carl, after actually walking the
+tour again — "book session before buy a credit" was backwards (you
+can't book without credits, so teach that first), and the Shop bridge
+copy said "let's get a membership," undermining that Shop covers Credit
+Packs too, not just Memberships. `tour-steps.ts` reordered: Home → Shop
+(Credit Packs step first, then Memberships) → Book → done, replacing
+the old Home → Book (with an inline "buy a credit" aside) → Shop
+(membership-only) order. Also restored the "Assist" label chip under
+Pod Assist's real icon (`pod-assist-bubble.tsx`) to match Pod Coach's
+own "Coach" chip — dropped by mistake when the icon itself was reverted
+from the generic drawn version back to the real PNG. Re-verified live
+end to end via a fresh synthetic member: Home's 4 steps → Shop's 3
+(Credit Packs, then Memberships, then the Book nav bridge) → Book's 3,
+finishing on the real Pod Assist icon there — confirmed `tour_completed_at`
+only stamps once, at the very end. `tsc`/`eslint` clean.

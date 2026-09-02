@@ -12,6 +12,12 @@ export interface TourStep {
 // navigates to the next step's page (steps naturally finished) or stops
 // (closed early) — see tour-runner.tsx. Order matters: this array *is*
 // the tour's sequence.
+//
+// Reordered same day, second pass (Carl: "book session before buy a
+// credit" is backwards, and "saying the going to the shop is to only buy
+// membership" undersold what's there) — Shop now comes before Book
+// (you need credits before you can book, so teach that first) and Shop's
+// own two steps cover both Credit Packs and Memberships, not just one.
 export const TOUR_STEPS: TourStep[] = [
   {
     path: "/",
@@ -19,7 +25,7 @@ export const TOUR_STEPS: TourStep[] = [
     popover: {
       title: "Welcome to My Fit Pod",
       description:
-        "Quick tour — I'll show you how to book a session and buy credits or a membership. You can always tap the Pod Assist icon (top right) again later if you get stuck.",
+        "Quick tour — I'll show you how to buy credits or a membership, then how to book a session. You can always tap the Pod Assist icon (top right) again later if you get stuck.",
     },
   },
   {
@@ -27,7 +33,7 @@ export const TOUR_STEPS: TourStep[] = [
     element: "#tour-credits",
     popover: {
       title: "Your credits",
-      description: "Each session uses one credit — I'll show you exactly where to top up in a moment.",
+      description: "Each session uses one credit — let's show you where to buy some first.",
     },
   },
   {
@@ -40,10 +46,34 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     path: "/",
+    element: "#tour-nav-shop",
+    popover: {
+      title: "First, let's get you credits",
+      description: "You'll need at least one credit before you can book — let's go see how.",
+    },
+  },
+  {
+    path: "/shop",
+    element: "#tour-shop-credits",
+    popover: {
+      title: "How to buy a credit",
+      description: "Tap here to browse and buy a credit pack — this is exactly how you'd top up.",
+    },
+  },
+  {
+    path: "/shop",
+    element: "#tour-shop-membership",
+    popover: {
+      title: "How to buy a membership",
+      description: "Or tap here for a monthly membership instead — a recurring credit allowance rather than one-off packs.",
+    },
+  },
+  {
+    path: "/shop",
     element: "#tour-nav-book",
     popover: {
-      title: "Let's book a session",
-      description: "Tap here any time — for now, let's go take a look.",
+      title: "Now, let's book a session",
+      description: "Credits sorted — let's go book your first session.",
     },
   },
   {
@@ -64,30 +94,6 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     path: "/book",
-    element: "#tour-book-credits",
-    popover: {
-      title: "How to buy a credit",
-      description: "Out of credits? Tap Buy more here any time to top up — this is exactly how you'd buy one.",
-    },
-  },
-  {
-    path: "/book",
-    element: "#tour-nav-shop",
-    popover: {
-      title: "Now, a membership",
-      description: "Let's take a look at how to get a monthly membership instead.",
-    },
-  },
-  {
-    path: "/shop",
-    element: "#tour-shop-membership",
-    popover: {
-      title: "How to buy a membership",
-      description: "Tap here to browse and subscribe — a monthly membership gives you a recurring credit allowance instead of buying one-off packs.",
-    },
-  },
-  {
-    path: "/shop",
     element: "#tour-help-button",
     popover: {
       title: "That's it!",

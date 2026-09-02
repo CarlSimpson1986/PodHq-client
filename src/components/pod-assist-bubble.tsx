@@ -45,12 +45,11 @@ export function PodAssistBubble({
   }
 
   return (
-    <div className="fixed right-4 top-4 z-20">
+    <div className="fixed right-4 top-4 z-20 flex flex-col items-center gap-1">
       {/* The real pod-assist-mark.png asset — reverted 2026-09-02 after
           replacing it with a generic drawn icon broke Carl's actual
-          branded icon ("needs the actual ICon I gave you"). Pod Coach's
-          gold + dumbbell bubble is already visually distinct from this
-          on its own; no styling needed here to tell them apart. */}
+          branded icon ("needs the actual ICon I gave you"). Label chip
+          restored underneath to match Pod Coach's own (pod-coach-bubble.tsx). */}
       <button
         type="button"
         id="tour-help-button"
@@ -60,6 +59,9 @@ export function PodAssistBubble({
       >
         <Image src="/icons/features/pod-assist-mark.png" alt="" width={40} height={40} />
       </button>
+      <span className="rounded-full bg-card-light-foreground/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+        Assist
+      </span>
       {chatOpen && (
         <div
           className={`fixed inset-x-4 bottom-4 top-20 z-30 flex origin-top-right flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl transition-all duration-200 ease-out sm:inset-x-auto sm:right-4 sm:w-96 ${

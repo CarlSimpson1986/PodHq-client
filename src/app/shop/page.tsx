@@ -28,6 +28,7 @@ const SHOP_ITEMS: {
     title: "Credit Packs",
     description: "Browse credit packs available to book activities at our club.",
     icon: CoinIcon,
+    tourId: "tour-shop-credits",
   },
   {
     href: "/gift-voucher",
