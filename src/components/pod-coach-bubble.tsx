@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { CoachChatView, type ChatMessage } from "@/components/coach-chat-view";
 import { PrivacyConsentForm } from "@/components/privacy-consent-form";
+import { DumbbellIcon } from "@/components/icons";
 import type { CheckInState } from "@/lib/coach/checkin-state";
 
 // Pod Coach's floating bubble — replaces the old dedicated /coach tab
@@ -52,15 +52,22 @@ export function PodCoachBubble({
   }
 
   return (
-    <div className="fixed right-4 top-4 z-20">
+    <div className="fixed right-4 top-4 z-20 flex flex-col items-center gap-1">
+      {/* Gold + dumbbell glyph vs. Pod Assist's black + speech-bubble —
+          both used the same generic white mark image before this
+          (2026-09-02, Carl: "the icons dont say pod assist or podcoach
+          ... they should be visually different"). */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Pod Coach"
-        className="flex h-10 w-10 items-center justify-center drop-shadow-lg"
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-accent shadow-lg"
       >
-        <Image src="/icons/features/pod-coach-mark.png" alt="" width={40} height={40} />
+        <DumbbellIcon className="h-5 w-5 text-accent-foreground" />
       </button>
+      <span className="rounded-full bg-accent/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-foreground">
+        Coach
+      </span>
       {open && (
         <div
           className={`fixed inset-x-4 bottom-4 top-20 z-30 flex origin-top-right flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl transition-all duration-200 ease-out sm:inset-x-auto sm:right-4 sm:w-96 ${

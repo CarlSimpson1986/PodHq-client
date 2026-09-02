@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DumbbellIcon } from "@/components/icons";
 
-type Step = "banner" | "preview" | "confirmation";
+type Step = "banner" | "preview";
 
 const OUTCOMES = [
   "A fully personalised coaching journey — tailored nutrition and training built around you",
@@ -34,6 +34,15 @@ export function TrialBanner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Straight into the onboarding questions, not a "you're in" holding
+  // screen (Carl, live: "as soon as i hit start your free trial it
+  // should be into the onboarding questions...then Pod coach takes you
+  // around" — the second half is coach-onboarding-form.tsx's own
+  // redirect to "/" plus dashboard/page.tsx now seeding Pod Coach's
+  // welcome as soon as a trial_pending member has a coachProfile and an
+  // empty conversation, not only once trial_active). No router.push
+  // fallback needed — /coach-onboarding itself redirects home if a
+  // profile somehow already exists.
   async function startTrial() {
     setLoading(true);
     setError(null);
@@ -42,12 +51,12 @@ export function TrialBanner() {
       const body = await res.json();
       if (body.status !== "ok") {
         setError(body.message ?? "Something went wrong. Try again.");
+        setLoading(false);
         return;
       }
-      setStep("confirmation");
+      router.push("/coach-onboarding");
     } catch {
       setError("Something went wrong. Try again.");
-    } finally {
       setLoading(false);
     }
   }
@@ -108,31 +117,8 @@ export function TrialBanner() {
                   Not now
                 </button>
                 <p className="mt-3 text-center text-xs text-card-light-muted">
-                  No card required. Trial activates on your first session.
+                  No card required. Booking your first session starts the 7-day clock.
                 </p>
-              </>
-            )}
-
-            {step === "confirmation" && (
-              <>
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent/20">
-                  <DumbbellIcon className="h-6 w-6 text-accent-foreground" />
-                </div>
-                <h2 className="mt-4 text-center text-xl font-semibold">You&apos;re in.</h2>
-                <p className="mt-2 text-center text-sm text-card-light-muted">
-                  Your 7-day AI Coach trial starts automatically the moment you book your next session — no extra
-                  step needed.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep("banner");
-                    router.refresh();
-                  }}
-                  className="mt-6 w-full rounded-lg bg-card-light-foreground px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
-                >
-                  Go to my app →
-                </button>
               </>
             )}
           </div>

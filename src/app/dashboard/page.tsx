@@ -74,34 +74,47 @@ export default async function DashboardPage() {
   let conversation: { role: "user" | "assistant"; content: string }[] = [];
   let showCoachWelcome = false;
 
-  if (showFullDashboard && coachProfile) {
-    const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-    const [recovery, review, weeks, recentCheckIns, conv] = await Promise.all([
-      getRecoveryStatus(member.id),
-      getWeeklyReview(member.id, periodStart, periodEnd, member.gender),
-      getWeeklyConsistency(member.id),
-      getRecentCheckIns(member.id),
-      getCoachConversation(member.id),
-    ]);
-    recoveryStatus = recovery;
-    weeklyReview = review;
-    consistency = weeks.find((w) => w.weeksAgo === 0) ?? { weeksAgo: 0, sessionsCompleted: 0 };
+  // Conversation + welcome load whenever a coach profile exists, not only
+  // on the full dashboard (2026-09-02, Carl: "as soon as i hit start your
+  // free trial it should be into the onboarding questions...then Pod
+  // coach takes you around" — onboarding finishes in `trial_pending`,
+  // before the 7-day clock even starts on the first booking, so gating
+  // this to `trial_active` only meant the welcome never fired at the
+  // exact moment it was supposed to). Gated on an empty conversation, not
+  // a dedicated flag column: an empty coach_conversations row already
+  // means "never chatted with Pod Coach yet," so it doubles as the
+  // one-time trigger. Welcome itself stays trial-only, not subscribers —
+  // matches getCoachHomeState's "conversion moments" framing (see
+  // ai-coach-section.tsx) — but a subscriber's real history still needs
+  // loading here same as before.
+  if (coachProfile) {
+    const conv = await getCoachConversation(member.id);
     conversation = conv.map((m) => ({ role: m.role, content: m.content }));
 
-    // First-ever look at Pod Coach during the 7-day trial (2026-09-02) —
-    // mirrors OnboardingTour's Pod Assist welcome on Home. Gated on an
-    // empty conversation, not a dedicated flag column: an empty
-    // coach_conversations row already means "never chatted with Pod Coach
-    // yet," so it doubles as the one-time trigger. Trial-only per Carl's
-    // ask, not subscribers — matches getCoachHomeState's "conversion
-    // moments" framing (see ai-coach-section.tsx).
-    if (state.kind === "trial_active" && conversation.length === 0) {
+    if (conversation.length === 0 && (state.kind === "trial_pending" || state.kind === "trial_active")) {
       const firstName = member.name.split(" ")[0] || member.name;
-      const welcome = `Hi ${firstName}! I'm Pod Coach. You're on the 7-day free trial, training for ${GOAL_COPY[coachProfile.goal]} — I'll build your sessions, track your recovery, and answer questions about your plan along the way. Check today's session on the Home tab, or ask me anything here.`;
+      const trialLine =
+        state.kind === "trial_pending"
+          ? "Book your first session to kick off your 7-day trial"
+          : "You're on your 7-day free trial";
+      const welcome = `Hi ${firstName}! I'm Pod Coach. I'll build your sessions, track your recovery, and answer questions about your plan for ${GOAL_COPY[coachProfile.goal]} along the way. ${trialLine} — ask me anything here, or check today's session on the Home tab.`;
       const seeded = await seedCoachWelcomeMessage(member.id, welcome);
       conversation = seeded.map((m) => ({ role: m.role, content: m.content }));
       showCoachWelcome = true;
     }
+  }
+
+  if (showFullDashboard && coachProfile) {
+    const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
+    const [recovery, review, weeks, recentCheckIns] = await Promise.all([
+      getRecoveryStatus(member.id),
+      getWeeklyReview(member.id, periodStart, periodEnd, member.gender),
+      getWeeklyConsistency(member.id),
+      getRecentCheckIns(member.id),
+    ]);
+    recoveryStatus = recovery;
+    weeklyReview = review;
+    consistency = weeks.find((w) => w.weeksAgo === 0) ?? { weeksAgo: 0, sessionsCompleted: 0 };
 
     currentHabit = recentCheckIns[0]?.habit ?? null;
     habitStreak = computeHabitStreak(recentCheckIns);

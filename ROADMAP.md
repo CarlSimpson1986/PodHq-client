@@ -14,139 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-52.md`, covering the pilot
-mechanism proof (2026-08-05) through PubMed citations made independently
-verifiable (2026-08-30) — all split out to keep this file within Claude
-Code's ~15,000-character `@`-import limit. Archives aren't always the
-strictly oldest material — the split point is "what's finished and
-stable" as much as "what's oldest" (see each archive's own header note
-for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
-for full build history, or `git log` on this file for exact split
-points. Active content here starts at "`getBookingsForDate`/
-`getActiveReservationsForDate` timezone bug fixed" (2026-08-30). If this
-file grows too large again, split it the same way: move the most
-clearly finished section into `ROADMAP-ARCHIVE-53.md`, update this
-paragraph.
-
-## `getBookingsForDate`/`getActiveReservationsForDate` timezone bug fixed — 2026-08-30
-
-The real fix behind the `booking-dates.ts` bug flagged 2026-08-17 (that
-one turned out already fixed same day, commit `ed116f3` — a stale note).
-Auditing the codebase for the same bug class turned up a genuine live
-instance in `src/lib/data/member.ts`: both functions built their day
-window with `new Date(date); startOfDay.setHours(0,0,0,0); ...
-endOfDay.setDate(endOfDay.getDate()+1)` — local Date accessors, which on
-Vercel run in UTC. `date` itself was already a correct London-midnight
-instant (from `booking-dates.ts`'s `parseDateParam`), but `setHours(0,
-0,0,0)` re-derives "midnight" against the server's own UTC calendar day,
-discarding the correct input. During BST (UTC+1, which is now, and lasts
-until late October) this shifts the query window a full UTC calendar day
-off from the intended London day — `/book`'s "existing bookings for this
-day" and "active waitlist reservations for this day" queries could show
-the wrong day's data.
-
-Fixed by replacing both with `londonMidnight(date)` /
-`addLondonDays(startOfDay, 1)` — the exact same helper pair this same
-file already uses correctly in `getTodayBookingForMember` a few dozen
-lines up, so this wasn't a new pattern, just two functions that never
-got updated when the rest of the file adopted it.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (178/178, no
-regressions — these are DB-backed functions with no existing unit test,
-and the fix's correctness now flows entirely from `london-time.ts`'s own
-already-tested helpers), and `npm run build` all clean. Confirmed no
-regression live in local dev (`/book` still rendered today's existing
-bookings correctly) — but per this exact file's own header comment, this
-bug class only ever reproduces on the real Vercel deployment (UTC
-server vs. a UK browser), never in local dev where both run on the same
-machine, so a true BST-boundary reproduction wasn't attempted; confident
-in the fix because it's a direct reuse of an already-live, already-
-correct pattern from the same file rather than new logic.
-
-## Pod Assist / Pod Coach first-time welcomes — 2026-09-02
-
-Carl: on first login, Pod Assist should welcome the member and offer to
-show them around, and the same pattern should repeat for Pod Coach on the
-7-day AI Coach trial. Both reuse existing infra rather than anything new
-— no new DB columns, no new API routes.
-
-**Pod Assist (Home, first login)**: `OnboardingTour` no longer auto-drives
-the driver.js tour cold. Instead it auto-opens `PodAssistBubble` with a
-seeded greeting ("Hi {firstName}, welcome to My Fit Pod! You're all set
-up at {gym}...") and a "Show me around" CTA that starts the existing
-driver.js steps — closing the greeting without taking the tour still
-stamps `tour_completed_at` (via the existing `/api/member/tour-complete`,
-now called from either path, guarded with a ref so it only ever fires
-once per mount). `HelpChatView` gained `welcomeMessage`/`tourCtaLabel`
-props (lazy `useState` initializer so the greeting is present on first
-paint, not a post-mount flash) and its quick-question/tour chips now key
-off "no user message sent yet" rather than "no messages at all", so they
-still show underneath a seeded greeting.
-
-**Pod Coach (Dashboard, 7-day trial)**: gated on `coachState.kind ===
-"trial_active"` AND an empty `coach_conversations` row — that emptiness
-already means "never chatted with Pod Coach," so no new flag column was
-needed. New `seedCoachWelcomeMessage()` (`coach-conversations.ts`) writes
-a single assistant-authored opener ("Hi {firstName}! I'm Pod Coach.
-You're on the 7-day free trial, training for {goal}...", using
-`coach-chat.ts`'s existing `GOAL_COPY`, now exported) and is idempotent
-against concurrent page loads the same way `start-trial`'s own
-`trial_activated_at` check is. `PodCoachBubble` gained `initialOpen` to
-auto-open on that first visit; if the member hasn't accepted the Pod
-Coach privacy policy yet, the existing consent-form gate still takes
-priority (correct — the welcome message is there in history once they
-accept, not lost). Scoped to trial members only, not subscribers, per
-Carl's ask.
-
-**Verified**: `tsc --noEmit` and `eslint` clean on all changed files.
-Live-tested in local dev (`next dev`, not the deployed preview) via a
-synthetic confirmed test member (Supabase admin-generated magic link,
-deleted after) — first Home visit auto-opened Pod Assist with the
-personalised greeting, "Show me around" handed off cleanly into the
-driver.js tour (1 of 7, correct first step), a second Home visit did not
-re-open it (`tour_completed_at` correctly stamped). Seeded
-`trial_active` state + a `coach_profiles` row for the same test member
-and confirmed Dashboard auto-opened Pod Coach with the personalised
-trial welcome once the privacy policy was accepted. Not tested: the real
-production signup → email confirmation → first-login path end-to-end (a
-separate, unrelated confirmation-email deliverability question raised
-the same session, not yet resolved) — this stage only exercised the
-onboarding UI itself via a pre-confirmed test account.
-
-**Follow-up fixes, same day (Carl, after actually using it live)**: the
-welcome's own quick-question FAQ chips were still rendering underneath
-the seeded greeting (`HelpChatView`'s chip condition was "no user
-message yet," which a seeded assistant message doesn't clear) — buried
-the one thing that screen was for under four unrelated FAQ buttons. Now
-gated on `!welcomeMessage`. Also had no way out besides the small header
-✕, which read as the tour being mandatory — added an explicit "Maybe
-later" next to "Show me around", same "Not now" pattern as the trial
-preview modal. And the panel itself just snapped into place with no
-sense of coming from the Pod Assist icon — `pod-assist-bubble.tsx` now
-mounts scaled-down/transparent and transitions to full size from
-`origin-top-right` (matching the icon's own position) on a `rAF`-delayed
-next frame, including on the very first auto-open, not just later taps.
-Separately, both post-login redirects (`login/page.tsx`,
-`auth/callback/page.tsx`) still pointed at `/book` — a leftover from
-before Home (`/`) existed as its own page (see this file's own earlier
-note: "New Home page (`/`) replaces the old plain redirect-to-`/book`")
-that never got updated when Home was built, so login was skipping the
-welcome entirely. Both now land on `/`. All four re-verified live in
-local dev via a fresh synthetic test member.
-
-**Same fixes extended to Pod Coach's trial welcome, same day** — Carl:
-"pod assist and pod coach" (the first pass above only touched Pod
-Assist). `coach-chat-view.tsx` gained an `onDismiss` prop and an
-`isWelcomeOnly` check (a lone seeded assistant message, no user turn
-yet — the same signal `dashboard/page.tsx`'s `seedCoachWelcomeMessage`
-produces) to show "Maybe later" without disturbing the existing
-`messages.length === 0` gate on the unrelated "Quick questions" list
-(already correctly hidden once a welcome is seeded — that one was never
-broken). `pod-coach-bubble.tsx` got the identical `origin-top-right`
-scale/opacity entrance transition as `pod-assist-bubble.tsx`. Re-verified
-live: a fresh `trial_active` test member with `coach_profiles` and
-privacy already accepted saw Pod Coach auto-open with the greeting and
-"Maybe later" together, and dismissing it closed cleanly.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-54.md`, covering the pilot
+mechanism proof (2026-08-05) through the first pass of Pod Assist/Pod
+Coach first-time welcomes (2026-09-02) — all split out to keep this file
+within Claude Code's ~15,000-character `@`-import limit. Archives aren't
+always the strictly oldest material — the split point is "what's
+finished and stable" as much as "what's oldest" (see each archive's own
+header note for examples). Reference-only, not auto-loaded by CLAUDE.md;
+check them for full build history, or `git log` on this file for exact
+split points. Active content here starts at "Trial preview copy
+strengthened" (2026-09-02). If this file grows too large again, split
+it the same way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-55.md`, update this paragraph.
 
 ## Trial preview copy strengthened — 2026-09-02
 
@@ -231,3 +110,60 @@ confirmed by direct DB inspection (`members`/`leads`/`auth_events`/
 Live re-test of the actual fix (a fresh Hove signup, checked against
 `notification_log` landing as `sent`) still outstanding as of this
 write-up.
+
+## Trial start goes straight into onboarding; Pod Coach welcomes at trial_pending too; distinct bubble icons — 2026-09-02
+
+Carl, after actually clicking through the trial flow live: "there is no
+premium onboarding, just 'you are in'? as soon as i hit start your free
+trial it should be into the onboarding questions...then Pod coach takes
+you around." Also: "the icons dont say pod assist or podcoach? they
+should be visually different" — both `pod-assist-mark.png` and
+`pod-coach-mark.png` turned out to be the exact same generic white
+chat-bubble glyph, genuinely indistinguishable at a glance.
+
+**Trial start**: `trial-banner.tsx`'s "You're in" confirmation screen
+removed — `startTrial()` now `router.push`es straight to
+`/coach-onboarding` on success (that page already redirects home if a
+profile somehow exists, so no extra guard needed). `coach-onboarding-
+form.tsx`'s existing `router.push("/")` on completion was untouched.
+
+**The "Pod Coach takes you around" half** needed a real gap closed, not
+just the redirect: onboarding finishes in `trial_pending` (the 7-day
+clock only starts on the first booking — see `start-trial/route.ts`'s
+own comment), but Pod Coach's welcome-seeding in `dashboard/page.tsx`
+was gated to `trial_active` only, so it silently never fired at the
+moment it mattered. Moved the `getCoachConversation`/
+`seedCoachWelcomeMessage` logic out from inside the `showFullDashboard`
+block into its own step that runs whenever `coachProfile` exists —
+conversation still loads normally for subscribers (unaffected), but the
+welcome itself now seeds for `trial_pending` or `trial_active` with an
+empty conversation, with state-aware wording ("Book your first session
+to kick off your 7-day trial" vs "You're on your 7-day free trial").
+
+**Icons**: `pod-assist-bubble.tsx` → black circle, `ChatBubbleIcon`,
+"Assist" label chip. `pod-coach-bubble.tsx` → gold (`bg-accent`) circle,
+`DumbbellIcon`, "Coach" label chip — reusing icons already in
+`icons.tsx` rather than commissioning new art, and matching `DumbbellIcon`
+being the AI Coach's existing icon elsewhere in the app (trial banner,
+`AICoachSection`). The old identical PNG marks are now unused (left in
+`public/`, not deleted — no other references checked for this session).
+
+Same "Maybe later" dismiss + `origin-top-right` entrance animation
+fixes from earlier today (see above) apply to both bubbles unchanged;
+this stage only touched what triggers them and what they look like.
+
+**Verified**: `tsc --noEmit`/`eslint` clean on every changed file.
+Live-tested in local dev end to end via a fresh synthetic member (no
+trial, no coach profile): tapped the trial banner → preview modal →
+"Start my free trial" → landed directly on `/coach-onboarding` (no
+confirmation screen) → completed all 7 steps → redirected to Home →
+navigated to Dashboard → confirmed `trial_pending`'s "AI Coach trial
+ready" card rendered *and* Pod Coach auto-opened with the correct
+state-aware welcome text and a working "Maybe later". Confirmed via DOM
+inspection that the two launcher buttons now render genuinely distinct
+markup (black circle + chat-bubble + "Assist" vs. gold circle + dumbbell
++ "Coach"), not just visually eyeballed. Hit the documented stale-
+Turbopack-bundle issue again mid-test (edits made after `next dev` was
+already running) — full process kill + `.next` clear + service-worker
+unregister fixed it, consistent with prior notes on this exact failure
+mode in local dev.

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { HelpChatView } from "@/components/help-chat-view";
+import { ChatBubbleIcon } from "@/components/icons";
 
 // Pod Assist's floating bubble, extracted from onboarding-tour.tsx
 // (2026-09-01) so every non-premium page can mount it, not just Home —
@@ -45,16 +45,24 @@ export function PodAssistBubble({
   }
 
   return (
-    <div className="fixed right-4 top-4 z-20">
+    <div className="fixed right-4 top-4 z-20 flex flex-col items-center gap-1">
+      {/* Black + speech-bubble glyph vs. Pod Coach's gold + dumbbell —
+          both bubbles used the exact same generic white mark image
+          before this (2026-09-02, Carl: "the icons dont say pod assist
+          or podcoach... they should be visually different"), genuinely
+          indistinguishable at a glance. */}
       <button
         type="button"
         id="tour-help-button"
         onClick={() => setChatOpen(true)}
         aria-label="Pod Assist"
-        className="flex h-10 w-10 items-center justify-center drop-shadow-lg"
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-card-light-foreground shadow-lg"
       >
-        <Image src="/icons/features/pod-assist-mark.png" alt="" width={40} height={40} />
+        <ChatBubbleIcon className="h-5 w-5 text-white" />
       </button>
+      <span className="rounded-full bg-card-light-foreground/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+        Assist
+      </span>
       {chatOpen && (
         <div
           className={`fixed inset-x-4 bottom-4 top-20 z-30 flex origin-top-right flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl transition-all duration-200 ease-out sm:inset-x-auto sm:right-4 sm:w-96 ${
