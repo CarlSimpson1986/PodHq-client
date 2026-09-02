@@ -12,8 +12,25 @@ import { HelpChatView } from "@/components/help-chat-view";
 // `onReplayTour`; every other page renders this with no replay option
 // (HelpChatView already hides that chip when the prop is undefined) since
 // the tour only ever targets Home's own elements.
-export function PodAssistBubble({ onReplayTour }: { onReplayTour?: () => void }) {
-  const [chatOpen, setChatOpen] = useState(false);
+export function PodAssistBubble({
+  onReplayTour,
+  tourCtaLabel,
+  welcomeMessage,
+  initialOpen = false,
+  onClose,
+}: {
+  onReplayTour?: () => void;
+  tourCtaLabel?: string;
+  welcomeMessage?: string;
+  initialOpen?: boolean;
+  onClose?: () => void;
+}) {
+  const [chatOpen, setChatOpen] = useState(initialOpen);
+
+  function closeChat() {
+    setChatOpen(false);
+    onClose?.();
+  }
 
   return (
     <div className="fixed right-4 top-4 z-20">
@@ -32,7 +49,7 @@ export function PodAssistBubble({ onReplayTour }: { onReplayTour?: () => void })
             <p className="text-sm font-semibold text-card-light-foreground">Pod Assist</p>
             <button
               type="button"
-              onClick={() => setChatOpen(false)}
+              onClick={closeChat}
               aria-label="Close chat"
               className="flex h-7 w-7 items-center justify-center rounded-full text-card-light-muted hover:bg-card-light-border"
             >
@@ -41,10 +58,12 @@ export function PodAssistBubble({ onReplayTour }: { onReplayTour?: () => void })
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <HelpChatView
+              welcomeMessage={welcomeMessage}
+              tourCtaLabel={tourCtaLabel}
               onReplayTour={
                 onReplayTour &&
                 (() => {
-                  setChatOpen(false);
+                  closeChat();
                   onReplayTour();
                 })
               }

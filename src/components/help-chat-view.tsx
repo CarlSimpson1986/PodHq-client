@@ -7,8 +7,21 @@ interface ChatMessage {
   content: string;
 }
 
-export function HelpChatView({ onReplayTour }: { onReplayTour?: () => void }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function HelpChatView({
+  onReplayTour,
+  tourCtaLabel = "Replay app tour",
+  welcomeMessage,
+}: {
+  onReplayTour?: () => void;
+  tourCtaLabel?: string;
+  welcomeMessage?: string;
+}) {
+  // Lazy initializer, not useEffect — the seeded greeting must be there on
+  // the very first paint (the bubble can auto-open already showing it), not
+  // pop in a frame later.
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    welcomeMessage ? [{ role: "assistant", content: welcomeMessage }] : []
+  );
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,38 +80,14 @@ export function HelpChatView({ onReplayTour }: { onReplayTour?: () => void }) {
   return (
     <div className="flex h-full min-h-[200px] flex-col gap-3">
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto rounded-xl border border-card-light-border p-4">
+        {/* Plain instructions only when there's no seeded greeting already
+            covering that ground — a welcomeMessage bubble makes this
+            redundant. */}
         {messages.length === 0 && (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-card-light-muted">
-              Ask me anything about bookings, credits, or gym policies — I can only answer from what staff have told
-              us, so I&apos;ll say if I&apos;m not sure rather than guess.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {/* Tour replay is a UI action, not a policy question the LLM can
-                  answer — bypasses /api/member/help-chat entirely and calls
-                  the existing driver.js replay via this prop instead. */}
-              {onReplayTour && (
-                <button
-                  type="button"
-                  onClick={onReplayTour}
-                  className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
-                >
-                  Replay app tour
-                </button>
-              )}
-              {quickQuestions.map((question) => (
-                <button
-                  key={question}
-                  type="button"
-                  onClick={() => sendMessage(question)}
-                  disabled={sending}
-                  className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="text-sm text-card-light-muted">
+            Ask me anything about bookings, credits, or gym policies — I can only answer from what staff have told
+            us, so I&apos;ll say if I&apos;m not sure rather than guess.
+          </p>
         )}
         {messages.map((m, i) => (
           <div
@@ -110,6 +99,33 @@ export function HelpChatView({ onReplayTour }: { onReplayTour?: () => void }) {
             {m.content}
           </div>
         ))}
+        {!messages.some((m) => m.role === "user") && (
+          <div className="flex flex-wrap gap-2">
+            {/* Tour replay is a UI action, not a policy question the LLM can
+                answer — bypasses /api/member/help-chat entirely and calls
+                the existing driver.js replay via this prop instead. */}
+            {onReplayTour && (
+              <button
+                type="button"
+                onClick={onReplayTour}
+                className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
+              >
+                {tourCtaLabel}
+              </button>
+            )}
+            {quickQuestions.map((question) => (
+              <button
+                key={question}
+                type="button"
+                onClick={() => sendMessage(question)}
+                disabled={sending}
+                className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        )}
         {sending && <p className="text-sm text-card-light-muted">Thinking…</p>}
         <div ref={bottomRef} />
       </div>

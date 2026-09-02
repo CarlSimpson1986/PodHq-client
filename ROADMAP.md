@@ -14,55 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-48.md`, covering the pilot
-mechanism proof (2026-08-05) through the HIIT interval timer + reps
-tally (2026-08-30) — all split out to keep this file within Claude
-Code's ~15,000-character `@`-import limit. Archives aren't always the
-strictly oldest material — the split point is "what's finished and
-stable" as much as "what's oldest" (see each archive's own header note
-for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
-for full build history, or `git log` on this file for exact split
-points. Active content here starts at "Weekly weigh-in + body
-measurements" (2026-08-30). If this file grows too large again, split it
-the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-49.md`, update this paragraph.
-
-## Weekly weigh-in + body measurements — 2026-08-30
-
-Carl asked whether the app tracked body weight over time — it didn't;
-`coach_profiles.weight_kg` was a single current value, fully overwritten
-on every profile edit with no history. New `member_body_measurements`
-table (migration `0075`, podHq, shared DB) — `weight_kg`/`waist_cm`/
-`hip_cm`, all nullable, unique on `member_id, recorded_date`. Deliberately
-NOT part of `member_wearable_data`: that table is fully deleted the
-moment a member disconnects their wearable (right-to-erasure behaviour),
-which would silently wipe manually-entered measurements too.
-
-Logged as an optional step in the existing weekly check-in (Carl's
-choice — weekly cadence, not an always-available action, matching this
-app's existing pattern for reflective data and avoiding encouraging
-daily weigh-ins). A logged weight also syncs into
-`coach_profiles.weight_kg` via a new targeted partial-update
-(`updateProfileWeightKg`) — `nutrition-targets.ts`'s TDEE calculation
-already reads that column live on every call, so nutrition targets pick
-up a new weigh-in with zero extra wiring. Trend charts (reusing the
-existing `HealthTrendLine` component) show on `/coach/profile`, next to
-the weight field, one per metric, hidden entirely until that metric has
-at least one logged point.
-
-**Verified**: `tsc --noEmit`, `eslint`, `npx vitest run` (172/172), and
-`npm run build` all clean. Live-verified on the playground member: a
-real check-in submission (backdated the previous check-in row 8 days to
-force "due" state for testing) with weight logged and waist/hip left
-blank — confirmed the `member_body_measurements` row, the
-`coach_profiles.weight_kg` sync, the profile form reflecting the new
-value, and the weight trend card rendering correctly with waist/hip
-cards absent (no data logged for either).
-
-**Not built this stage**: an always-available "log anytime" entry point
-outside the weekly check-in; a computed waist-to-hip ratio or any
-health-risk interpretation — this is logging + a trend line, not
-analysis.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-49.md`, covering the pilot
+mechanism proof (2026-08-05) through weekly weigh-in + body measurements
+(2026-08-30) — all split out to keep this file within Claude Code's
+~15,000-character `@`-import limit. Archives aren't always the strictly
+oldest material — the split point is "what's finished and stable" as
+much as "what's oldest" (see each archive's own header note for
+examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
+full build history, or `git log` on this file for exact split points.
+Active content here starts at "Session history + workout stats"
+(2026-08-30). If this file grows too large again, split it the same
+way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-50.md`, update this paragraph.
 
 ## Session history + workout stats — 2026-08-30
 
@@ -212,3 +175,53 @@ server vs. a UK browser), never in local dev where both run on the same
 machine, so a true BST-boundary reproduction wasn't attempted; confident
 in the fix because it's a direct reuse of an already-live, already-
 correct pattern from the same file rather than new logic.
+
+## Pod Assist / Pod Coach first-time welcomes — 2026-09-02
+
+Carl: on first login, Pod Assist should welcome the member and offer to
+show them around, and the same pattern should repeat for Pod Coach on the
+7-day AI Coach trial. Both reuse existing infra rather than anything new
+— no new DB columns, no new API routes.
+
+**Pod Assist (Home, first login)**: `OnboardingTour` no longer auto-drives
+the driver.js tour cold. Instead it auto-opens `PodAssistBubble` with a
+seeded greeting ("Hi {firstName}, welcome to My Fit Pod! You're all set
+up at {gym}...") and a "Show me around" CTA that starts the existing
+driver.js steps — closing the greeting without taking the tour still
+stamps `tour_completed_at` (via the existing `/api/member/tour-complete`,
+now called from either path, guarded with a ref so it only ever fires
+once per mount). `HelpChatView` gained `welcomeMessage`/`tourCtaLabel`
+props (lazy `useState` initializer so the greeting is present on first
+paint, not a post-mount flash) and its quick-question/tour chips now key
+off "no user message sent yet" rather than "no messages at all", so they
+still show underneath a seeded greeting.
+
+**Pod Coach (Dashboard, 7-day trial)**: gated on `coachState.kind ===
+"trial_active"` AND an empty `coach_conversations` row — that emptiness
+already means "never chatted with Pod Coach," so no new flag column was
+needed. New `seedCoachWelcomeMessage()` (`coach-conversations.ts`) writes
+a single assistant-authored opener ("Hi {firstName}! I'm Pod Coach.
+You're on the 7-day free trial, training for {goal}...", using
+`coach-chat.ts`'s existing `GOAL_COPY`, now exported) and is idempotent
+against concurrent page loads the same way `start-trial`'s own
+`trial_activated_at` check is. `PodCoachBubble` gained `initialOpen` to
+auto-open on that first visit; if the member hasn't accepted the Pod
+Coach privacy policy yet, the existing consent-form gate still takes
+priority (correct — the welcome message is there in history once they
+accept, not lost). Scoped to trial members only, not subscribers, per
+Carl's ask.
+
+**Verified**: `tsc --noEmit` and `eslint` clean on all changed files.
+Live-tested in local dev (`next dev`, not the deployed preview) via a
+synthetic confirmed test member (Supabase admin-generated magic link,
+deleted after) — first Home visit auto-opened Pod Assist with the
+personalised greeting, "Show me around" handed off cleanly into the
+driver.js tour (1 of 7, correct first step), a second Home visit did not
+re-open it (`tour_completed_at` correctly stamped). Seeded
+`trial_active` state + a `coach_profiles` row for the same test member
+and confirmed Dashboard auto-opened Pod Coach with the personalised
+trial welcome once the privacy policy was accepted. Not tested: the real
+production signup → email confirmation → first-login path end-to-end (a
+separate, unrelated confirmation-email deliverability question raised
+the same session, not yet resolved) — this stage only exercised the
+onboarding UI itself via a pre-confirmed test account.
