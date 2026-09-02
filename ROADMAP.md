@@ -225,3 +225,23 @@ production signup → email confirmation → first-login path end-to-end (a
 separate, unrelated confirmation-email deliverability question raised
 the same session, not yet resolved) — this stage only exercised the
 onboarding UI itself via a pre-confirmed test account.
+
+## Trial preview copy strengthened — 2026-09-02
+
+Carl: give members more reasons to actually start the 7-day trial. The
+existing tap-through preview (`trial-banner.tsx`, already built — not a
+new flow) had 3 generic bullets from before nutrition tracking and the
+research-grounded Pod Coach chat existed. Rewrote all 4 to be specific
+and current, and added an explicit "Full Premium access for a week — not
+a stripped-down preview" line, since `getCoachHomeState` already treats
+`trial_active` identically to `subscriber` everywhere else in the app —
+no pricing shown (this component has no access to catalog pricing, and
+"free/no card" is the stronger anchor already on screen).
+
+**Verified**: `tsc --noEmit`/`eslint` clean, confirmed live in local dev
+via a synthetic test member. Note for next time: the PWA service worker
+(`public/sw.js`) served a stale cached Home page mid-test even after a
+fresh `next dev` + cleared `.next` — unrelated to this change, but real;
+`navigator.serviceWorker.getRegistrations()` + unregister + `caches`
+clear fixed it. Worth remembering if a change ever "doesn't show up" in
+local dev again.
