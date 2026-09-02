@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { CoachChatView, type ChatMessage } from "@/components/coach-chat-view";
@@ -35,6 +35,21 @@ export function PodCoachBubble({
   initialOpen?: boolean;
 }) {
   const [open, setOpen] = useState(initialOpen);
+  // Same two-phase mount as Pod Assist's bubble (pod-assist-bubble.tsx) —
+  // transitions in from the icon's own corner instead of snapping into
+  // place, including on the trial-welcome auto-open, not just later taps.
+  const [animateIn, setAnimateIn] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => setAnimateIn(true));
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  function closeChat() {
+    setOpen(false);
+    setAnimateIn(false);
+  }
 
   return (
     <div className="fixed right-4 top-4 z-20">
@@ -47,12 +62,16 @@ export function PodCoachBubble({
         <Image src="/icons/features/pod-coach-mark.png" alt="" width={40} height={40} />
       </button>
       {open && (
-        <div className="fixed inset-x-4 bottom-4 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl sm:inset-x-auto sm:right-4 sm:w-96">
+        <div
+          className={`fixed inset-x-4 bottom-4 top-20 z-30 flex origin-top-right flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl transition-all duration-200 ease-out sm:inset-x-auto sm:right-4 sm:w-96 ${
+            animateIn ? "scale-100 opacity-100" : "scale-95 opacity-0"
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-card-light-border px-4 py-3">
             <p className="text-sm font-semibold text-card-light-foreground">Pod Coach</p>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={closeChat}
               aria-label="Close chat"
               className="flex h-7 w-7 items-center justify-center rounded-full text-card-light-muted hover:bg-card-light-border"
             >
@@ -62,7 +81,11 @@ export function PodCoachBubble({
           <div className="flex-1 overflow-y-auto p-4">
             <CheckInPrompt state={checkInState} />
             <div className="mt-4">
-              {hasAcceptedPrivacyPolicy ? <CoachChatView initialMessages={initialMessages} /> : <PrivacyConsentForm />}
+              {hasAcceptedPrivacyPolicy ? (
+                <CoachChatView initialMessages={initialMessages} onDismiss={closeChat} />
+              ) : (
+                <PrivacyConsentForm />
+              )}
             </div>
           </div>
         </div>

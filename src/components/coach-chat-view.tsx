@@ -36,7 +36,18 @@ function renderMessageContent(content: string) {
   );
 }
 
-export function CoachChatView({ initialMessages }: { initialMessages: ChatMessage[] }) {
+export function CoachChatView({
+  initialMessages,
+  onDismiss,
+}: {
+  initialMessages: ChatMessage[];
+  onDismiss?: () => void;
+}) {
+  // A lone seeded assistant message (no user turn yet) is the trial
+  // welcome (see dashboard/page.tsx's seedCoachWelcomeMessage), not real
+  // conversation history — that's when "Maybe later" applies, same
+  // "not mandatory" fix as Pod Assist's welcome.
+  const isWelcomeOnly = initialMessages.length === 1 && initialMessages[0].role === "assistant";
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -100,6 +111,12 @@ export function CoachChatView({ initialMessages }: { initialMessages: ChatMessag
             </button>
           ))}
         </div>
+      )}
+
+      {isWelcomeOnly && onDismiss && (
+        <button type="button" onClick={onDismiss} className="self-start px-1 text-xs font-medium text-muted-foreground hover:underline">
+          Maybe later
+        </button>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">

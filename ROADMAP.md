@@ -134,6 +134,20 @@ that never got updated when Home was built, so login was skipping the
 welcome entirely. Both now land on `/`. All four re-verified live in
 local dev via a fresh synthetic test member.
 
+**Same fixes extended to Pod Coach's trial welcome, same day** — Carl:
+"pod assist and pod coach" (the first pass above only touched Pod
+Assist). `coach-chat-view.tsx` gained an `onDismiss` prop and an
+`isWelcomeOnly` check (a lone seeded assistant message, no user turn
+yet — the same signal `dashboard/page.tsx`'s `seedCoachWelcomeMessage`
+produces) to show "Maybe later" without disturbing the existing
+`messages.length === 0` gate on the unrelated "Quick questions" list
+(already correctly hidden once a welcome is seeded — that one was never
+broken). `pod-coach-bubble.tsx` got the identical `origin-top-right`
+scale/opacity entrance transition as `pod-assist-bubble.tsx`. Re-verified
+live: a fresh `trial_active` test member with `coach_profiles` and
+privacy already accepted saw Pod Coach auto-open with the greeting and
+"Maybe later" together, and dismissing it closed cleanly.
+
 ## Trial preview copy strengthened — 2026-09-02
 
 Carl: give members more reasons to actually start the 7-day trial. The
