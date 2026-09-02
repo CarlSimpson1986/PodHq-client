@@ -151,8 +151,15 @@ via a synthetic test member. Note for next time: the PWA service worker
 (`public/sw.js`) served a stale cached Home page mid-test even after a
 fresh `next dev` + cleared `.next` — unrelated to this change, but real;
 `navigator.serviceWorker.getRegistrations()` + unregister + `caches`
-clear fixed it. Worth remembering if a change ever "doesn't show up" in
-local dev again.
+clear fixed it (hit again, same fix, on the follow-up copy pass below).
+
+**Second pass, same day**: Carl, after actually reading the modal live —
+"it's not just your free AI Coach trial, it's a free upgrade to
+Premium." Reframed the header ("Free upgrade to Premium") and subtitle
+around that positioning, and swapped the 4 bullets from feature-level
+copy to outcome-level selling points: personalised coaching journey,
+accountability, results, wearable sync. Same `tsc`/`eslint`/local-dev
+verification as the first pass.
 
 ## Signup crash from an undecryptable gym Resend key — 2026-09-02
 

@@ -7,21 +7,27 @@ import { DumbbellIcon } from "@/components/icons";
 type Step = "banner" | "preview" | "confirmation";
 
 const OUTCOMES = [
-  "Your next session is planned for you — no more guessing what to do",
-  "Gets harder automatically as you get stronger, based on how each set actually felt",
-  "Personalised calorie and protein targets for your goal, not generic advice",
-  "Ask your coach anything — answers grounded in real research, not vague AI filler",
+  "A fully personalised coaching journey — tailored nutrition and training built around you",
+  "Real accountability, not just an app you forget to open",
+  "Dramatically increases your chances of actually getting the results you want",
+  "Syncs with your wearable — Fitbit, Health Connect, and more",
 ];
 
-// State 1's trial pitch (brief §7). Copy updated 2026-09-02 (Carl: "give
-// them reasons to do the trial") — the original 3 bullets undersold what
-// the trial actually includes by now: nutrition targets and the
-// research-grounded coach chat were both out of scope when this list was
-// first written, and have since shipped (see ROADMAP.md). The trial
-// genuinely runs the full premium feature set for 7 days, not a limited
-// demo — getCoachHomeState treats trial_active identically to subscriber
-// everywhere else in the app — so the intro line below says exactly
-// that rather than listing tiers/pricing this component has no access to.
+// State 1's trial pitch (brief §7). Copy updated 2026-09-02 twice same
+// day — first pass (Carl: "give them reasons to do the trial") replaced
+// the original 3 generic bullets with specifics reflecting what the
+// trial actually includes by now (nutrition targets and the
+// research-grounded coach chat were both out of scope when the original
+// list was written, and have since shipped — see ROADMAP.md). Second
+// pass (Carl, reviewing live: "it's not just your free AI Coach trial,
+// it's a free upgrade to Premium") reframed the header/subtitle around
+// that positioning and swapped the bullets for outcome-level selling
+// points (personalisation, accountability, results, wearable sync)
+// rather than feature-level ones. The trial genuinely runs the full
+// premium feature set for 7 days, not a limited demo —
+// getCoachHomeState treats trial_active identically to subscriber
+// everywhere else in the app — so this framing is accurate, not just
+// persuasive; no pricing is shown, this component has no access to it.
 export function TrialBanner() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("banner");
@@ -66,9 +72,9 @@ export function TrialBanner() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
                   7 days · Free · No card needed
                 </p>
-                <h2 className="mt-2 text-xl font-semibold">Your free AI Coach trial</h2>
+                <h2 className="mt-2 text-xl font-semibold">Free upgrade to Premium</h2>
                 <p className="mt-1 text-sm text-card-light-muted">
-                  Full Premium access for a week — not a stripped-down preview.
+                  Everything Premium members get — including Pod Coach — free for a week.
                 </p>
                 <ul className="mt-4 space-y-3">
                   {OUTCOMES.map((outcome, i) => (
