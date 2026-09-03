@@ -14,93 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-58.md`, covering the pilot
-mechanism proof (2026-08-05) through the cross-page tour rework
-(2026-09-02) — all split out to keep this file within Claude Code's
-~15,000-character `@`-import limit. Archives aren't always the strictly
-oldest material — the split point is "what's finished and stable" as
-much as "what's oldest" (see each archive's own header note for
-examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
-full build history, or `git log` on this file for exact split points.
-Active content here starts at "Tour: glow, step order, door-access
-copy, broken Done/X" (2026-09-03). If this file grows too large again,
-split it the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-59.md`, update this paragraph.
-
-## Tour: glow, step order, door-access copy, broken Done/X — 2026-09-03
-
-Carl walked the tour live and flagged four real problems in one pass:
-no visible glow around Pod Assist, a distracting full-width pulsing bar
-on some steps, an out-of-order step sequence ("2/6 goes from [credits]
-to [session card] doesn't flow"), and — the big one — **the popover's
-own Done and X buttons didn't do anything**.
-
-**Glow was never actually reachable.** It had been wired as a `glowing`
-prop threaded through `OnboardingTour`, which only Home ever had a path
-for — `/shop` and `/book` had no wiring at all. Even on Home it was
-invisible in practice: driver.js's dimming overlay (`z-index: 10000`)
-painted over the icon's old `z-20` wrapper for every step except the one
-literally targeting it. Replaced the prop-threading with direct DOM
-class toggling in `tour-runner.tsx` (`setPodAssistGlow`, keyed off the
-icon's stable `id`, so it works from wherever `TourRunner` mounts — Home,
-`/shop`, or `/book` alike) and raised the icon's z-index above driver.js
-entirely (`z-[2000000000]`, with `pointer-events-none` on the wrapper and
-`pointer-events-auto` on the actual interactive children, so its now-huge
-hit area can never swallow a click meant for a popover positioned nearby).
-Also dropped the glow from arbitrary highlighted step targets (a `<p>`
-spanning the full card width read as a stretched pulsing bar, not a
-highlight) — scoped to just the Pod Assist icon, per Carl's call.
-
-**Step order** (`tour-steps.ts`) reordered to match Home's actual
-top-to-bottom layout — was greeting → credits (bottom of page) → session
-card (back near the top) → leaderboard → find-professional, now
-greeting → session card → leaderboard → find-professional → credits →
-shop hand-off.
-
-**Door-access step** now warns members before they book, using the real
-rules from `unlock-window.ts`/`api/unlock/route.ts` rather than
-undersetting it as automatic: "The door only unlocks from 5 minutes
-before your session, and only once you're physically at the gym."
-
-**Done/X root cause** (not a styling issue): driver.js skips its own
-default close/advance behavior *entirely* once you supply a custom
-`onDoneClick`/`onCloseClick` — your callback is expected to call
-`.destroy()` itself. None of `tour-runner.tsx`'s three handlers ever
-did. X had been broken on every single step since this was built (its
-handler is always overridden); Done only broke on the tour's true final
-step (every other "Next" was still hitting driver.js's own untouched
-default, which is why step-to-step progress always looked fine).
-Fixed by adding the missing `driverRef.current?.destroy()` calls. Also
-retargeted the final step at a new non-interactive `#tour-help-label`
-span instead of the live, real `#tour-help-button` itself — highlighting
-an element with its own click handler in the same corner driver.js's own
-popover renders in was exactly the kind of setup that causes buttons to
-stop responding.
-
-**Also this session**: `sw.js` had `"/"` in its cacheable-navigation
-allowlist — Home is the most member-specific page in the app ("Hello,
-{name}"), and caching it directly violated the file's own rule (written
-after the 2026-08-16 OWASP audit) that non-public pages must never be
-served stale; a deleted/logged-out member's browser could keep serving
-their old cached dashboard. Removed, `CACHE_VERSION` bumped to purge the
-existing bad cache. Membership/Book-session Home cards restyled to match
-the icon-centered layout already used by Leaderboard/Find-a-professional;
-Leaderboard, Find-a-professional, and Gift Voucher (which had no tour id
-at all) added to the guided tour. Trial banner's collapsed line and the
-first-login welcome message copy adjusted for accuracy and tone.
-
-**Verified**: `tsc --noEmit` clean throughout. Glow and step-order fixes
-confirmed live in local dev via direct DOM inspection through a full
-Home walk-through (six steps, glow `true` on every one). The Done/X fix
-was verified live the same way for X (popover and overlay both removed
-on click, glow correctly cleared) — the true-final-step Done button
-specifically couldn't be exercised end-to-end in this session: reaching
-it requires the cross-page resume in `tour-continuation.tsx`, which is
-gated on `requestAnimationFrame` and never fired against an automated,
-unfocused browser tab (confirmed via `document.hasFocus()` /
-`visibilityState: "hidden"` — not a product bug, a limitation of testing
-via an unfocused automation tab). Same destroy() fix, proven working for
-X; a real end-to-end click-through by Carl is the outstanding check.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-59.md`, covering the pilot
+mechanism proof (2026-08-05) through the Pod Assist tour glow/order/
+Done-X fix (2026-09-03) — all split out to keep this file within Claude
+Code's ~15,000-character `@`-import limit. Archives aren't always the
+strictly oldest material — the split point is "what's finished and
+stable" as much as "what's oldest" (see each archive's own header note
+for examples). Reference-only, not auto-loaded by CLAUDE.md; check them
+for full build history, or `git log` on this file for exact split
+points. Active content here starts at "Premium onboarding overhaul"
+(2026-09-03). If this file grows too large again, split it the same
+way: move the most clearly finished section into `ROADMAP-ARCHIVE-60.md`,
+update this paragraph.
 
 ## Premium onboarding overhaul: trial-at-signup, Coach dashboard tour, real icons — 2026-09-03
 
@@ -192,3 +117,64 @@ testing this session repeatedly hit the service-worker JS-chunk caching
 issue (same one documented in the entry above), worked around each time
 via DevTools Application → Storage → clear-and-unregister, not yet
 fully confirmed clean end to end on Carl's own machine.
+
+## Icon color revert; real Coach-tour bug found live; tour extended to Training/Nutrition — 2026-09-03
+
+Same-day follow-up once Carl actually clicked through the above.
+
+**Icons reverted**: the white-bg/black-icon treatment from the entry
+above didn't survive contact — Carl: "I WANT THE ICONS BACK TO THE
+ORIGINAL COLOUR." Both `pod-assist-mark.png`/`pod-coach-mark.png` are
+white line art again (deleted the black-recolored variants entirely),
+and the label pills underneath now read "POD ASSIST"/"POD COACH" in
+full on white-background/black-text (was gold/black inconsistently
+before) — the one piece of the white/black direction that stuck.
+
+**The Coach tour's "Show me around" chip was genuinely invisible, not
+just stale-cached** — worth recording precisely, since it looked
+identical to this session's other caching false-alarms at first. Ruled
+caching out for real this time (Incognito window, zero cached state,
+still missing), then instrumented `coach-chat-view.tsx` with a
+temporary on-page debug readout rather than keep guessing — it showed
+`onReplayTour=true`, `isWelcomeOnly=true`, everything correct. Root
+cause: the button's className used `text-foreground`/`border-card-border`
+(dark-theme tokens, meant for the black page) inside Pod Coach's white
+`card-light` chat panel — white text on white, present in the DOM the
+whole render, just invisible. Fixed to the same light-context tokens
+(`text-card-light-foreground`/`border-card-light-border`) Pod Assist's
+own equivalent button in `help-chat-view.tsx` already used correctly —
+a straight copy-paste would have avoided this. Debug code removed after
+confirming the fix.
+
+**Coach tour extended from Dashboard-only to a real cross-page tour** —
+Carl, mid-walkthrough: "this is not it — you havent gone through the
+training system or the nutrition." Same architecture as Pod Assist's
+own cross-page tour (`tour-runner.tsx`/`tour-continuation.tsx`/
+`tour-state.ts`), mirrored: `coach-tour-state.ts` (separate sessionStorage
+key, `podCoachTourResumeIndex`), `coach-tour-continuation.tsx` (mounted
+on `/training` and `/nutrition`, passive), `coach-tour-runner.tsx`
+rebuilt to hand off between pages via `onDoneClick` (with the explicit
+`driverRef.current?.destroy()` calls the Pod Assist debugging session
+upstream already proved necessary, baked in from the start this time).
+New sequence, 12 steps: Dashboard (week strip, recovery, sessions,
+nutrition summary, recommendation, leaderboard) → Training (next
+session, training block, consistency) → Nutrition (daily targets, log a
+meal, done). Real anchors added on both pages
+(`#tour-coach-training-next/-block/-consistency`,
+`#tour-coach-nutrition-summary/-log`) — the nutrition summary anchor
+needed its own inner wrapper div rather than reusing the outer
+`card-light` container, which also held the meal log and would have
+made the two steps' spotlights visually identical.
+
+Also removed the "Your habit streak" Dashboard step (Carl: redundant —
+the same Main Effort card already shows on Home) and the `#tour-coach-habit`
+id it targeted.
+
+**Verified**: `tsc --noEmit` clean throughout. The invisible-button root
+cause was confirmed via live instrumentation, not guessed — the debug
+readout's values were screenshotted before the fix. The Training/
+Nutrition anchors and cross-page hand-off logic are unverified live as
+of this write-up (same `requestAnimationFrame`-needs-a-focused-tab
+limitation noted for Pod Assist's own tour applies identically here) —
+a real click-through by Carl through all three pages is the outstanding
+check.
