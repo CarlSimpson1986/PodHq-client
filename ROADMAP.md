@@ -14,91 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-57.md`, covering the pilot
-mechanism proof (2026-08-05) through the trial-start/distinct-icons work
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-58.md`, covering the pilot
+mechanism proof (2026-08-05) through the cross-page tour rework
 (2026-09-02) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see each archive's own header note for
 examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
 full build history, or `git log` on this file for exact split points.
-Active content here starts at "Onboarding: real icon restored, tour
-extended across pages" (2026-09-02). If this file grows too large
-again, split it the same way: move the most clearly finished section
-into `ROADMAP-ARCHIVE-58.md`, update this paragraph.
-
-## Onboarding: real icon restored, tour extended across pages — 2026-09-02
-
-Carl, furious and right: the earlier icon-differentiation pass had
-replaced Pod Assist's actual branded asset (`pod-assist-mark.png`) with
-a generic drawn `ChatBubbleIcon` — reverted, `pod-assist-bubble.tsx` uses
-the real PNG again (Pod Coach's gold + dumbbell bubble is already
-visually distinct on its own, no styling needed on Pod Assist to tell
-them apart). Also flagged: the tour used to always end on "tap the '?'
-if you get stuck," and that guarantee quietly broke once the welcome
-became skippable via "Maybe later" — someone who dismissed early would
-never see it anywhere. Fixed by putting it directly in the welcome
-message text itself, the one guaranteed-seen touchpoint, not just
-buried in a tour step someone might skip.
-
-**The bigger piece**: "THE TOUR SHOULD HIGHLIGHT EACH PAGE AND EACH
-FEATURE... HOW TO BUY A CREDIT OR MEMBERSHIP, THE HOW TO BOOK." v1 was
-deliberately Home-only (no cross-page steps, see the old note this
-replaces). Built real cross-page tour infrastructure instead of just
-describing other pages from Home:
-
-- `tour-steps.ts` — the full 10-step sequence as data, each step tagged
-  with which route (`/`, `/book`, `/shop`) it belongs to.
-- `tour-state.ts` — a sessionStorage pointer to "resume at step N",
-  scoped to the tab, cleared on completion or early close.
-- `tour-runner.tsx` — drives whichever contiguous run of steps belongs
-  to the current page. driver.js's `onDoneClick` vs `onCloseClick`
-  distinction (not just `onDestroyed`, which fires either way) is what
-  makes "finished this page's steps, hand off to the next page" behave
-  differently from "closed early, stop for good" — an early close must
-  never force-navigate the member somewhere they didn't ask to go.
-- `tour-continuation.tsx` — mounted on `/book` and `/shop`; renders
-  nothing on a normal visit, only actually runs `TourRunner` when a
-  resume is genuinely pending for that exact page (checked in an effect,
-  not during render, so server/first-client-render output stays
-  consistently empty and hydration never mismatches).
-- New real anchors added: `#tour-book-dates`/`#tour-book-slots` (the
-  actual date strip and slot list on `/book`), `#tour-book-credits` (the
-  real "Buy more" link — doubles as "how to buy a credit" without a
-  separate page hop), `#tour-shop-membership` (the real Memberships
-  card on `/shop`). The final step lands on `/shop`'s own
-  `#tour-help-button` — every page already carries that id via
-  `PodAssistBubble`, so the closing "tap here if stuck" reminder is
-  anchored to a real, always-present element, not a one-off.
-- `onboarding-tour.tsx` simplified to just launch `TourRunner` at index
-  0 when "Show me around" is tapped — the old page-local driver.js
-  instance and its own completion-tracking logic are gone, all handled
-  by the shared runner now.
-
-**Verified live in local dev**, full walk-through via a fresh synthetic
-member, not just types: Home's 4 steps ran correctly (1 of 4 → 4 of 4),
-clicking through the last one navigated to `/book` and resumed there
-automatically (1 of 4, correctly highlighting the real date strip),
-through its 4 steps handed off to `/shop` (1 of 2, real Memberships
-card), finished on the real Pod Assist icon there (2 of 2) — confirmed
-`tour_completed_at` only got stamped at the very end of that full
-sequence, not after Home's portion alone. `tsc`/`eslint` clean throughout.
-
-**Reordered same day, third pass**: Carl, after actually walking the
-tour again — "book session before buy a credit" was backwards (you
-can't book without credits, so teach that first), and the Shop bridge
-copy said "let's get a membership," undermining that Shop covers Credit
-Packs too, not just Memberships. `tour-steps.ts` reordered: Home → Shop
-(Credit Packs step first, then Memberships) → Book → done, replacing
-the old Home → Book (with an inline "buy a credit" aside) → Shop
-(membership-only) order. Also restored the "Assist" label chip under
-Pod Assist's real icon (`pod-assist-bubble.tsx`) to match Pod Coach's
-own "Coach" chip — dropped by mistake when the icon itself was reverted
-from the generic drawn version back to the real PNG. Re-verified live
-end to end via a fresh synthetic member: Home's 4 steps → Shop's 3
-(Credit Packs, then Memberships, then the Book nav bridge) → Book's 3,
-finishing on the real Pod Assist icon there — confirmed `tour_completed_at`
-only stamps once, at the very end. `tsc`/`eslint` clean.
+Active content here starts at "Tour: glow, step order, door-access
+copy, broken Done/X" (2026-09-03). If this file grows too large again,
+split it the same way: move the most clearly finished section into
+`ROADMAP-ARCHIVE-59.md`, update this paragraph.
 
 ## Tour: glow, step order, door-access copy, broken Done/X — 2026-09-03
 
@@ -174,3 +101,94 @@ unfocused browser tab (confirmed via `document.hasFocus()` /
 `visibilityState: "hidden"` — not a product bug, a limitation of testing
 via an unfocused automation tab). Same destroy() fix, proven working for
 X; a real end-to-end click-through by Carl is the outstanding check.
+
+## Premium onboarding overhaul: trial-at-signup, Coach dashboard tour, real icons — 2026-09-03
+
+Carl, walking the Premium flow live end to end, drove a full pass on
+where onboarding actually lands and what happens once it does.
+
+**Onboarding now hands off to Dashboard, not Home** — Carl: "as soon as
+the premium onboarding is done it should go to the premium dashboard
+where Pod Coach takes over." `coach-onboarding-form.tsx` redirects to
+`/dashboard` on completion instead of `/`.
+
+**Trial starts at onboarding completion, not first booking.** Confirmed
+via `AskUserQuestion` before touching the business logic — Carl chose
+"start immediately" over keeping the old booking-gated behaviour. Moved
+the `trial_started_at`/`trial_expires_at` stamp out of
+`api/bookings/route.ts` into `api/member/coach-profile/route.ts` (same
+`trial_activated_at set, trial_started_at still null` gate, just a
+different trigger). Updated every comment and piece of copy that still
+described the old behaviour — `member.ts`, `start-trial/route.ts`,
+`trial-state.ts`, `trial-banner.tsx`'s footer line, and the Pod Coach
+welcome message's `trial_pending` branch — plus the Home/Dashboard
+`trial_pending`/`trial_active` cards, which now point at
+`/coach-onboarding` and read "Premium expires in N days! Upgrade to
+Premium membership to keep progressing" respectively (Carl's own
+wording for the latter).
+
+**Pod Coach's own guided Dashboard tour** — the Premium-side mirror of
+Pod Assist's tour, built single-page (no cross-page hand-off machinery
+needed, Dashboard is one page): `coach-tour-steps.ts` (8 steps: week
+strip, recovery, sessions, nutrition, recommendation, habit streak,
+leaderboard, "that's it"), `coach-tour-runner.tsx`, and
+`dashboard-coach-tour.tsx` wiring a "Show me around"/"Replay app tour"
+chip into Pod Coach's chat (`coach-chat-view.tsx`, alongside the
+existing "Maybe later", not replacing it — that removal was Carl's call
+for Pod Assist specifically, not extended here without being asked).
+Built the fixes tour-runner.tsx needed the hard way (see the entry
+above) in from the start this time: never overrides `onDoneClick` at
+all (driver.js's own default Done/advance behaviour is simply left
+alone), and the final step targets a non-interactive `#tour-coach-label`
+span rather than the real `#tour-coach-button`.
+
+**Privacy Policy consent moved into onboarding.** Was a surprise gate
+the first time a member opened Pod Coach's chat — no personality before
+the legal ask, Carl: "who is this." Now a required checkbox on
+onboarding's final step (`coach-onboarding-form.tsx`), stamping
+`privacy_policy_accepted_at` in the same request as the profile
+(`coach-profile/route.ts`) — `hasAcceptedPrivacyPolicy()` reads that
+same column, so the old consent screen (`privacy-consent-form.tsx`)
+simply never renders for anyone who onboards normally now.
+
+**Real icons for both bubbles**, replacing generic/placeholder ones —
+Carl supplied matched-set badge art for Pod Assist and Pod Coach (full
+rounded-square badges, "POD ASSIST"/"POD COACH" text baked in, kept
+alongside as `*-badge-full.png` for anywhere bigger is useful later).
+Each was cropped (Python/PIL — divider-row detection then a tight bbox
+scan for just the glyph cluster, transparent background) to a small
+UI-sized mark, since the baked-in text is illegible at button size; "Pod
+Assist"/"Pod Coach" as text lives in the label pill below each icon
+instead, both now white-background/black-text (was gold/black
+inconsistently, both mismatched a few iterations before landing here).
+Bubbles switched from `fixed` to `absolute` positioning — Carl: a fixed
+FAB that follows scroll meant a white label pill could float directly
+over a white `card-light` tile below it and become unreadable; a dark
+backing-plate alternative was tried and rejected ("i dfont like it")
+before landing on absolute (scrolls away with the page, only visible
+near the top) as the actual fix.
+
+**Dashboard tile consistency** — Recovery/Sessions/Nutrition/
+Recommendation/Habit cards restyled to match Leaderboard's
+icon-centered layout (`HeartPulseIcon`/`DumbbellIcon`/`AppleIcon`/
+`SparkleIcon`/`CalendarIcon` respectively) — same pattern already
+applied to Home's Membership/Book-session cards earlier this session.
+
+**Copy**: "Your habit" → "Main effort" (`member-habit-card.tsx`,
+renders on both Home and Dashboard), "Today's mission" → "Today's
+tasks" (`todays-mission-card.tsx`), and the "Your coach" card
+(`coach-response-card.tsx`) removed from Home entirely — Carl: not
+required, redundant with Pod Coach's own chat bubble. Component and its
+data function (`getLatestCheckInResponse`) left in place, since the
+check-in completion flow still uses both; only Home's render + now-dead
+fetch were removed.
+
+**Verified**: `tsc --noEmit` clean throughout, every change. Icon crops
+and dark-plate-vs-absolute-positioning decision confirmed by direct
+visual review (composited preview PNGs) rather than guessed at blind.
+Full live click-through of the new onboarding→Dashboard→Coach-tour
+sequence by Carl still outstanding as of this write-up — local dev
+testing this session repeatedly hit the service-worker JS-chunk caching
+issue (same one documented in the entry above), worked around each time
+via DevTools Application → Storage → clear-and-unregister, not yet
+fully confirmed clean end to end on Carl's own machine.
