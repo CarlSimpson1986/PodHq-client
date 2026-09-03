@@ -29,7 +29,11 @@ export interface RemainingBudget {
 }
 
 const MEAL_PRIORITY: Meal[] = ["breakfast", "lunch", "dinner", "snacks"];
-const SUGGESTION_COUNT = 2;
+// Was 2 (Carl, 2026-09-03: "I would like to add more options for what
+// to eat next") — 4 naturally covers one idea per meal slot on a day
+// where nothing's logged yet, rather than always just two regardless of
+// how much of the day is still open.
+const SUGGESTION_COUNT = 4;
 // Below this, don't force a suggestion at all — the day's effectively
 // done (every catalog entry is at least 140kcal, so anything smaller
 // than this genuinely has nothing that fits).
@@ -114,9 +118,19 @@ export function getMealSuggestions(remaining: RemainingBudget, loggedMeals: Meal
   }
 
   // Top up, preferring a slot not already used in this batch first, only
-  // reusing a used slot if nothing else fits the remaining budget.
+  // reusing a used slot if nothing else fits the remaining budget. Loops
+  // rather than a couple of fixed calls (was fine when SUGGESTION_COUNT
+  // was 2 — a single top-up pass could never fall short) — now that it's
+  // 4, a day with only one or two open slots needs several passes to
+  // actually reach the count instead of quietly returning fewer than
+  // asked for. Bails once a pass adds nothing, so it can't spin forever
+  // once the catalog (minus what's already picked) is exhausted.
   pickFrom(MEAL_CATALOG.filter((e) => !usedSlots.has(e.meal)));
-  pickFrom(MEAL_CATALOG);
+  while (picked.length < SUGGESTION_COUNT) {
+    const before = picked.length;
+    pickFrom(MEAL_CATALOG);
+    if (picked.length === before) break;
+  }
 
   return picked;
 }
