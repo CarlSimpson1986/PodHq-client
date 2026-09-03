@@ -134,7 +134,7 @@ export function TodaysMissionCard({ mission, initialHabits }: { mission: TodaysM
         aria-expanded={expanded}
         className="flex w-full items-center justify-between gap-3 p-5 text-left"
       >
-        <span className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Today&apos;s mission</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Today&apos;s tasks</span>
         <span className="flex items-center gap-2">
           <span className="text-sm font-semibold">{doneCount} / 5 today</span>
           <ChevronRightIcon className={`h-4 w-4 flex-none text-card-light-muted transition-transform ${expanded ? "rotate-90" : ""}`} />

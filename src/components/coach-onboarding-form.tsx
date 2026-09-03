@@ -73,6 +73,7 @@ interface FormState {
   mealCountPreference: string;
   foodAllergies: string;
   foodPreferences: FoodPreference | null;
+  agreedToPrivacy: boolean;
 }
 
 const INITIAL_STATE: FormState = {
@@ -87,6 +88,7 @@ const INITIAL_STATE: FormState = {
   mealCountPreference: "",
   foodAllergies: "",
   foodPreferences: null,
+  agreedToPrivacy: false,
 };
 
 export function CoachOnboardingForm() {
@@ -129,6 +131,7 @@ export function CoachOnboardingForm() {
           mealCountPreference: form.mealCountPreference ? Number(form.mealCountPreference) : undefined,
           foodAllergies: form.foodAllergies,
           foodPreferences: form.foodPreferences ?? undefined,
+          agreedToPrivacy: form.agreedToPrivacy,
         }),
       });
       const body = await res.json();
@@ -136,7 +139,7 @@ export function CoachOnboardingForm() {
         setError(body.message ?? "Something went wrong.");
         return;
       }
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setError("Something went wrong. Try again.");
@@ -312,6 +315,26 @@ export function CoachOnboardingForm() {
               ))}
             </div>
           </fieldset>
+
+          {/* Privacy Policy consent (2026-09-03, moved here from a
+              separate gate the first time a member opened the Coach
+              bubble — Carl: onboarding is a better place to ask than
+              ambushing them later). Required to finish, same wording as
+              privacy-consent-form.tsx (which this replaces for anyone who
+              completes onboarding through here). */}
+          <label className="flex items-start gap-3 border-t border-card-light-border pt-5 text-sm text-card-light-muted">
+            <input
+              type="checkbox"
+              checked={form.agreedToPrivacy}
+              onChange={(e) => update("agreedToPrivacy", e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-card-light-border"
+            />
+            I have read and agree to the{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline">
+              Privacy Policy
+            </a>
+            , including Pod Coach&apos;s use of AI to generate advice from my data.
+          </label>
         </div>
       )}
 
@@ -328,7 +351,7 @@ export function CoachOnboardingForm() {
             Continue
           </button>
         ) : (
-          <button type="button" onClick={handleSubmit} disabled={loading} className={buttonClass}>
+          <button type="button" onClick={handleSubmit} disabled={loading || !form.agreedToPrivacy} className={buttonClass}>
             {loading ? "Saving..." : "Finish"}
           </button>
         )}

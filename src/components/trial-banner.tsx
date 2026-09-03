@@ -117,7 +117,7 @@ export function TrialBanner() {
                   Not now
                 </button>
                 <p className="mt-3 text-center text-xs text-card-light-muted">
-                  No card required. Booking your first session starts the 7-day clock.
+                  No card required. Your 7-day clock starts as soon as you finish setup.
                 </p>
               </>
             )}

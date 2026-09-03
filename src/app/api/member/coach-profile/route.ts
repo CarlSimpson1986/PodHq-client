@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { createCoachProfile } from "@/lib/coach/coach-profile";
 import { coachProfileSchema } from "@/lib/validation/coach-profile";
@@ -58,6 +59,32 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[coach-profile] failed to save", { error: (error as Error).message });
     return NextResponse.json({ status: "error", message: "Something went wrong." }, { status: 500 });
+  }
+
+  // Trial clock starts here, not on first booking (2026-09-03, Carl:
+  // onboarding now hands straight off to Pod Coach on the Dashboard, so
+  // the trial should be live from that moment — gated the same way
+  // (trial_activated_at set, trial_started_at still null) so it only
+  // ever fires once, but the trigger is "finished setup" rather than
+  // "booked a session," since a member without a completed profile has
+  // nothing for Pod Coach to actually run yet.
+  //
+  // Privacy Policy consent also stamps here now, not on first tap into
+  // the Coach bubble — the schema already requires agreedToPrivacy to be
+  // true to reach this point, so this just records it. hasAcceptedPrivacyPolicy()
+  // (member.ts) reads this same column, so PrivacyConsentForm simply never
+  // renders for anyone who completed onboarding through this route.
+  const memberUpdate: Record<string, string> = { privacy_policy_accepted_at: new Date().toISOString() };
+  if (member.trial_activated_at && !member.trial_started_at) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    memberUpdate.trial_started_at = now.toISOString();
+    memberUpdate.trial_expires_at = expiresAt.toISOString();
+  }
+  const admin = createAdminClient();
+  const { error: memberUpdateError } = await admin.from("members").update(memberUpdate).eq("id", member.id);
+  if (memberUpdateError) {
+    console.error("[coach-profile] failed to update member trial/consent state", { error: memberUpdateError.message });
   }
 
   return NextResponse.json({ status: "ok" });

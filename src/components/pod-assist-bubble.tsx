@@ -45,26 +45,38 @@ export function PodAssistBubble({
   }
 
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-[2000000000] flex flex-col items-center gap-1">
-      {/* The real pod-assist-mark.png asset — reverted 2026-09-02 after
-          replacing it with a generic drawn icon broke Carl's actual
-          branded icon ("needs the actual ICon I gave you"). Label chip
-          restored underneath to match Pod Coach's own (pod-coach-bubble.tsx).
-          z-index sits above driver.js's own overlay/popover (1000000000) —
-          otherwise the tour's dimming overlay visually buries this icon
-          (and its glow, see tour-runner.tsx's setPodAssistGlow) on every
-          step that isn't targeting it directly. The wrapper itself is
-          pointer-events-none (re-enabled below on the actual interactive
-          pieces) so its empty space can never sit in front of and swallow
-          clicks meant for a tour popover positioned nearby. */}
+    <div className="pointer-events-none absolute right-4 top-4 z-[2000000000] flex flex-col items-center gap-1">
+      {/* Not fixed (2026-09-03) — it used to float over whatever scrolled
+          underneath as the member scrolled down, and a white label pill
+          over a white card (everything on this app is card-light) was
+          unreadable. absolute + top-4 keeps it pinned to the top of the
+          page's own content instead, scrolling away with everything else
+          — Carl's call, over a dark backing plate that kept it fixed but
+          always legible (tried and rejected, "i dfont like it"). */}
+      {/* The real Pod Assist mark (2026-09-03, matched-set update) —
+          Carl's source file (pod-assist-badge-full.png, kept alongside for
+          anywhere a bigger app-icon-style badge is useful later) is a full
+          rounded-square badge with "POD ASSIST" text baked in, same
+          treatment as pod-coach-mark.png: cropped to just the glyph
+          cluster (bubble-robot + question-bubble/FAQ-card/info/headset)
+          with a transparent background, "Pod Assist" as text lives in the
+          label span below instead. Source glyphs are ~1.32:1 (wide, not
+          square), hence the non-square width/height. z-index sits above
+          driver.js's own overlay/popover (1000000000) — otherwise the
+          tour's dimming overlay visually buries this icon (and its glow,
+          see tour-runner.tsx's setPodAssistGlow) on every step that isn't
+          targeting it directly. The wrapper itself is pointer-events-none
+          (re-enabled below on the actual interactive pieces) so its empty
+          space can never sit in front of and swallow clicks meant for a
+          tour popover positioned nearby. */}
       <button
         type="button"
         id="tour-help-button"
         onClick={() => setChatOpen(true)}
         aria-label="Pod Assist"
-        className="pointer-events-auto flex h-10 w-10 items-center justify-center drop-shadow-lg"
+        className="pointer-events-auto flex h-10 w-14 items-center justify-center drop-shadow-lg"
       >
-        <Image src="/icons/features/pod-assist-mark.png" alt="" width={40} height={40} />
+        <Image src="/icons/features/pod-assist-mark.png" alt="" width={53} height={40} />
       </button>
       {/* id targeted by the tour's final step, not #tour-help-button itself
           — that's a real interactive control (its own onClick), and
@@ -74,9 +86,9 @@ export function PodAssistBubble({
           This label has no handler, so nothing can steal the click. */}
       <span
         id="tour-help-label"
-        className="rounded-full bg-card-light-foreground/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+        className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-card-light-foreground"
       >
-        Assist
+        Pod Assist
       </span>
       {chatOpen && (
         <div

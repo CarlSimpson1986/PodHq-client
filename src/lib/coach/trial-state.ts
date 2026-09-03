@@ -3,10 +3,11 @@ import type { Member, Membership } from "@/lib/data/member";
 // Presentation-only derivation of the home screen's AI Coach state — no DB
 // access here, just the member/membership rows the home page already
 // fetches. Five states, not the brief's four: "trial_pending" (tapped
-// Start but hasn't booked yet, so the clock hasn't started — see the hook
-// in bookings/route.ts) is a real state a member can sit in, and showing
-// them the initial trial pitch again there would be wrong since they
-// already said yes.
+// Start but hasn't finished onboarding yet, so the clock hasn't started —
+// see the hook in api/member/coach-profile/route.ts) is a real state a
+// member can sit in if they abandon onboarding partway, and showing them
+// the initial trial pitch again there would be wrong since they already
+// said yes.
 export type CoachHomeState =
   | { kind: "no_trial" }
   | { kind: "trial_pending" }

@@ -6,7 +6,8 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 // "Tap Start my free trial" — stamps trial_activated_at only. The trial
 // clock itself (trial_started_at/trial_expires_at) doesn't start until
-// the member's next booking; see the hook in bookings/route.ts.
+// the member actually finishes onboarding; see the hook in
+// api/member/coach-profile/route.ts.
 export async function POST() {
   const session = await createSessionClient();
   const {

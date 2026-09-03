@@ -16,11 +16,10 @@ import { OnboardingTour } from "@/components/onboarding-tour";
 import { AICoachSection } from "@/components/ai-coach-section";
 import { TodaysMissionCard } from "@/components/todays-mission-card";
 import { MemberHabitCard } from "@/components/member-habit-card";
-import { CoachResponseCard } from "@/components/coach-response-card";
 import { getCoachHomeState } from "@/lib/coach/trial-state";
 import { getTodaysMission } from "@/lib/coach/todays-mission";
 import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
-import { getRecentCheckIns, getLatestCheckInResponse } from "@/lib/coach/check-ins";
+import { getRecentCheckIns } from "@/lib/coach/check-ins";
 import { computeHabitStreak } from "@/lib/coach/habit-streak";
 import { computeHabitFollowThrough } from "@/lib/coach/habit-follow-through";
 import { TrophyIcon, UsersIcon, IdCardIcon, CalendarIcon } from "@/components/icons";
@@ -56,13 +55,13 @@ export default async function HomePage() {
   const habitsWithProgress = habits.map((h) => ({ ...h, todayCount: habitProgress.get(h.id) ?? 0 }));
 
   // Check-in feedback on the Home dashboard (2026-08-30) — the weekly
-  // check-in's habit/streak and the coach's actual response used to only
-  // ever surface on /coach, a tab a member has to specifically go looking
-  // for; the response itself wasn't even saved anywhere before this. Same
-  // premium/trial gate as the rest of the AI Coach content on this page.
-  const [recentCheckIns, checkInResponse] = showTodaysMission
-    ? await Promise.all([getRecentCheckIns(member.id), getLatestCheckInResponse(member.id)])
-    : [[], null];
+  // check-in's habit/streak used to only ever surface on /coach, a tab a
+  // member has to specifically go looking for. Same premium/trial gate as
+  // the rest of the AI Coach content on this page. The coach's own
+  // narrative response (CoachResponseCard, "Your coach") was dropped
+  // 2026-09-03 (Carl: not required) — Pod Coach's own chat bubble already
+  // covers that ground.
+  const recentCheckIns = showTodaysMission ? await getRecentCheckIns(member.id) : [];
   const currentHabit = recentCheckIns[0]?.habit ?? null;
   const habitStreak = computeHabitStreak(recentCheckIns);
   const followThrough = computeHabitFollowThrough(recentCheckIns);
@@ -81,10 +80,7 @@ export default async function HomePage() {
           <AICoachSection state={coachState} />
 
           {showTodaysMission && (
-            <>
-              <CoachResponseCard response={checkInResponse} />
-              <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />
-            </>
+            <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />
           )}
 
           {showTodaysMission && mission && <TodaysMissionCard mission={mission} initialHabits={habitsWithProgress} />}

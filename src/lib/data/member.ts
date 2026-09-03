@@ -29,9 +29,10 @@ export interface Member {
   tour_completed_at: string | null;
   // 7-day free AI Coach trial (Hove beta) — see 0047_member_trial.sql for
   // what each of the three stamps means. trial_activated_at alone means
-  // "tapped Start my free trial but hasn't booked yet"; trial_started_at/
-  // trial_expires_at are only set once, on the first booking after
-  // activation (see the hook in bookings/route.ts).
+  // "tapped Start my free trial but hasn't finished onboarding yet";
+  // trial_started_at/trial_expires_at are only set once, when Pod Coach
+  // onboarding actually completes (see the hook in
+  // api/member/coach-profile/route.ts).
   trial_activated_at: string | null;
   trial_started_at: string | null;
   trial_expires_at: string | null;

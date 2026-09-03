@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { RecoveryStatus } from "@/lib/coach/recovery-status";
+import { HeartPulseIcon } from "@/components/icons";
 
 // Dashboard hero + Health tab both render this. Deliberately never shows a
 // fabricated 0-100 "readiness score" — no such field exists anywhere in
@@ -15,8 +16,9 @@ const REASON_COPY: Record<"elevated_resting_hr" | "low_sleep", string> = {
 export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {
   if (status.kind === "not_connected") {
     return (
-      <div className="card-light p-5">
-        <p className="text-sm font-semibold">Connect your wearable</p>
+      <div className="card-light flex flex-col items-center p-5 text-center">
+        <HeartPulseIcon className="h-6 w-6 text-card-light-foreground" />
+        <p className="mt-2 text-sm font-semibold">Connect your wearable</p>
         <p className="mt-1 text-sm text-card-light-muted">Sync Fitbit via Google Health to see your recovery here.</p>
         <Link href="/health" prefetch={false} className="mt-3 inline-block text-xs font-semibold underline">
           Connect on the Health tab →
@@ -29,8 +31,9 @@ export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {
     const baselineDays = status.kind === "calibrating" ? status.baselineDays : 0;
     const baselineDaysNeeded = status.kind === "calibrating" ? status.baselineDaysNeeded : 5;
     return (
-      <div className="card-light p-5">
-        <p className="text-sm font-semibold">Calibrating your recovery</p>
+      <div className="card-light flex flex-col items-center p-5 text-center">
+        <HeartPulseIcon className="h-6 w-6 text-card-light-foreground" />
+        <p className="mt-2 text-sm font-semibold">Calibrating your recovery</p>
         <p className="mt-1 text-sm text-card-light-muted">
           Day {baselineDays} of {baselineDaysNeeded} — keep your wearable synced and this will start showing real signal.
         </p>
@@ -46,16 +49,18 @@ export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {
 
   if (status.kind === "low_recovery") {
     return (
-      <div className="card-light p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-warning">Recovery looks low today</p>
+      <div className="card-light flex flex-col items-center p-5 text-center">
+        <HeartPulseIcon className="h-6 w-6 text-warning" />
+        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-warning">Recovery looks low today</p>
         <p className="mt-1 text-sm text-card-light-muted">{REASON_COPY[status.reason]}</p>
       </div>
     );
   }
 
   return (
-    <div className="card-light p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-success">Recovery on track</p>
+    <div className="card-light flex flex-col items-center p-5 text-center">
+      <HeartPulseIcon className="h-6 w-6 text-success" />
+      <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-success">Recovery on track</p>
       <p className="mt-1 text-sm text-card-light-muted">Nothing unusual against your recent average — good to train as planned.</p>
     </div>
   );

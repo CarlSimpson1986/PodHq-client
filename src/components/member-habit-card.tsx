@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CalendarIcon } from "@/components/icons";
 
 // Same card-light styling and destination as the Check-in card right
 // below it on /coach — was a plain inert div (2026-08-28 bug: looked
@@ -22,8 +23,9 @@ export function MemberHabitCard({
   followThrough: { madeProgress: number; total: number } | null;
 }) {
   return (
-    <Link href="/coach/checkin" prefetch={false} className="card-light block p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">Your habit</p>
+    <Link href="/coach/checkin" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
+      <CalendarIcon className="h-6 w-6 text-card-light-foreground" />
+      <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-card-light-muted">Main effort</p>
       {habit === null ? (
         <p className="mt-1 text-sm text-card-light-muted">
           Set one at your next check-in — one habit you&apos;re committing to for the week ahead.

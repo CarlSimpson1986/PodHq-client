@@ -20,10 +20,10 @@ import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { WeekCalendarStrip } from "@/components/week-calendar-strip";
 import { RecoveryStatusCard } from "@/components/recovery-status-card";
 import { TrialBanner } from "@/components/trial-banner";
-import { TrophyIcon } from "@/components/icons";
+import { TrophyIcon, DumbbellIcon, AppleIcon } from "@/components/icons";
 import { WeeklyRecommendationCard } from "@/components/weekly-recommendation-card";
 import { MemberHabitCard } from "@/components/member-habit-card";
-import { PodCoachBubble } from "@/components/pod-coach-bubble";
+import { DashboardCoachTour } from "@/components/dashboard-coach-tour";
 
 // The new Dashboard — replaces /coach's old hub content (2026-08-25
 // redesign, see ROADMAP.md). Same trial/subscriber gating as before
@@ -95,7 +95,7 @@ export default async function DashboardPage() {
       const firstName = member.name.split(" ")[0] || member.name;
       const trialLine =
         state.kind === "trial_pending"
-          ? "Book your first session to kick off your 7-day trial"
+          ? "Your 7-day trial will start as soon as your profile's saved"
           : "You're on your 7-day free trial";
       const welcome = `Hi ${firstName}! I'm Pod Coach. I'll build your sessions, track your recovery, and answer questions about your plan for ${GOAL_COPY[coachProfile.goal]} along the way. ${trialLine} — ask me anything here, or check today's session on the Home tab.`;
       const seeded = await seedCoachWelcomeMessage(member.id, welcome);
@@ -138,7 +138,7 @@ export default async function DashboardPage() {
           <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">Today</p>
         </div>
-        <div className="mx-auto mt-6 w-full max-w-md">
+        <div id="tour-coach-week" className="mx-auto mt-6 w-full max-w-md">
           <WeekCalendarStrip />
         </div>
       </div>
@@ -149,10 +149,10 @@ export default async function DashboardPage() {
 
           {state.kind === "trial_pending" && (
             <div className="card-light p-5">
-              <p className="text-sm font-semibold">AI Coach trial ready</p>
-              <p className="mt-1 text-sm text-card-light-muted">Book your next session and your 7-day trial starts automatically.</p>
-              <Link href="/book" prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
-                Book a session
+              <p className="text-sm font-semibold">Finish setting up Pod Coach</p>
+              <p className="mt-1 text-sm text-card-light-muted">A few quick questions and your 7-day Premium trial starts right away.</p>
+              <Link href="/coach-onboarding" prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
+                Set up Pod Coach
               </Link>
             </div>
           )}
@@ -169,14 +169,19 @@ export default async function DashboardPage() {
 
           {showFullDashboard && (
             <>
-              {recoveryStatus && <RecoveryStatusCard status={recoveryStatus} />}
+              {recoveryStatus && (
+                <div id="tour-coach-recovery">
+                  <RecoveryStatusCard status={recoveryStatus} />
+                </div>
+              )}
 
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">This week</p>
                 <div className="space-y-3">
                   {consistency && coachProfile && (
-                    <div className="card-light p-5">
-                      <p className="text-sm font-semibold">Sessions</p>
+                    <div id="tour-coach-sessions" className="card-light flex flex-col items-center p-5 text-center">
+                      <DumbbellIcon className="h-6 w-6 text-card-light-foreground" />
+                      <p className="mt-2 text-sm font-semibold">Sessions</p>
                       <p className="mt-1 text-sm text-card-light-muted">
                         {consistency.sessionsCompleted} / {coachProfile.sessions_per_week}{" "}
                         {consistency.sessionsCompleted >= coachProfile.sessions_per_week ? (
@@ -189,8 +194,9 @@ export default async function DashboardPage() {
                   )}
 
                   {weeklyReview && (
-                    <div className="card-light p-5">
-                      <p className="text-sm font-semibold">Avg. nutrition</p>
+                    <div id="tour-coach-nutrition" className="card-light flex flex-col items-center p-5 text-center">
+                      <AppleIcon className="h-6 w-6 text-card-light-foreground" />
+                      <p className="mt-2 text-sm font-semibold">Avg. nutrition</p>
                       {weeklyReview.avgDailyCalories === null ? (
                         <p className="mt-1 text-sm text-card-light-muted">No meals logged this week yet.</p>
                       ) : (
@@ -209,11 +215,24 @@ export default async function DashboardPage() {
 
               {/* Check-in moved into the Pod Coach bubble (2026-09-01) —
                   see pod-coach-bubble.tsx. This card duplicated it. */}
-              {recommendation && <WeeklyRecommendationCard recommendation={recommendation} />}
+              {recommendation && (
+                <div id="tour-coach-recommendation">
+                  <WeeklyRecommendationCard recommendation={recommendation} />
+                </div>
+              )}
 
-              {coachProfile && <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />}
+              {coachProfile && (
+                <div id="tour-coach-habit">
+                  <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />
+                </div>
+              )}
 
-              <Link href="/leaderboard" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
+              <Link
+                id="tour-coach-leaderboard"
+                href="/leaderboard"
+                prefetch={false}
+                className="card-light flex flex-col items-center p-5 text-center"
+              >
                 <TrophyIcon className="h-6 w-6 text-card-light-foreground" />
                 <p className="mt-2 text-sm font-semibold">Leaderboard</p>
                 <p className="mt-1 text-sm text-card-light-muted">See how you stack up against everyone else — sessions, streaks and steps, every gym.</p>
@@ -237,11 +256,12 @@ export default async function DashboardPage() {
         </div>
       </div>
       {coachProfile && (
-        <PodCoachBubble
+        <DashboardCoachTour
           checkInState={checkInState}
           initialMessages={conversation}
           hasAcceptedPrivacyPolicy={hasAcceptedPrivacyPolicy(member)}
           initialOpen={showCoachWelcome}
+          isFirstWelcome={showCoachWelcome}
         />
       )}
       <MemberBottomNav />

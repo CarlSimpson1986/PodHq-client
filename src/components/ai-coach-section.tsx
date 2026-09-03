@@ -19,24 +19,24 @@ export function AICoachSection({ state }: { state: CoachHomeState }) {
 
     case "trial_pending":
       return (
-        <div className="card-light p-5">
+        <Link href="/coach-onboarding" prefetch={false} className="card-light block p-5 hover:opacity-90">
           <p className="flex items-center gap-2 text-sm font-semibold">
             <DumbbellIcon className="h-4 w-4" />
-            AI Coach trial ready
+            Finish setting up Pod Coach
           </p>
           <p className="mt-1 text-sm text-card-light-muted">
-            Book your next session and your 7-day trial starts automatically.
+            A few quick questions and your 7-day Premium trial starts right away.
           </p>
-        </div>
+        </Link>
       );
 
     case "trial_active":
       return (
-        <Link href="/dashboard" prefetch={false} className="card-light block p-5 hover:opacity-90">
+        <Link href="/buy-membership" prefetch={false} className="card-light block p-5 hover:opacity-90">
           <p className="text-xs font-semibold uppercase tracking-wide text-warning">
-            AI Coach · Trial · {state.daysRemaining} {state.daysRemaining === 1 ? "day" : "days"} remaining
+            Premium expires in {state.daysRemaining} {state.daysRemaining === 1 ? "day" : "days"}!
           </p>
-          <p className="mt-1 text-sm text-card-light-muted">View your coach and today&apos;s workout →</p>
+          <p className="mt-1 text-sm text-card-light-muted">Upgrade to Premium membership to keep progressing →</p>
         </Link>
       );
 

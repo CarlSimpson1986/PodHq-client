@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { CoachChatView, type ChatMessage } from "@/components/coach-chat-view";
 import { PrivacyConsentForm } from "@/components/privacy-consent-form";
-import { DumbbellIcon } from "@/components/icons";
 import type { CheckInState } from "@/lib/coach/checkin-state";
 
 // Pod Coach's floating bubble — replaces the old dedicated /coach tab
@@ -28,11 +28,15 @@ export function PodCoachBubble({
   initialMessages,
   hasAcceptedPrivacyPolicy,
   initialOpen = false,
+  onReplayTour,
+  tourCtaLabel,
 }: {
   checkInState: CheckInState;
   initialMessages: ChatMessage[];
   hasAcceptedPrivacyPolicy: boolean;
   initialOpen?: boolean;
+  onReplayTour?: () => void;
+  tourCtaLabel?: string;
 }) {
   const [open, setOpen] = useState(initialOpen);
   // Same two-phase mount as Pod Assist's bubble (pod-assist-bubble.tsx) —
@@ -52,25 +56,46 @@ export function PodCoachBubble({
   }
 
   return (
-    <div className="fixed right-4 top-4 z-20 flex flex-col items-center gap-1">
-      {/* Gold + dumbbell glyph vs. Pod Assist's black + speech-bubble —
-          both used the same generic white mark image before this
-          (2026-09-02, Carl: "the icons dont say pod assist or podcoach
-          ... they should be visually different"). */}
+    <div className="pointer-events-none absolute right-4 top-4 z-[2000000000] flex flex-col items-center gap-1">
+      {/* Not fixed (2026-09-03) — same reasoning as pod-assist-bubble.tsx:
+          a white label pill floating over whatever scrolled underneath
+          (everything on Dashboard is card-light, i.e. white) was
+          unreadable. absolute + top-4 keeps it pinned to the top of the
+          page's own content, scrolling away with everything else — a dark
+          backing plate that kept it fixed was tried and rejected first. */}
+      {/* The real Pod Coach mark (2026-09-03) — Carl's source file
+          (pod-coach-badge-full.png, kept alongside for anywhere a bigger
+          app-icon-style badge is useful later) is a full rounded-square
+          badge with "POD COACH" text baked in, illegible at this size, so
+          pod-coach-mark.png here is that same file cropped to just the
+          chat-bubble/clipboard/target glyph cluster with a transparent
+          background — "Pod Coach" as text lives in the label span below
+          instead. Source glyphs are ~1.5:1 (wide, not square), hence the
+          non-square width/height. z-index/pointer-events match
+          pod-assist-bubble.tsx's own fix — sits above driver.js's
+          overlay/popover (1000000000) so the tour glow is actually
+          visible, with the wrapper itself inert so its empty space can
+          never swallow a click meant for a nearby popover button. */}
       <button
         type="button"
+        id="tour-coach-button"
         onClick={() => setOpen(true)}
         aria-label="Pod Coach"
-        className="flex h-11 w-11 items-center justify-center rounded-full bg-accent shadow-lg"
+        className="pointer-events-auto flex h-10 w-14 items-center justify-center drop-shadow-lg"
       >
-        <DumbbellIcon className="h-5 w-5 text-accent-foreground" />
+        <Image src="/icons/features/pod-coach-mark.png" alt="" width={56} height={37} />
       </button>
-      <span className="rounded-full bg-accent/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-foreground">
-        Coach
+      {/* id targeted by the coach tour's final step, not #tour-coach-button
+          itself — same reasoning as Pod Assist's #tour-help-label. */}
+      <span
+        id="tour-coach-label"
+        className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-card-light-foreground"
+      >
+        Pod Coach
       </span>
       {open && (
         <div
-          className={`fixed inset-x-4 bottom-4 top-20 z-30 flex origin-top-right flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl transition-all duration-200 ease-out sm:inset-x-auto sm:right-4 sm:w-96 ${
+          className={`pointer-events-auto fixed inset-x-4 bottom-4 top-20 z-30 flex origin-top-right flex-col overflow-hidden rounded-2xl border border-card-light-border bg-card-light shadow-2xl transition-all duration-200 ease-out sm:inset-x-auto sm:right-4 sm:w-96 ${
             animateIn ? "scale-100 opacity-100" : "scale-95 opacity-0"
           }`}
         >
@@ -89,7 +114,18 @@ export function PodCoachBubble({
             <CheckInPrompt state={checkInState} />
             <div className="mt-4">
               {hasAcceptedPrivacyPolicy ? (
-                <CoachChatView initialMessages={initialMessages} onDismiss={closeChat} />
+                <CoachChatView
+                  initialMessages={initialMessages}
+                  onDismiss={closeChat}
+                  tourCtaLabel={tourCtaLabel}
+                  onReplayTour={
+                    onReplayTour &&
+                    (() => {
+                      closeChat();
+                      onReplayTour();
+                    })
+                  }
+                />
               ) : (
                 <PrivacyConsentForm />
               )}

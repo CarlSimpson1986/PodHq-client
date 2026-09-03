@@ -22,4 +22,10 @@ export const coachProfileSchema = z.object({
   foodAllergies: z.string().trim().max(500).optional().or(z.literal("")),
   foodPreferences: z.enum(FOOD_PREFERENCES).optional(),
   nutritionTrackingMode: z.enum(NUTRITION_TRACKING_MODES).optional(),
+  // Required true, not optional — Pod Coach's Privacy Policy consent
+  // (2026-09-03, moved from a separate gate the first time a member opened
+  // the Coach bubble, per Carl: onboarding is a better place to ask than
+  // ambushing them later). See api/member/coach-profile/route.ts, which
+  // stamps members.privacy_policy_accepted_at once this is true.
+  agreedToPrivacy: z.literal(true),
 });

@@ -39,9 +39,13 @@ function renderMessageContent(content: string) {
 export function CoachChatView({
   initialMessages,
   onDismiss,
+  onReplayTour,
+  tourCtaLabel = "Replay app tour",
 }: {
   initialMessages: ChatMessage[];
   onDismiss?: () => void;
+  onReplayTour?: () => void;
+  tourCtaLabel?: string;
 }) {
   // A lone seeded assistant message (no user turn yet) is the trial
   // welcome (see dashboard/page.tsx's seedCoachWelcomeMessage), not real
@@ -113,10 +117,23 @@ export function CoachChatView({
         </div>
       )}
 
-      {isWelcomeOnly && onDismiss && (
-        <button type="button" onClick={onDismiss} className="self-start px-1 text-xs font-medium text-muted-foreground hover:underline">
-          Maybe later
-        </button>
+      {isWelcomeOnly && (onReplayTour || onDismiss) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {onReplayTour && (
+            <button
+              type="button"
+              onClick={onReplayTour}
+              className="rounded-full border border-card-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-card-glass"
+            >
+              {tourCtaLabel}
+            </button>
+          )}
+          {onDismiss && (
+            <button type="button" onClick={onDismiss} className="px-2 py-1.5 text-xs font-medium text-muted-foreground hover:underline">
+              Maybe later
+            </button>
+          )}
+        </div>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
