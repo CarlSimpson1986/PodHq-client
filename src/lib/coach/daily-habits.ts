@@ -8,13 +8,14 @@ export interface MemberHabit {
   name: string;
   habitType: HabitType;
   targetCount: number | null;
+  unit: string | null;
 }
 
 export async function getActiveHabits(memberId: number): Promise<MemberHabit[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("member_habits")
-    .select("id, name, habit_type, target_count")
+    .select("id, name, habit_type, target_count, unit")
     .eq("member_id", memberId)
     .is("archived_at", null)
     .order("created_at", { ascending: true });
@@ -26,6 +27,7 @@ export async function getActiveHabits(memberId: number): Promise<MemberHabit[]> 
     name: row.name,
     habitType: row.habit_type as HabitType,
     targetCount: row.target_count,
+    unit: row.unit,
   }));
 }
 
@@ -33,6 +35,7 @@ export interface AddHabitInput {
   name: string;
   habitType: HabitType;
   targetCount: number | null;
+  unit: string | null;
 }
 
 export async function addHabit(memberId: number, input: AddHabitInput): Promise<void> {
@@ -42,6 +45,7 @@ export async function addHabit(memberId: number, input: AddHabitInput): Promise<
     name: input.name,
     habit_type: input.habitType,
     target_count: input.habitType === "counted" ? input.targetCount : null,
+    unit: input.habitType === "counted" ? input.unit : null,
   });
   if (error) throw new Error(error.message);
 }

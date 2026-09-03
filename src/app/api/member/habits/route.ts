@@ -74,6 +74,7 @@ export async function POST(request: Request) {
       name: parsed.data.name,
       habitType: parsed.data.habitType,
       targetCount: parsed.data.targetCount ?? null,
+      unit: parsed.data.unit ?? null,
     });
   } catch (error) {
     console.error("[habits-add] failed", { error: (error as Error).message });

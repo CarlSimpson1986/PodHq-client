@@ -23,6 +23,7 @@ export function DailyHabitsCard({ initialHabits, embedded = false }: { initialHa
   const [customName, setCustomName] = useState("");
   const [customType, setCustomType] = useState<HabitType>("checkbox");
   const [customTarget, setCustomTarget] = useState("");
+  const [customUnit, setCustomUnit] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,7 +95,7 @@ export function DailyHabitsCard({ initialHabits, embedded = false }: { initialHa
     }
   }
 
-  async function submitAdd(name: string, habitType: HabitType, targetCount: number | null) {
+  async function submitAdd(name: string, habitType: HabitType, targetCount: number | null, unit: string | null) {
     if (busy || !name.trim()) return;
     setBusy(true);
     setError(null);
@@ -102,7 +103,12 @@ export function DailyHabitsCard({ initialHabits, embedded = false }: { initialHa
       const res = await fetch("/api/member/habits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), habitType, targetCount: targetCount ?? undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          habitType,
+          targetCount: targetCount ?? undefined,
+          unit: unit?.trim() ? unit.trim() : undefined,
+        }),
       });
       const body = await res.json();
       if (body.status !== "ok") {
@@ -111,6 +117,7 @@ export function DailyHabitsCard({ initialHabits, embedded = false }: { initialHa
       }
       setCustomName("");
       setCustomTarget("");
+      setCustomUnit("");
       setCustomType("checkbox");
       setAdding(false);
       await refresh();
@@ -156,6 +163,7 @@ export function DailyHabitsCard({ initialHabits, embedded = false }: { initialHa
                 {habit.habitType === "counted" && (
                   <span className="text-xs font-medium text-card-light-muted">
                     {habit.todayCount}/{habit.targetCount}
+                    {habit.unit ? ` ${habit.unit}` : ""}
                   </span>
                 )}
                 {habit.todayCount > 0 && (
@@ -200,10 +208,36 @@ export function DailyHabitsCard({ initialHabits, embedded = false }: { initialHa
                     key={r.name}
                     type="button"
                     disabled={busy}
-                    onClick={() => submitAdd(r.name, r.habitType, r.targetCount ?? null)}
+                    onClick={() => {
+                      // A "counted" recommendation (e.g. "Drink water",
+                      // target 8) used to instant-add with its catalog
+                      // default silently applied — no unit, no chance to
+                      // change it, so the first the member ever saw of
+                      // "8" was the tracker itself. Loads it into the
+                      // custom-habit form instead so the target's visible
+                      // and editable before it's actually added; a plain
+                      // yes/no recommendation still adds instantly since
+                      // there's no quantity to get wrong.
+                      if (r.habitType === "counted") {
+                        setCustomName(r.name);
+                        setCustomType("counted");
+                        setCustomTarget(String(r.targetCount ?? ""));
+                        setCustomUnit(r.unit ?? "");
+                        setAdding(true);
+                      } else {
+                        submitAdd(r.name, r.habitType, null, null);
+                      }
+                    }}
                     className={buttonClass}
                   >
                     {r.name}
+                    {r.habitType === "counted" && r.targetCount ? (
+                      <span className="text-card-light-muted">
+                        {" "}
+                        · {r.targetCount}
+                        {r.unit ? ` ${r.unit}` : ""}/day
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -240,23 +274,40 @@ export function DailyHabitsCard({ initialHabits, embedded = false }: { initialHa
                 Count towards a target
               </button>
               {customType === "counted" && (
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={customTarget}
-                  onChange={(e) => setCustomTarget(e.target.value)}
-                  placeholder="Target"
-                  min={1}
-                  max={999}
-                  className="w-20 rounded-lg border border-card-light-border bg-white px-2 py-1.5 text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
-                />
+                <>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={customTarget}
+                    onChange={(e) => setCustomTarget(e.target.value)}
+                    placeholder="Target"
+                    min={1}
+                    max={999}
+                    className="w-20 rounded-lg border border-card-light-border bg-white px-2 py-1.5 text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={customUnit}
+                    onChange={(e) => setCustomUnit(e.target.value)}
+                    placeholder="Unit (e.g. glasses)"
+                    maxLength={20}
+                    className="w-32 rounded-lg border border-card-light-border bg-white px-2 py-1.5 text-xs text-card-light-foreground focus:border-card-light-foreground focus:outline-none"
+                  />
+                </>
               )}
             </div>
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
                 disabled={busy || !customName.trim() || (customType === "counted" && !customTarget)}
-                onClick={() => submitAdd(customName, customType, customType === "counted" ? Number(customTarget) : null)}
+                onClick={() =>
+                  submitAdd(
+                    customName,
+                    customType,
+                    customType === "counted" ? Number(customTarget) : null,
+                    customType === "counted" ? customUnit : null
+                  )
+                }
                 className="rounded-lg bg-card-light-foreground px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
               >
                 Add

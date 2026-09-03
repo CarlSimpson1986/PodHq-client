@@ -9,6 +9,7 @@ export const addHabitSchema = z
     name: z.string().trim().min(1).max(80),
     habitType: z.enum(HABIT_TYPES),
     targetCount: z.number().int().min(1).max(999).optional(),
+    unit: z.string().trim().max(20).optional(),
   })
   .refine((data) => data.habitType !== "counted" || data.targetCount !== undefined, {
     message: "targetCount is required when habitType is 'counted'.",

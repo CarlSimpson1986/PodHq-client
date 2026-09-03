@@ -5,6 +5,7 @@ export interface RecommendedHabit {
   habitType: HabitType;
   // Only meaningful for habitType "counted".
   targetCount?: number;
+  unit?: string;
 }
 
 // A starting list of common habits to offer alongside "add your own" —
@@ -14,10 +15,10 @@ export interface RecommendedHabit {
 // muscle-gain lists) — a member can always add a custom habit for
 // anything more specific.
 export const RECOMMENDED_HABITS: RecommendedHabit[] = [
-  { name: "Drink water", habitType: "counted", targetCount: 8 },
+  { name: "Drink water", habitType: "counted", targetCount: 8, unit: "glasses" },
   { name: "Hit protein target", habitType: "checkbox" },
   { name: "Get 7+ hours sleep", habitType: "checkbox" },
-  { name: "Eat a portion of fruit or veg", habitType: "counted", targetCount: 5 },
+  { name: "Eat a portion of fruit or veg", habitType: "counted", targetCount: 5, unit: "portions" },
   { name: "Stretch or mobility work", habitType: "checkbox" },
   { name: "Walk 8,000+ steps", habitType: "checkbox" },
   { name: "No alcohol", habitType: "checkbox" },
