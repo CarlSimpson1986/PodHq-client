@@ -14,145 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-55.md`, covering the pilot
-mechanism proof (2026-08-05) through the trial preview copy strengthening
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-57.md`, covering the pilot
+mechanism proof (2026-08-05) through the trial-start/distinct-icons work
 (2026-09-02) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see each archive's own header note for
 examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
 full build history, or `git log` on this file for exact split points.
-Active content here starts at "Signup crash from an undecryptable gym
-Resend key" (2026-09-02). If this file grows too large again, split it
-the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-56.md`, update this paragraph.
-
-## Signup crash from an undecryptable gym Resend key — 2026-09-02
-
-**Real production bug, found live**: Carl signed up on `podhq-client.vercel.app`
-and got "Something went wrong. Try again." — but the account was actually
-created successfully (auth user, `members` row, `leads` row, `auth_events`
-row all committed; Supabase's own confirmation email genuinely sent).
-
-Root cause: `/api/auth/signup` creates the member, then tries to email
-gym staff (`staffNewSignupEmail`/`notifyFireAndForget`). Hove has a
-`gym_resend_config` row, so that path calls `getGymResendConfig('Hove')`,
-which calls `decryptSecret()` on the stored API key —
-`SECRET_ENCRYPTION_KEY` was never set in **podhq-client's own** Vercel
-Production env (confirmed by Carl checking directly; it's a separate
-Vercel project from podHq, so podHq having its own copy set doesn't
-cover this app — same convention noted in `secret-encryption.ts`'s own
-header comment). `decryptSecret` throws when the key's missing, and that
-throw was uncaught — propagating out of `sendEmail` (whose own docstring
-promises "never throws") through `notifyFireAndForget` and crashing the
-whole request *after* the member row had already committed, so the
-client got a raw 500 it couldn't parse instead of the app's normal JSON
-response. Confirmed via `notification_log`: zero `staff_new_signup` rows
-since 2026-08-22 (the last one before this was found), while Hove picked
-up 2 new members since then with no notification row for either — this
-had been silently breaking every Hove signup's staff notification, and
-showing this false error to the member, for over a week.
-
-**Fixed**: `getGymResendConfig` (`resend-config.ts`) now catches the
-`decryptSecret` throw the same way it already handled a Supabase query
-error — logs it, returns `null`, falls back to the shared Resend
-account. A gym's broken/missing encryption key can never crash a
-signup (or any other caller of `sendEmail`) again, regardless of the
-Vercel env cause. `wearables.ts`'s own `decryptSecret` call sites were
-checked too — both already either throw-and-let-the-caller-handle-it
-(single-connection lookup, an intentional existing contract) or already
-catch-and-skip (the sync cron's batch loop), so left alone.
-
-**Resolved 2026-09-02, Carl (manual, in Vercel — matches how
-account-level Vercel/Supabase/Stripe settings get handled on this
-project)**: turned out podHq's existing `SECRET_ENCRYPTION_KEY` couldn't
-be copied across — Vercel's Sensitive variable type can't be read back
-once saved, which is almost certainly what actually caused the original
-2026-08-22 Aylesbury incident (a value that could never be verified,
-not just a paste slip). Generated a fresh key instead and rotated it
-properly: set in both podHq's and podhq-client's Vercel (Production +
-Preview), both redeployed, then Hove's Resend API key re-saved through
-podHq's `/setup` so its stored ciphertext actually matches the new key.
-Full writeup of the parity requirement (and why a value alone can't be
-trusted) now lives in CLAUDE.md's own "Deployment" section, not just
-here, so it survives this file's own archiving.
-
-**Verified**: `tsc --noEmit`/`eslint` clean. Root cause and impact
-confirmed by direct DB inspection (`members`/`leads`/`auth_events`/
-`notification_log` for the actual live signup that surfaced this).
-Live re-test of the actual fix (a fresh Hove signup, checked against
-`notification_log` landing as `sent`) still outstanding as of this
-write-up.
-
-## Trial start goes straight into onboarding; Pod Coach welcomes at trial_pending too; distinct bubble icons — 2026-09-02
-
-Carl, after actually clicking through the trial flow live: "there is no
-premium onboarding, just 'you are in'? as soon as i hit start your free
-trial it should be into the onboarding questions...then Pod coach takes
-you around." Also: "the icons dont say pod assist or podcoach? they
-should be visually different" — both `pod-assist-mark.png` and
-`pod-coach-mark.png` turned out to be the exact same generic white
-chat-bubble glyph, genuinely indistinguishable at a glance.
-
-**Trial start**: `trial-banner.tsx`'s "You're in" confirmation screen
-removed — `startTrial()` now `router.push`es straight to
-`/coach-onboarding` on success (that page already redirects home if a
-profile somehow exists, so no extra guard needed). `coach-onboarding-
-form.tsx`'s existing `router.push("/")` on completion was untouched.
-
-**The "Pod Coach takes you around" half** needed a real gap closed, not
-just the redirect: onboarding finishes in `trial_pending` (the 7-day
-clock only starts on the first booking — see `start-trial/route.ts`'s
-own comment), but Pod Coach's welcome-seeding in `dashboard/page.tsx`
-was gated to `trial_active` only, so it silently never fired at the
-moment it mattered. Moved the `getCoachConversation`/
-`seedCoachWelcomeMessage` logic out from inside the `showFullDashboard`
-block into its own step that runs whenever `coachProfile` exists —
-conversation still loads normally for subscribers (unaffected), but the
-welcome itself now seeds for `trial_pending` or `trial_active` with an
-empty conversation, with state-aware wording ("Book your first session
-to kick off your 7-day trial" vs "You're on your 7-day free trial").
-
-**Icons**: `pod-assist-bubble.tsx` → black circle, `ChatBubbleIcon`,
-"Assist" label chip. `pod-coach-bubble.tsx` → gold (`bg-accent`) circle,
-`DumbbellIcon`, "Coach" label chip — reusing icons already in
-`icons.tsx` rather than commissioning new art, and matching `DumbbellIcon`
-being the AI Coach's existing icon elsewhere in the app (trial banner,
-`AICoachSection`). The old identical PNG marks are now unused (left in
-`public/`, not deleted — no other references checked for this session).
-
-Same "Maybe later" dismiss + `origin-top-right` entrance animation
-fixes from earlier today (see above) apply to both bubbles unchanged;
-this stage only touched what triggers them and what they look like.
-
-**Verified**: `tsc --noEmit`/`eslint` clean on every changed file.
-Live-tested in local dev end to end via a fresh synthetic member (no
-trial, no coach profile): tapped the trial banner → preview modal →
-"Start my free trial" → landed directly on `/coach-onboarding` (no
-confirmation screen) → completed all 7 steps → redirected to Home →
-navigated to Dashboard → confirmed `trial_pending`'s "AI Coach trial
-ready" card rendered *and* Pod Coach auto-opened with the correct
-state-aware welcome text and a working "Maybe later". Confirmed via DOM
-inspection that the two launcher buttons now render genuinely distinct
-markup (black circle + chat-bubble + "Assist" vs. gold circle + dumbbell
-+ "Coach"), not just visually eyeballed. Hit the documented stale-
-Turbopack-bundle issue again mid-test (edits made after `next dev` was
-already running) — full process kill + `.next` clear + service-worker
-unregister fixed it, consistent with prior notes on this exact failure
-mode in local dev.
-
-**Follow-up, same day, live-verified on production**: re-ran the whole
-trial-start → onboarding → Pod Coach welcome flow against the real
-`podhq-client.vercel.app` deploy (not just local dev) — confirmed
-identical to local: straight into `/coach-onboarding`, correct
-`trial_pending`-aware Pod Coach welcome on Dashboard, both bubble icons
-rendering distinctly. Carl, on the actual onboarding page: `/coach-
-onboarding`'s header still read "Set up your AI Coach" — inconsistent
-with the trial now being framed as "Free upgrade to Premium," not just
-an AI Coach trial. Changed to "Set up your Premium profile"
-(`coach-onboarding/page.tsx`'s `PageHero` title only — the handful of
-"Set up your AI Coach first" *error* messages elsewhere, e.g.
-`coach-chat/route.ts`, are a different surface and weren't touched).
+Active content here starts at "Onboarding: real icon restored, tour
+extended across pages" (2026-09-02). If this file grows too large
+again, split it the same way: move the most clearly finished section
+into `ROADMAP-ARCHIVE-58.md`, update this paragraph.
 
 ## Onboarding: real icon restored, tour extended across pages — 2026-09-02
 
@@ -226,3 +99,78 @@ end to end via a fresh synthetic member: Home's 4 steps → Shop's 3
 (Credit Packs, then Memberships, then the Book nav bridge) → Book's 3,
 finishing on the real Pod Assist icon there — confirmed `tour_completed_at`
 only stamps once, at the very end. `tsc`/`eslint` clean.
+
+## Tour: glow, step order, door-access copy, broken Done/X — 2026-09-03
+
+Carl walked the tour live and flagged four real problems in one pass:
+no visible glow around Pod Assist, a distracting full-width pulsing bar
+on some steps, an out-of-order step sequence ("2/6 goes from [credits]
+to [session card] doesn't flow"), and — the big one — **the popover's
+own Done and X buttons didn't do anything**.
+
+**Glow was never actually reachable.** It had been wired as a `glowing`
+prop threaded through `OnboardingTour`, which only Home ever had a path
+for — `/shop` and `/book` had no wiring at all. Even on Home it was
+invisible in practice: driver.js's dimming overlay (`z-index: 10000`)
+painted over the icon's old `z-20` wrapper for every step except the one
+literally targeting it. Replaced the prop-threading with direct DOM
+class toggling in `tour-runner.tsx` (`setPodAssistGlow`, keyed off the
+icon's stable `id`, so it works from wherever `TourRunner` mounts — Home,
+`/shop`, or `/book` alike) and raised the icon's z-index above driver.js
+entirely (`z-[2000000000]`, with `pointer-events-none` on the wrapper and
+`pointer-events-auto` on the actual interactive children, so its now-huge
+hit area can never swallow a click meant for a popover positioned nearby).
+Also dropped the glow from arbitrary highlighted step targets (a `<p>`
+spanning the full card width read as a stretched pulsing bar, not a
+highlight) — scoped to just the Pod Assist icon, per Carl's call.
+
+**Step order** (`tour-steps.ts`) reordered to match Home's actual
+top-to-bottom layout — was greeting → credits (bottom of page) → session
+card (back near the top) → leaderboard → find-professional, now
+greeting → session card → leaderboard → find-professional → credits →
+shop hand-off.
+
+**Door-access step** now warns members before they book, using the real
+rules from `unlock-window.ts`/`api/unlock/route.ts` rather than
+undersetting it as automatic: "The door only unlocks from 5 minutes
+before your session, and only once you're physically at the gym."
+
+**Done/X root cause** (not a styling issue): driver.js skips its own
+default close/advance behavior *entirely* once you supply a custom
+`onDoneClick`/`onCloseClick` — your callback is expected to call
+`.destroy()` itself. None of `tour-runner.tsx`'s three handlers ever
+did. X had been broken on every single step since this was built (its
+handler is always overridden); Done only broke on the tour's true final
+step (every other "Next" was still hitting driver.js's own untouched
+default, which is why step-to-step progress always looked fine).
+Fixed by adding the missing `driverRef.current?.destroy()` calls. Also
+retargeted the final step at a new non-interactive `#tour-help-label`
+span instead of the live, real `#tour-help-button` itself — highlighting
+an element with its own click handler in the same corner driver.js's own
+popover renders in was exactly the kind of setup that causes buttons to
+stop responding.
+
+**Also this session**: `sw.js` had `"/"` in its cacheable-navigation
+allowlist — Home is the most member-specific page in the app ("Hello,
+{name}"), and caching it directly violated the file's own rule (written
+after the 2026-08-16 OWASP audit) that non-public pages must never be
+served stale; a deleted/logged-out member's browser could keep serving
+their old cached dashboard. Removed, `CACHE_VERSION` bumped to purge the
+existing bad cache. Membership/Book-session Home cards restyled to match
+the icon-centered layout already used by Leaderboard/Find-a-professional;
+Leaderboard, Find-a-professional, and Gift Voucher (which had no tour id
+at all) added to the guided tour. Trial banner's collapsed line and the
+first-login welcome message copy adjusted for accuracy and tone.
+
+**Verified**: `tsc --noEmit` clean throughout. Glow and step-order fixes
+confirmed live in local dev via direct DOM inspection through a full
+Home walk-through (six steps, glow `true` on every one). The Done/X fix
+was verified live the same way for X (popover and overlay both removed
+on click, glow correctly cleared) — the true-final-step Done button
+specifically couldn't be exercised end-to-end in this session: reaching
+it requires the cross-page resume in `tour-continuation.tsx`, which is
+gated on `requestAnimationFrame` and never fired against an automated,
+unfocused browser tab (confirmed via `document.hasFocus()` /
+`visibilityState: "hidden"` — not a product bug, a limitation of testing
+via an unfocused automation tab). Same destroy() fix, proven working for
+X; a real end-to-end click-through by Carl is the outstanding check.
