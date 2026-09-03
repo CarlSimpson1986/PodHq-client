@@ -221,11 +221,7 @@ export default async function DashboardPage() {
                 </div>
               )}
 
-              {coachProfile && (
-                <div id="tour-coach-habit">
-                  <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />
-                </div>
-              )}
+              {coachProfile && <MemberHabitCard habit={currentHabit} streakWeeks={habitStreak} followThrough={followThrough} />}
 
               <Link
                 id="tour-coach-leaderboard"

@@ -36,7 +36,7 @@ export function DashboardCoachTour({
         onReplayTour={() => setTourStarted(true)}
         tourCtaLabel={isFirstWelcome ? "Show me around" : "Replay app tour"}
       />
-      {tourStarted && <CoachTourRunner onComplete={() => setTourStarted(false)} />}
+      {tourStarted && <CoachTourRunner path="/dashboard" startIndex={0} onComplete={() => setTourStarted(false)} />}
     </>
   );
 }

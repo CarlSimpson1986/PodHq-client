@@ -18,7 +18,7 @@ export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {
     return (
       <div className="card-light flex flex-col items-center p-5 text-center">
         <HeartPulseIcon className="h-6 w-6 text-card-light-foreground" />
-        <p className="mt-2 text-sm font-semibold">Connect your wearable</p>
+        <p className="mt-2 text-sm font-semibold">Connect your tech</p>
         <p className="mt-1 text-sm text-card-light-muted">Sync Fitbit via Google Health to see your recovery here.</p>
         <Link href="/health" prefetch={false} className="mt-3 inline-block text-xs font-semibold underline">
           Connect on the Health tab →

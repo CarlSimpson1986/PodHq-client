@@ -123,7 +123,7 @@ export function CoachChatView({
             <button
               type="button"
               onClick={onReplayTour}
-              className="rounded-full border border-card-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-card-glass"
+              className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
             >
               {tourCtaLabel}
             </button>

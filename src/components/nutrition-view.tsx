@@ -208,32 +208,34 @@ export function NutritionView({
 
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md card-light space-y-6 p-6">
-          {targets ? (
-            trackingMode === "hand_portions" ? (
-              <PortionsSummary consumed={totals} target={targets} />
+          <div id="tour-coach-nutrition-summary">
+            {targets ? (
+              trackingMode === "hand_portions" ? (
+                <PortionsSummary consumed={totals} target={targets} />
+              ) : (
+                <>
+                  <CalorieRing target={targets.calories} consumed={totals.calories} remaining={remaining!} />
+                  <div className="grid grid-cols-3 gap-3">
+                    <MacroBar label="Protein" consumed={totals.proteinG} target={targets.proteinG} />
+                    <MacroBar label="Carbs" consumed={totals.carbsG} target={targets.carbsG} />
+                    <MacroBar label="Fat" consumed={totals.fatG} target={targets.fatG} />
+                  </div>
+                </>
+              )
             ) : (
-              <>
-                <CalorieRing target={targets.calories} consumed={totals.calories} remaining={remaining!} />
-                <div className="grid grid-cols-3 gap-3">
-                  <MacroBar label="Protein" consumed={totals.proteinG} target={targets.proteinG} />
-                  <MacroBar label="Carbs" consumed={totals.carbsG} target={targets.carbsG} />
-                  <MacroBar label="Fat" consumed={totals.fatG} target={targets.fatG} />
-                </div>
-              </>
-            )
-          ) : (
-            <div className="rounded-xl border border-card-light-border p-5">
-              <p className="text-sm font-semibold">Body stats needed</p>
-              <p className="mt-1 text-sm text-card-light-muted">
-                Your weight, height and age from onboarding are needed to work out your daily targets.
-              </p>
-            </div>
-          )}
+              <div className="rounded-xl border border-card-light-border p-5">
+                <p className="text-sm font-semibold">Body stats needed</p>
+                <p className="mt-1 text-sm text-card-light-muted">
+                  Your weight, height and age from onboarding are needed to work out your daily targets.
+                </p>
+              </div>
+            )}
+          </div>
 
           {loading ? (
             <p className="text-center text-sm text-card-light-muted">Loading...</p>
           ) : (
-            <div className="space-y-4">
+            <div id="tour-coach-nutrition-log" className="space-y-4">
               {MEALS.map((meal) => (
                 <MealSection
                   key={meal}

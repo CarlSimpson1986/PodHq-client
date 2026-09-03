@@ -19,6 +19,7 @@ import { LastSessionCard } from "@/components/last-session-card";
 import { ConsistencyChart } from "@/components/consistency-chart";
 import { TrainingBlockView } from "@/components/training-block-view";
 import { PodCoachBubble } from "@/components/pod-coach-bubble";
+import { CoachTourContinuation } from "@/components/coach-tour-continuation";
 
 // Moved from /coach/training (2026-08-25 redesign — flat top-level tabs,
 // see ROADMAP.md). Functional change from the old page: the exercise
@@ -66,7 +67,7 @@ export default async function TrainingPage() {
       <PageHero title="Training" subtitle="Your progress" />
       <div className="flex-1 space-y-6 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md space-y-6">
-          <section>
+          <section id="tour-coach-training-next">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next session</p>
             {upcomingBooking ? (
               <Link href={`/workout/${upcomingBooking.id}`} prefetch={false} className="card-light block p-5">
@@ -95,7 +96,7 @@ export default async function TrainingPage() {
             )}
           </section>
 
-          <section>
+          <section id="tour-coach-training-block">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current training block</p>
             <div className="card-light">
               <TrainingBlockView />
@@ -122,7 +123,7 @@ export default async function TrainingPage() {
             </section>
           )}
 
-          <section>
+          <section id="tour-coach-training-consistency">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Consistency</p>
             <div className="card-light">
               <ConsistencyChart weeks={consistency} targetPerWeek={coachProfile.sessions_per_week} />
@@ -135,6 +136,7 @@ export default async function TrainingPage() {
         initialMessages={conversation.map((m) => ({ role: m.role, content: m.content }))}
         hasAcceptedPrivacyPolicy={hasAcceptedPrivacyPolicy(member)}
       />
+      <CoachTourContinuation path="/training" />
       <MemberBottomNav />
     </main>
   );

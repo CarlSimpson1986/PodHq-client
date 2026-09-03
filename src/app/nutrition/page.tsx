@@ -10,6 +10,7 @@ import { NoMemberProfile } from "@/components/no-member-profile";
 import { MemberBottomNav } from "@/components/member-bottom-nav";
 import { NutritionView } from "@/components/nutrition-view";
 import { PodCoachBubble } from "@/components/pod-coach-bubble";
+import { CoachTourContinuation } from "@/components/coach-tour-continuation";
 
 // Moved from /coach/nutrition (2026-08-25 redesign, see ROADMAP.md).
 // NutritionView owns its own full page body — dark hero (with the date
@@ -54,6 +55,7 @@ export default async function NutritionPage() {
         initialMessages={conversation.map((m) => ({ role: m.role, content: m.content }))}
         hasAcceptedPrivacyPolicy={hasAcceptedPrivacyPolicy(member)}
       />
+      <CoachTourContinuation path="/nutrition" />
       <MemberBottomNav />
     </main>
   );
