@@ -35,6 +35,7 @@ const SHOP_ITEMS: {
     title: "Gift Voucher",
     description: "Give the gift of wellness with a gift voucher for our club.",
     icon: GiftIcon,
+    tourId: "tour-shop-gift-voucher",
   },
 ];
 

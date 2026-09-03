@@ -30,18 +30,34 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     path: "/",
-    element: "#tour-credits",
-    popover: {
-      title: "Your credits",
-      description: "Each session uses one credit — let's show you where to buy some first.",
-    },
-  },
-  {
-    path: "/",
     element: "#tour-session-card",
     popover: {
       title: "Your next session",
       description: "Once you've booked, it shows here — with the door unlock ready when it's time.",
+    },
+  },
+  {
+    path: "/",
+    element: "#tour-leaderboard",
+    popover: {
+      title: "Leaderboard",
+      description: "See how you stack up against everyone else — sessions, streaks and steps, across every gym.",
+    },
+  },
+  {
+    path: "/",
+    element: "#tour-find-professional",
+    popover: {
+      title: "Find a professional",
+      description: "Browse personal trainers at your gym and get in touch directly.",
+    },
+  },
+  {
+    path: "/",
+    element: "#tour-credits",
+    popover: {
+      title: "Your credits",
+      description: "Each session uses one credit — let's show you where to buy some first.",
     },
   },
   {
@@ -65,7 +81,15 @@ export const TOUR_STEPS: TourStep[] = [
     element: "#tour-shop-membership",
     popover: {
       title: "How to buy a membership",
-      description: "Or tap here for a monthly membership instead — a recurring credit allowance rather than one-off packs.",
+      description: "Or tap here for a monthly membership instead — a recurring credit allowance at a reduced rate compared to buying one-off packs.",
+    },
+  },
+  {
+    path: "/shop",
+    element: "#tour-shop-gift-voucher",
+    popover: {
+      title: "Gift vouchers",
+      description: "You can also buy a gift voucher here — a nice way to introduce someone else to the club.",
     },
   },
   {
@@ -89,12 +113,12 @@ export const TOUR_STEPS: TourStep[] = [
     element: "#tour-book-slots",
     popover: {
       title: "Book a time",
-      description: "Tap Book next to any free slot — it reserves your pod and unlocks the door automatically when your session starts.",
+      description: "Tap Book next to any free slot — it reserves your pod. The door only unlocks from 5 minutes before your session, and only once you're physically at the gym.",
     },
   },
   {
     path: "/book",
-    element: "#tour-help-button",
+    element: "#tour-help-label",
     popover: {
       title: "That's it!",
       description: "Tap this icon any time, on any page, if you get stuck or want to ask a question.",

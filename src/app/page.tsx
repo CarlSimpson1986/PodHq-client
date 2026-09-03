@@ -23,7 +23,7 @@ import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
 import { getRecentCheckIns, getLatestCheckInResponse } from "@/lib/coach/check-ins";
 import { computeHabitStreak } from "@/lib/coach/habit-streak";
 import { computeHabitFollowThrough } from "@/lib/coach/habit-follow-through";
-import { TrophyIcon, UsersIcon } from "@/components/icons";
+import { TrophyIcon, UsersIcon, IdCardIcon, CalendarIcon } from "@/components/icons";
 
 export default async function HomePage() {
   const session = await createSessionClient();
@@ -90,8 +90,9 @@ export default async function HomePage() {
           {showTodaysMission && mission && <TodaysMissionCard mission={mission} initialHabits={habitsWithProgress} />}
 
           {!membership && (
-            <div className="card-light border-2 border-card-light-foreground p-5">
-              <p className="text-base font-semibold">Get Your Membership</p>
+            <div className="card-light flex flex-col items-center border-2 border-card-light-foreground p-5 text-center">
+              <IdCardIcon className="h-6 w-6 text-card-light-foreground" />
+              <p className="mt-2 text-base font-semibold">Get Your Membership</p>
               <p className="mt-1 text-sm text-card-light-muted">Get started with a monthly credit allowance.</p>
               <Link
                 href="/buy-membership"
@@ -110,8 +111,9 @@ export default async function HomePage() {
                 slotDurationMinutes={resources.find((r) => r.id === upcomingBooking.resource_id)?.slotDurationMinutes ?? 60}
               />
             ) : (
-              <div className="card-light p-5 text-center">
-                <p className="text-base font-semibold">No upcoming sessions</p>
+              <div className="card-light flex flex-col items-center p-5 text-center">
+                <CalendarIcon className="h-6 w-6 text-card-light-foreground" />
+                <p className="mt-2 text-base font-semibold">No upcoming sessions</p>
                 <p className="mt-1 text-sm text-card-light-muted">Book a session to set your goals in motion.</p>
                 <Link
                   href="/book"
@@ -123,13 +125,23 @@ export default async function HomePage() {
             )}
           </div>
 
-          <Link href="/leaderboard" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
+          <Link
+            id="tour-leaderboard"
+            href="/leaderboard"
+            prefetch={false}
+            className="card-light flex flex-col items-center p-5 text-center"
+          >
             <TrophyIcon className="h-6 w-6 text-card-light-foreground" />
             <p className="mt-2 text-base font-semibold">Leaderboard</p>
             <p className="mt-1 text-sm text-card-light-muted">See how you stack up against everyone else — sessions, streaks and steps, every gym.</p>
           </Link>
 
-          <Link href="/professionals" prefetch={false} className="card-light flex flex-col items-center p-5 text-center">
+          <Link
+            id="tour-find-professional"
+            href="/professionals"
+            prefetch={false}
+            className="card-light flex flex-col items-center p-5 text-center"
+          >
             <UsersIcon className="h-6 w-6 text-card-light-foreground" />
             <p className="mt-2 text-base font-semibold">Find a professional</p>
             <p className="mt-1 text-sm text-card-light-muted">Browse personal trainers at your gym and get in touch.</p>

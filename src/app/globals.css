@@ -92,6 +92,21 @@ body {
   box-shadow: 0 24px 48px -28px rgba(0, 0, 0, 0.6);
 }
 
+@keyframes pod-assist-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 14px 6px rgba(255, 255, 255, 0.35);
+  }
+}
+
+.pod-assist-glow {
+  border-radius: 9999px;
+  animation: pod-assist-glow 1.8s ease-in-out infinite;
+}
+
 .card-glass::before {
   content: "";
   position: absolute;

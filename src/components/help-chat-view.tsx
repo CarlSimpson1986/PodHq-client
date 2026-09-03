@@ -11,12 +11,10 @@ export function HelpChatView({
   onReplayTour,
   tourCtaLabel = "Replay app tour",
   welcomeMessage,
-  onDismiss,
 }: {
   onReplayTour?: () => void;
   tourCtaLabel?: string;
   welcomeMessage?: string;
-  onDismiss?: () => void;
 }) {
   // Lazy initializer, not useEffect — the seeded greeting must be there on
   // the very first paint (the bubble can auto-open already showing it), not
@@ -113,14 +111,6 @@ export function HelpChatView({
                 className="rounded-full border border-card-light-border px-3 py-1.5 text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white"
               >
                 {tourCtaLabel}
-              </button>
-            )}
-            {/* Not mandatory — an explicit, equally-visible way out of the
-                first-login welcome, same "Not now" pattern as the trial
-                preview modal, rather than only the header's small ✕. */}
-            {welcomeMessage && onDismiss && (
-              <button type="button" onClick={onDismiss} className="px-2 py-1.5 text-xs font-medium text-card-light-muted hover:underline">
-                Maybe later
               </button>
             )}
             {/* FAQ shortcuts only make sense on a genuinely blank chat —

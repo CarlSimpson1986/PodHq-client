@@ -70,7 +70,7 @@ export function TrialBanner() {
       >
         <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Limited offer · Free</p>
         <p className="mt-1 text-base font-semibold">7 Day Premium Trial</p>
-        <p className="mt-0.5 text-sm opacity-90">AI Coach — personalised workouts that adapt as you train</p>
+        <p className="mt-0.5 text-sm opacity-90">Full Premium — coaching, nutrition & training that adapts as you go</p>
       </button>
 
       {step !== "banner" && (

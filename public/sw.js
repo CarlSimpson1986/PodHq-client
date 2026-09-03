@@ -7,7 +7,7 @@
 // the network so auth/session state and payment/booking actions can't be
 // served stale.
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE_NAME = `podhq-client-${CACHE_VERSION}`;
 const PRECACHE_URLS = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
@@ -18,7 +18,12 @@ const PRECACHE_URLS = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png
 // every successful navigation regardless of content, so logging out and back
 // in as someone else on the same device/browser could serve the previous
 // member's cached profile/bookings page if the network hit the timeout below.
-const CACHEABLE_NAVIGATION_PATHS = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/offline"]);
+// "/" is deliberately NOT in this set — it's Home, the most member-specific
+// page in the app ("Hello, {name}"), not a public page. Including it here
+// once caused exactly the bug this file's own rule exists to prevent: a
+// deleted/logged-out member's browser could keep being served their old
+// cached dashboard instead of the real, fresh (logged-out) page.
+const CACHEABLE_NAVIGATION_PATHS = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/offline"]);
 
 // On a genuinely bad connection, fetch() doesn't reject quickly — it just
 // hangs until the browser's own long timeout. Racing it against a short

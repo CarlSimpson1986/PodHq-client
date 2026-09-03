@@ -53,14 +53,16 @@ export function OnboardingTour({
         initialOpen={firstLogin}
         welcomeMessage={
           firstLogin
-            ? `Hi ${firstName}, welcome to My Fit Pod! You're all set up at ${gym}. I'm Pod Assist — ask me anything about bookings, credits, or gym policies, any time you get stuck, just tap this icon. Want a quick tour first — how to book a session, and how to buy credits or a membership?`
+            ? `Hi ${firstName}, welcome to My Fit Pod! You're all set up at ${gym}. I'm Pod Assist — ask me anything about bookings, credits, or gym policies, any time you get stuck, just tap this icon. Here's a quick tour to get you started — how to buy credits or a membership, and how to book a session.`
             : undefined
         }
         tourCtaLabel={firstLogin ? "Show me around" : "Replay app tour"}
         onReplayTour={() => setTourStarted(true)}
         onClose={firstLogin ? markTourComplete : undefined}
       />
-      {tourStarted && <TourRunner path="/" startIndex={0} />}
+      {tourStarted && (
+        <TourRunner path="/" startIndex={0} onComplete={() => setTourStarted(false)} />
+      )}
     </>
   );
 }
