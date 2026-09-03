@@ -172,9 +172,24 @@ id it targeted.
 
 **Verified**: `tsc --noEmit` clean throughout. The invisible-button root
 cause was confirmed via live instrumentation, not guessed — the debug
-readout's values were screenshotted before the fix. The Training/
-Nutrition anchors and cross-page hand-off logic are unverified live as
-of this write-up (same `requestAnimationFrame`-needs-a-focused-tab
-limitation noted for Pod Assist's own tour applies identically here) —
-a real click-through by Carl through all three pages is the outstanding
-check.
+readout's values were screenshotted before the fix. Dashboard's 6 steps
+re-verified live via direct DOM inspection (correct order, glow on
+every step); Training/Nutrition's cross-page hand-off itself hit the
+same automation-tab `requestAnimationFrame` limitation again when
+re-tested this way, but the resume pointer and page navigation were
+confirmed correct, and Carl's own real-tab click-through afterward
+("ok that will do!") confirms the full sequence actually works live.
+
+## More meal suggestion variety — 2026-09-03
+
+Carl: "I would like to add more options for what to eat next" →
+"I want as much variety as possible." `meal-suggestions.ts`'s
+`SUGGESTION_COUNT` (2 → 4, one idea per open meal slot on a day with
+nothing logged yet, not always just two) and its top-up pass (was a
+couple of fixed calls that could silently return fewer than asked for —
+now loops until it actually reaches the count or the catalog's
+exhausted). `meal-catalog.ts` doubled, 24 → 48 hand-written meals (12
+per slot) — more proteins (pork, beef, prawns, halloumi), cuisines
+(curry, fajitas, shakshuka), and vegetarian options, same
+reviewed-not-runtime-LLM-generated convention as the rest of the file.
+`tsc --noEmit` clean; not yet checked live.
