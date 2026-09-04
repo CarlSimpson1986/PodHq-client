@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getYoutubeVideoId, getYoutubeEmbedTiming } from "@/lib/coach/exercise-catalog";
+import { useExerciseVideoOverrides } from "@/lib/hooks/use-exercise-video-overrides";
 import { getStrengthFocusLabel } from "@/lib/coach/generate-workout";
 import type { StoredTemplate } from "@/lib/coach/workout-templates";
 import type { BlockType } from "@/lib/coach/types";
@@ -15,11 +16,14 @@ import { ChevronRightIcon } from "@/components/icons";
 // screen already uses, and only once tapped.
 function ExerciseRow({ ex }: { ex: StoredTemplate["exercises"][number] }) {
   const [playing, setPlaying] = useState(false);
+  const exerciseVideoOverrides = useExerciseVideoOverrides();
+  const ownVideoUrl = exerciseVideoOverrides[ex.key];
   const videoId = getYoutubeVideoId(ex.key);
   const timing = getYoutubeEmbedTiming(ex.key);
   const params = new URLSearchParams({ rel: "0" });
   if (timing.start !== undefined) params.set("start", String(timing.start));
   if (timing.end !== undefined) params.set("end", String(timing.end));
+  const hasVideo = Boolean(ownVideoUrl || videoId);
 
   return (
     <li>
@@ -27,13 +31,19 @@ function ExerciseRow({ ex }: { ex: StoredTemplate["exercises"][number] }) {
         <p className="text-sm text-card-light-muted">
           {ex.name} <span className="capitalize">({ex.muscleGroup})</span>
         </p>
-        {videoId && (
+        {hasVideo && (
           <button type="button" onClick={() => setPlaying((p) => !p)} className="flex-none text-xs font-semibold underline">
             {playing ? "Hide" : "▶ Watch"}
           </button>
         )}
       </div>
-      {playing && videoId && (
+      {playing && ownVideoUrl && (
+        <div className="mt-2 aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
+          {/* Own uploaded clip — no YouTube branding, no iframe. */}
+          <video src={ownVideoUrl} controls playsInline className="h-full w-full" />
+        </div>
+      )}
+      {playing && !ownVideoUrl && videoId && (
         <div className="mt-2 aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`}

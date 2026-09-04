@@ -14,6 +14,7 @@ import {
   type MuscleGroup,
 } from "@/lib/coach/exercise-catalog";
 import { WARMUP_ITEMS, COOLDOWN_ITEMS } from "@/lib/coach/warmup-cooldown";
+import { useExerciseVideoOverrides } from "@/lib/hooks/use-exercise-video-overrides";
 
 // How long each frame shows before auto-switching — reads as motion
 // without needing a real animated asset (the source images are two
@@ -248,6 +249,7 @@ function getSwapCandidates(exercise: WorkoutExercise, detail: WorkoutSessionDeta
 }
 
 export function WorkoutView({ bookingId }: { bookingId: number }) {
+  const exerciseVideoOverrides = useExerciseVideoOverrides();
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusSelection, setFocusSelection] = useState<MuscleGroup[]>([]);
@@ -2248,6 +2250,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   // phase === "active"
   const images = getExerciseImages(exercise.key);
   const safetyTip = getSafetyTip(exercise.key);
+  const ownVideoUrl = exerciseVideoOverrides[exercise.key];
   const youtubeVideoId = getYoutubeVideoId(exercise.key);
   const youtubeTiming = getYoutubeEmbedTiming(exercise.key);
   const youtubeEmbedParams = new URLSearchParams({ rel: "0" });
@@ -2266,7 +2269,12 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         </p>
       </div>
 
-      {youtubeVideoId ? (
+      {ownVideoUrl ? (
+        <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
+          {/* Own uploaded clip (see podHq's exercise-videos admin page) — no YouTube branding, no iframe. */}
+          <video src={ownVideoUrl} controls playsInline className="h-full w-full" />
+        </div>
+      ) : youtubeVideoId ? (
         <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?${youtubeEmbedParams.toString()}`}

@@ -68,6 +68,13 @@ function buildCsp(nonce: string) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self' data:",
+    // Own uploaded exercise-technique videos (2026-09-04) live in a public
+    // Supabase Storage bucket, a cross-origin URL — with no media-src set
+    // this would fall back to default-src 'self' and silently block every
+    // <video> element with no console warning, the same failure class as
+    // this file's other CSP misses. Read from SUPABASE_URL directly (server
+    // middleware, not client code) rather than hardcoding the project URL.
+    `media-src 'self' ${process.env.SUPABASE_URL ?? ""}`,
     // fcm.googleapis.com — Chrome's Push API routes pushManager.subscribe()
     // through its push service over a real network connection from the
     // page's own process, which page CSP does govern (same class of gap as
