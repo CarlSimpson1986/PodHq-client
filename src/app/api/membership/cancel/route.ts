@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getStripeClient } from "@/lib/stripe";
+import { getGymStripeContext } from "@/lib/data/stripe-config";
 
 // Immediate cancellation, not cancel_at_period_end — matches the exact
 // behaviour already live-verified during Stage 8 testing (stripe
@@ -38,8 +38,12 @@ export async function POST() {
   }
 
   try {
-    const stripe = getStripeClient();
-    await stripe.subscriptions.cancel(membership.stripe_subscription_id);
+    // Pre-existing gap fixed here: this previously always used the shared
+    // platform client with no account routing at all, which would have
+    // failed for any gym with its own Stripe account (standalone or
+    // Connect) — the subscription only exists on that gym's own account.
+    const { client: stripe, requestOptions } = await getGymStripeContext(member.gym);
+    await stripe.subscriptions.cancel(membership.stripe_subscription_id, {}, requestOptions);
   } catch (err) {
     console.error("[membership-cancel] Stripe cancel failed", {
       error: err instanceof Error ? err.message : String(err),

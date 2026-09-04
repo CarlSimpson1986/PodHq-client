@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import type Stripe from "stripe";
+import Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripeClient } from "@/lib/stripe";
+import { decryptSecret } from "@/lib/crypto/secret-encryption";
 import { getActiveMembership, networkCreditType } from "@/lib/data/member";
 import { notifyFireAndForget } from "@/lib/notifications/core";
 import { resolveMemberContact } from "@/lib/notifications/resolve-member-contact";
@@ -31,44 +32,73 @@ export async function POST(request: NextRequest) {
   // verify against both rather than the one shared secret originally assumed.
   const webhookSecretConnect = process.env.STRIPE_WEBHOOK_SECRET_CONNECT;
 
-  // Either secret alone is enough to serve requests — a gym-config with no
-  // platform endpoint yet configured (e.g. this Connect-only pilot, before
-  // any gym has a live platform-account checkout) must not 500 just because
-  // STRIPE_WEBHOOK_SECRET is unset while STRIPE_WEBHOOK_SECRET_CONNECT is.
-  if (!signature || (!webhookSecret && !webhookSecretConnect)) {
+  if (!signature) {
     return NextResponse.json({ status: "error", message: "Webhook not configured." }, { status: 500 });
   }
 
   const rawBody = await request.text();
-  const stripe = getStripeClient();
+  const platformStripe = getStripeClient();
+  const admin = createAdminClient();
 
-  let event: Stripe.Event;
-  try {
-    if (!webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET not configured");
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch {
-    if (!webhookSecretConnect) {
-      return NextResponse.json({ status: "error", message: "Invalid signature." }, { status: 400 });
-    }
+  let event: Stripe.Event | null = null;
+  // Set only when the matched signature was a standalone gym's own
+  // (see 0084_gym_stripe_standalone.sql) — that gym's own client must be
+  // used for every follow-up call below instead of the platform client,
+  // since the event never carries event.account (it's not a Connect
+  // event) and the payment/subscription objects it references only exist
+  // on that gym's own account.
+  let standaloneClient: Stripe | null = null;
+
+  if (webhookSecret) {
     try {
-      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecretConnect);
+      event = platformStripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
     } catch {
-      return NextResponse.json({ status: "error", message: "Invalid signature." }, { status: 400 });
+      // fall through to the next candidate secret
+    }
+  }
+  if (!event && webhookSecretConnect) {
+    try {
+      event = platformStripe.webhooks.constructEvent(rawBody, signature, webhookSecretConnect);
+    } catch {
+      // fall through
+    }
+  }
+  if (!event) {
+    const { data: standaloneConfigs, error: standaloneError } = await admin
+      .from("gym_stripe_config")
+      .select("api_key_encrypted, webhook_secret_encrypted")
+      .not("api_key_encrypted", "is", null)
+      .not("webhook_secret_encrypted", "is", null);
+    if (!standaloneError) {
+      for (const config of standaloneConfigs ?? []) {
+        try {
+          const candidateSecret = decryptSecret(config.webhook_secret_encrypted!);
+          event = platformStripe.webhooks.constructEvent(rawBody, signature, candidateSecret);
+          standaloneClient = new Stripe(decryptSecret(config.api_key_encrypted!));
+          break;
+        } catch {
+          // not this gym's secret — try the next one
+        }
+      }
     }
   }
 
-  const admin = createAdminClient();
+  if (!event) {
+    return NextResponse.json({ status: "error", message: "Invalid signature." }, { status: 400 });
+  }
 
-  // Present only when this event originated on a gym's own Stripe Connect
-  // account (event.account), never for the shared platform account — every
-  // *secondary* Stripe API call this handler makes below (retrieving a
-  // PaymentIntent, a Subscription, listing Invoice Payments, updating a
-  // Customer) needs to be told the same account explicitly, or it 404s
-  // against the platform account's own data instead. Resolving which
-  // member/gym a payment belongs to doesn't need this at all — that's
-  // already done via checkout/subscription metadata regardless of which
-  // account processed the payment.
-  const connectRequestOptions = event.account ? { stripeAccount: event.account } : undefined;
+  // Every *secondary* Stripe API call this handler makes below (retrieving
+  // a PaymentIntent, a Subscription, listing Invoice Payments, updating a
+  // Customer) must land on the same account the event itself came from —
+  // a standalone gym's own client, or the platform client scoped to a
+  // Connect account via connectRequestOptions, or the plain platform
+  // client for a platform-account event. Resolving which member/gym a
+  // payment belongs to doesn't depend on any of this — that's already
+  // done via checkout/subscription metadata regardless of which account
+  // processed the payment.
+  const stripe = standaloneClient ?? platformStripe;
+  const connectRequestOptions: Stripe.RequestOptions | undefined =
+    !standaloneClient && event.account ? { stripeAccount: event.account } : undefined;
 
   if (event.type === "checkout.session.completed") {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
@@ -208,7 +238,7 @@ export async function POST(request: NextRequest) {
           (await stripe.paymentIntents.retrieve(paymentIntentId, undefined, connectRequestOptions)).payment_method
         )
       : null;
-    await saveStripeCustomerId(admin, memberId, checkoutSession.customer, usedPaymentMethodId, connectRequestOptions);
+    await saveStripeCustomerId(admin, stripe, memberId, checkoutSession.customer, usedPaymentMethodId, connectRequestOptions);
   }
 
   // Staff-initiated "charge card on file" (podHq's /pods/members/[id] sell
@@ -319,6 +349,7 @@ export async function POST(request: NextRequest) {
 
     await saveStripeCustomerId(
       admin,
+      stripe,
       memberId,
       subscription.customer,
       resolvePaymentMethodId(subscription.default_payment_method),
@@ -381,7 +412,6 @@ export async function POST(request: NextRequest) {
     // one-off credit-pack purchase has no subscription and is credited by
     // checkout.session.completed above instead.
     if (subscriptionId) {
-      const stripe = getStripeClient();
       const subscription = await stripe.subscriptions.retrieve(
         typeof subscriptionId === "string" ? subscriptionId : subscriptionId.id,
         undefined,
@@ -552,6 +582,7 @@ export async function POST(request: NextRequest) {
 // guarded on customerId being present, not an unconditional overwrite.
 async function saveStripeCustomerId(
   admin: ReturnType<typeof createAdminClient>,
+  stripe: Stripe,
   memberId: number,
   customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined,
   defaultPaymentMethodId: string | null,
@@ -572,7 +603,6 @@ async function saveStripeCustomerId(
   // to display/charge "the" card on file, rather than listing every
   // attached payment method and guessing which one is current.
   if (defaultPaymentMethodId) {
-    const stripe = getStripeClient();
     try {
       await stripe.customers.update(
         customerId,

@@ -2,8 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getStripeClient } from "@/lib/stripe";
-import { getGymStripeAccountId } from "@/lib/data/stripe-config";
+import { getGymStripeContext } from "@/lib/data/stripe-config";
 import { checkoutVoucherSchema } from "@/lib/validation/gift-voucher";
 import { generateVoucherCode, creditsForVoucherAmount } from "@/lib/gift-voucher";
 
@@ -50,8 +49,7 @@ export async function POST(request: NextRequest) {
   const credits = creditsForVoucherAmount(amountGBP);
 
   const origin = request.nextUrl.origin;
-  const stripe = getStripeClient();
-  const stripeAccountId = await getGymStripeAccountId(member.gym);
+  const { client: stripe, requestOptions: stripeOptions } = await getGymStripeContext(member.gym);
   const checkoutSession = await stripe.checkout.sessions.create(
     {
       mode: "payment",
@@ -76,7 +74,7 @@ export async function POST(request: NextRequest) {
       success_url: `${origin}/gift-voucher/success?code=${code}`,
       cancel_url: `${origin}/gift-voucher?purchase=cancelled`,
     },
-    stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+    stripeOptions
   );
 
   if (!checkoutSession.url) {

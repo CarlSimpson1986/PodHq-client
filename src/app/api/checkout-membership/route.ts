@@ -2,8 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getStripeClient } from "@/lib/stripe";
-import { getGymStripeAccountId } from "@/lib/data/stripe-config";
+import { getGymStripeContext } from "@/lib/data/stripe-config";
 import { getMembershipTierById } from "@/lib/data/catalog";
 import { findApplicablePromoCode, redeemPromoCode, applyDiscount } from "@/lib/data/promo-codes";
 import { checkoutMembershipSchema } from "@/lib/validation/checkout-membership";
@@ -45,13 +44,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Unknown membership tier." }, { status: 400 });
   }
 
-  const stripe = getStripeClient();
-  // A gym with its own Stripe Connect account (Hove onward) gets the
-  // subscription created directly against that account. null (no
-  // connected account yet) falls back to the platform account exactly as
-  // every gym behaved before Connect existed.
-  const stripeAccountId = await getGymStripeAccountId(member.gym);
-  const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+  // A gym with its own Stripe account — standalone or Connect — gets the
+  // subscription created directly against that account. No config at all
+  // falls back to the shared platform account.
+  const { client: stripe, requestOptions: stripeOptions } = await getGymStripeContext(member.gym);
 
   // One active membership at a time. Same tier again is just a no-op
   // resubscribe attempt — block it. A genuinely different tier is a real

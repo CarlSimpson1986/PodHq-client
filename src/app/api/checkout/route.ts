@@ -2,8 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getStripeClient } from "@/lib/stripe";
-import { getGymStripeAccountId } from "@/lib/data/stripe-config";
+import { getGymStripeContext } from "@/lib/data/stripe-config";
 import { getCreditPackageById, hasMemberClaimedItem } from "@/lib/data/catalog";
 import { findApplicablePromoCode, redeemPromoCode, applyDiscount } from "@/lib/data/promo-codes";
 import { checkoutSchema } from "@/lib/validation/checkout";
@@ -100,16 +99,16 @@ export async function POST(request: NextRequest) {
   }
 
   const origin = request.nextUrl.origin;
-  const stripe = getStripeClient();
-  // A gym with its own Stripe Connect account (Hove onward) gets the
-  // Checkout Session created directly against that account — money and
+  // A gym with its own Stripe account — standalone (Carl's own gyms) or
+  // Connect (a franchisee that's completed onboarding) — gets the
+  // Checkout Session created directly against that account, so money and
   // Stripe's processing fee land there, not on the shared platform
-  // account. null (no connected account yet) falls back to the platform
-  // account exactly as every gym behaved before Connect existed. Uses
-  // the resolved `gym` (not member.gym) — this is the actual point of
-  // today's fix: buying while browsing another gym pays that gym, not
+  // account. No config at all falls back to the platform account exactly
+  // as every gym behaved before per-gym Stripe existed. Uses the
+  // resolved `gym` (not member.gym) — this is the actual point of the
+  // 2026-08-19 fix: buying while browsing another gym pays that gym, not
   // always home.
-  const stripeAccountId = await getGymStripeAccountId(gym);
+  const { client: stripe, requestOptions: stripeOptions } = await getGymStripeContext(gym);
   // Carries the purchase-gym back through so a member who bought credit
   // to spend at another gym lands back on that gym's /book view, not
   // their own — they'd otherwise have to re-select it after paying.
@@ -141,7 +140,7 @@ export async function POST(request: NextRequest) {
       success_url: `${origin}${bookRedirect}${bookRedirect.includes("?") ? "&" : "?"}purchase=success`,
       cancel_url: `${origin}/buy-credits?purchase=cancelled${gym !== member.gym ? `&gym=${encodeURIComponent(gym)}` : ""}`,
     },
-    stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+    stripeOptions
   );
 
   if (!checkoutSession.url) {
