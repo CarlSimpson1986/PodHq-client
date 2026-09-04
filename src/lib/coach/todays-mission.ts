@@ -7,9 +7,10 @@ import { computeNutritionTargets } from "@/lib/coach/nutrition-targets";
 import { getDayLog } from "@/lib/coach/food-log";
 import { getActiveHabits, getTodayProgress } from "@/lib/coach/daily-habits";
 import { getLatestWearableSnapshot } from "@/lib/data/wearables";
+import { isWorkoutManuallyLoggedToday } from "@/lib/coach/workout-manual-log";
 
 export type WorkoutMissionStatus =
-  | { kind: "no_booking" }
+  | { kind: "no_booking"; manuallyLogged: boolean }
   | { kind: "not_started"; bookingId: number }
   | { kind: "completed"; bookingId: number };
 
@@ -35,16 +36,17 @@ const STEP_TARGET = 8000;
 export async function getTodaysMission(memberId: number, gym: string, gender: string | null): Promise<TodaysMission> {
   const today = londonDateString(new Date());
 
-  const [booking, coachProfile, dayLog, habits, progress, snapshot] = await Promise.all([
+  const [booking, coachProfile, dayLog, habits, progress, snapshot, manuallyLogged] = await Promise.all([
     getTodayBookingForMember(memberId, gym),
     getCoachProfile(memberId),
     getDayLog(memberId, today),
     getActiveHabits(memberId),
     getTodayProgress(memberId),
     getLatestWearableSnapshot(memberId),
+    isWorkoutManuallyLoggedToday(memberId, today),
   ]);
 
-  let workout: WorkoutMissionStatus = { kind: "no_booking" };
+  let workout: WorkoutMissionStatus = { kind: "no_booking", manuallyLogged };
   if (booking) {
     const sessionStatus = await getSessionStatusForBooking(booking.id);
     workout = sessionStatus === "completed" ? { kind: "completed", bookingId: booking.id } : { kind: "not_started", bookingId: booking.id };

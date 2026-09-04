@@ -193,3 +193,30 @@ per slot) — more proteins (pork, beef, prawns, halloumi), cuisines
 (curry, fajitas, shakshuka), and vegetarian options, same
 reviewed-not-runtime-LLM-generated convention as the rest of the file.
 `tsc --noEmit` clean; not yet checked live.
+
+## Manual "worked out anyway" workout log — 2026-09-04
+
+Continuation of the 2026-09-03 session, which drafted and applied
+`member_workout_manual_logs` (podHq's `0083`, shared DB) but left the
+migration file uncommitted in podHq and never built this side. Picked
+back up 2026-09-04: `src/lib/coach/workout-manual-log.ts` (get/log/undo,
+same insert-only + same-day-only-delete convention as `habit_logs`),
+`/api/member/workout-manual-log` (POST/DELETE, same session/rate-limit/
+member-lookup shape as every other member route), and
+`todays-mission.ts`'s `no_booking` workout state extended with a
+`manuallyLogged` flag.
+
+`todays-mission-card.tsx`'s Workout row (no-booking case) changed from
+a single `Link` wrapping the whole row to a tickable `StatusDot` button
+(same look/behaviour as `DailyHabitsCard`'s tick/untick) plus a separate
+`/training` preview `Link`, so ticking and previewing don't fight over
+the same tap target.
+
+**Verified live**: `tsc --noEmit`, eslint, and `npx vitest run`
+(178/178) all clean. Logged into local dev as Carl's own real
+trial-active Hove account — ticked the Workout dot (POST 200, dot went
+green, text → "Logged today — preview →"), reloaded the page fresh to
+confirm the server-rendered state persisted (0/4 → 1/4 today), then
+undid it (DELETE 200) and reloaded again to confirm it reverted to
+0/4. Full round trip confirmed against the real DB, not just optimistic
+client state.

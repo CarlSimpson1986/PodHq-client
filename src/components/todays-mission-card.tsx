@@ -12,7 +12,7 @@ type Habit = MemberHabit & { todayCount: number };
 const rowClass = "flex items-center justify-between gap-3 rounded-lg border border-card-light-border px-3 py-2.5";
 
 function isWorkoutDone(workout: TodaysMission["workout"]): boolean {
-  return workout.kind === "completed";
+  return workout.kind === "completed" || (workout.kind === "no_booking" && workout.manuallyLogged);
 }
 function isStepsDone(steps: TodaysMission["steps"]): boolean {
   return steps.count !== null && steps.count >= steps.target;
@@ -37,16 +37,47 @@ function StatusDot({ done }: { done: boolean }) {
 }
 
 function WorkoutRow({ workout }: { workout: TodaysMission["workout"] }) {
+  const [manuallyLogged, setManuallyLogged] = useState(workout.kind === "no_booking" ? workout.manuallyLogged : false);
+  const [busy, setBusy] = useState(false);
+
   if (workout.kind === "no_booking") {
-    // Links to /training rather than /book — a member should always be
-    // able to see what their next workout would be, credit or no credit
-    // (Carl's call, 2026-08-29); /training's "Your workouts" section is
-    // exactly that preview, generated the same way a real booking would.
+    // "I worked out anyway" tick, for a day with no booked session — a
+    // booked session's own completion status (below) is the source of
+    // truth otherwise, this only ever applies here. Optimistic, same
+    // pattern as DailyHabitsCard's tick/untick; reverts on a failed
+    // request rather than reconciling against a GET, since the table's
+    // one-row-per-day constraint makes true/false the only two states.
+    async function toggle() {
+      if (busy) return;
+      setBusy(true);
+      const wasLogged = manuallyLogged;
+      setManuallyLogged(!wasLogged);
+      try {
+        const res = await fetch("/api/member/workout-manual-log", { method: wasLogged ? "DELETE" : "POST" });
+        const body = await res.json();
+        if (body.status !== "ok") setManuallyLogged(wasLogged);
+      } catch {
+        setManuallyLogged(wasLogged);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    // Preview link still goes to /training rather than /book — a member
+    // should always be able to see what their next workout would be,
+    // credit or no credit (Carl's call, 2026-08-29); /training's "Your
+    // workouts" section is exactly that preview, generated the same way
+    // a real booking would.
     return (
-      <Link href="/training" prefetch={false} className={`${rowClass} hover:bg-card-border/10`}>
-        <span className="text-sm">Workout</span>
-        <span className="text-xs text-card-light-muted">No session booked — preview →</span>
-      </Link>
+      <div className={rowClass}>
+        <button type="button" disabled={busy} onClick={toggle} className="flex items-center gap-2.5 text-left text-sm disabled:opacity-50">
+          <StatusDot done={manuallyLogged} />
+          Workout
+        </button>
+        <Link href="/training" prefetch={false} className="text-xs text-card-light-muted hover:underline">
+          {manuallyLogged ? "Logged today — preview →" : "No session booked — preview →"}
+        </Link>
+      </div>
     );
   }
   const done = isWorkoutDone(workout);
