@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripeClient } from "@/lib/stripe";
 import { decryptSecret } from "@/lib/crypto/secret-encryption";
 import { getActiveMembership, networkCreditType } from "@/lib/data/member";
+import { getCreditPackageById } from "@/lib/data/catalog";
+import { recordStripeRevenue } from "@/lib/data/record-revenue";
 import { notifyFireAndForget } from "@/lib/notifications/core";
 import { resolveMemberContact } from "@/lib/notifications/resolve-member-contact";
 import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
@@ -48,6 +50,11 @@ export async function POST(request: NextRequest) {
   // event) and the payment/subscription objects it references only exist
   // on that gym's own account.
   let standaloneClient: Stripe | null = null;
+  // Set alongside standaloneClient — the real gym this event's own account
+  // belongs to, read straight from the row whose secret matched. Used to
+  // attribute Revenue rows correctly (see record-revenue.ts) rather than
+  // guessing from member.gym, which can be wrong for a cross-gym purchase.
+  let standaloneGym: string | null = null;
 
   if (webhookSecret) {
     try {
@@ -66,7 +73,7 @@ export async function POST(request: NextRequest) {
   if (!event) {
     const { data: standaloneConfigs, error: standaloneError } = await admin
       .from("gym_stripe_config")
-      .select("api_key_encrypted, webhook_secret_encrypted")
+      .select("gym, api_key_encrypted, webhook_secret_encrypted")
       .not("api_key_encrypted", "is", null)
       .not("webhook_secret_encrypted", "is", null);
     if (!standaloneError) {
@@ -75,6 +82,7 @@ export async function POST(request: NextRequest) {
           const candidateSecret = decryptSecret(config.webhook_secret_encrypted!);
           event = platformStripe.webhooks.constructEvent(rawBody, signature, candidateSecret);
           standaloneClient = new Stripe(decryptSecret(config.api_key_encrypted!));
+          standaloneGym = config.gym;
           break;
         } catch {
           // not this gym's secret — try the next one
@@ -144,6 +152,16 @@ export async function POST(request: NextRequest) {
       if (!error) {
         const purchaser = await resolveMemberContact(purchaserMemberId);
         if (purchaser) {
+          if (standaloneGym) {
+            await recordStripeRevenue(
+              standaloneGym,
+              `Gift Voucher — £${amountGBP.toFixed(2)}`,
+              amountGBP,
+              "CREDIT_PACK",
+              purchaser.name,
+              event.created
+            );
+          }
           const purchaserEmail = giftVoucherPurchasedEmail({
             memberName: purchaser.name,
             code,
@@ -216,6 +234,18 @@ export async function POST(request: NextRequest) {
     if (!error) {
       const contact = await resolveMemberContact(memberId);
       if (contact) {
+        if (standaloneGym) {
+          const packageId = checkoutSession.metadata?.packageId;
+          const pkg = packageId ? await getCreditPackageById(standaloneGym, packageId) : null;
+          await recordStripeRevenue(
+            standaloneGym,
+            pkg ? `${pkg.name} — ${pkg.label}` : (packageId ?? "Credit pack"),
+            (checkoutSession.amount_total ?? 0) / 100,
+            "CREDIT_PACK",
+            contact.name,
+            event.created
+          );
+        }
         const { subject, html } = creditPackPurchasedEmail({ memberName: contact.name, credits });
         await notifyFireAndForget({
           eventType: "credit_pack_purchased",
@@ -284,6 +314,18 @@ export async function POST(request: NextRequest) {
       if (!error) {
         const contact = await resolveMemberContact(memberId);
         if (contact) {
+          if (standaloneGym) {
+            const packageId = paymentIntent.metadata?.packageId;
+            const pkg = packageId ? await getCreditPackageById(standaloneGym, packageId) : null;
+            await recordStripeRevenue(
+              standaloneGym,
+              pkg ? `${pkg.name} — ${pkg.label}` : (packageId ?? "Credit pack"),
+              paymentIntent.amount / 100,
+              "CREDIT_PACK",
+              contact.name,
+              event.created
+            );
+          }
           const { subject, html } = creditPackPurchasedEmail({ memberName: contact.name, credits });
           await notifyFireAndForget({
             eventType: "credit_pack_purchased",
@@ -450,6 +492,25 @@ export async function POST(request: NextRequest) {
       if (error && error.code !== "23505") {
         console.error("[stripe-webhook] failed to grant membership credits", { error: error.message });
         return NextResponse.json({ status: "error", message: "Could not grant credits." }, { status: 500 });
+      }
+
+      // Unconditional on a fresh insert, same as the credit grant itself —
+      // every real charge counts as revenue, first payment or renewal
+      // alike, not just the ones that also happen to trigger an email
+      // below.
+      if (!error && standaloneGym) {
+        const revenueContact = await resolveMemberContact(memberId);
+        if (revenueContact) {
+          const tierName = subscription.metadata?.tier_name ?? "Membership";
+          await recordStripeRevenue(
+            standaloneGym,
+            tierName,
+            (invoice.amount_paid ?? 0) / 100,
+            "MEMBERSHIP",
+            revenueContact.name,
+            event.created
+          );
+        }
       }
 
       // Combo memberships grant a second credit type from the same
