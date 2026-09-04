@@ -17,7 +17,7 @@ function ExerciseRow({ ex }: { ex: StoredTemplate["exercises"][number] }) {
   const [playing, setPlaying] = useState(false);
   const videoId = getYoutubeVideoId(ex.key);
   const timing = getYoutubeEmbedTiming(ex.key);
-  const params = new URLSearchParams({ rel: "0" });
+  const params = new URLSearchParams({ rel: "0", modestbranding: "1" });
   if (timing.start !== undefined) params.set("start", String(timing.start));
   if (timing.end !== undefined) params.set("end", String(timing.end));
 

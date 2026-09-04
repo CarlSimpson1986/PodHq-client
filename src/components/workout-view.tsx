@@ -2250,7 +2250,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const safetyTip = getSafetyTip(exercise.key);
   const youtubeVideoId = getYoutubeVideoId(exercise.key);
   const youtubeTiming = getYoutubeEmbedTiming(exercise.key);
-  const youtubeEmbedParams = new URLSearchParams({ rel: "0" });
+  const youtubeEmbedParams = new URLSearchParams({ rel: "0", modestbranding: "1" });
   if (youtubeTiming.start !== undefined) youtubeEmbedParams.set("start", String(youtubeTiming.start));
   if (youtubeTiming.end !== undefined) youtubeEmbedParams.set("end", String(youtubeTiming.end));
   return (
