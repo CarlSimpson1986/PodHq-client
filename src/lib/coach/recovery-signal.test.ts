@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getRecoverySignal } from "./recovery-signal";
+import { getRecoverySignal, getSelfReportedRecoverySignal } from "./recovery-signal";
 import type { WearableSnapshot } from "@/lib/data/wearables";
 
 function snapshot(overrides: Partial<WearableSnapshot> = {}): WearableSnapshot {
@@ -44,5 +44,27 @@ describe("getRecoverySignal", () => {
     const today = snapshot({ restingHeartRate: 66 });
     const result = getRecoverySignal(today, baseline);
     expect(result).toEqual({ kind: "low_recovery", reason: "elevated_resting_hr" });
+  });
+});
+
+describe("getSelfReportedRecoverySignal — pre-workout readiness check (2026-09-06)", () => {
+  it("flags low recovery when energy alone is low, regardless of sleep/soreness", () => {
+    const result = getSelfReportedRecoverySignal({ sleepQuality: "high", soreness: "high", energy: "low" });
+    expect(result).toEqual({ kind: "low_recovery", reason: "self_reported" });
+  });
+
+  it("flags low recovery when both sleep and soreness are low, even with medium energy", () => {
+    const result = getSelfReportedRecoverySignal({ sleepQuality: "low", soreness: "low", energy: "medium" });
+    expect(result).toEqual({ kind: "low_recovery", reason: "self_reported" });
+  });
+
+  it("does not flag low recovery from a single low answer other than energy", () => {
+    const result = getSelfReportedRecoverySignal({ sleepQuality: "low", soreness: "high", energy: "medium" });
+    expect(result).toEqual({ kind: "normal" });
+  });
+
+  it("returns normal when every answer is medium or high", () => {
+    const result = getSelfReportedRecoverySignal({ sleepQuality: "medium", soreness: "high", energy: "high" });
+    expect(result).toEqual({ kind: "normal" });
   });
 });

@@ -15,13 +15,15 @@ import {
   type TemplateExercisePick,
 } from "@/lib/coach/generate-workout";
 import { getTemplateSet, createTemplateSet, countSessionsForTemplates } from "@/lib/coach/workout-templates";
+import { getAvoidedExerciseKeys, avoidExercise } from "@/lib/coach/avoided-exercises";
 import { EXERCISE_CATALOG, type MuscleGroup } from "@/lib/coach/exercise-catalog";
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { getActiveBlock } from "@/lib/coach/training-block-state";
 import { DELOAD_WEIGHT_MULTIPLIER, type BlockType, type EquipmentType } from "@/lib/coach/types";
 import { getWearableConnection, getLatestWearableSnapshot, getRecentWearableSnapshots } from "@/lib/data/wearables";
-import { getRecoverySignal, type RecoverySignal } from "@/lib/coach/recovery-signal";
+import { getRecoverySignal, getSelfReportedRecoverySignal, type RecoverySignal } from "@/lib/coach/recovery-signal";
+import { getReadinessCheck, logReadinessCheck, type ReadinessCheckAnswers } from "@/lib/coach/readiness-check";
 import { getLatestPainReport } from "@/lib/coach/check-ins";
 import { getPainCaution, type PainCaution } from "@/lib/coach/pain-caution";
 
@@ -123,6 +125,12 @@ export interface WorkoutSessionDetail extends SessionExerciseDetail {
   // on the overview screen as a member-confirmed suggestion only
   // (applyRecoveryAdjustment below), never applied automatically.
   recoveryAdvice: RecoverySignal;
+  // Pre-workout readiness check (2026-09-06) — the member's own answers
+  // for this session, if they've submitted one. Null both before they've
+  // been asked and for a session type (AMRAP/RFT/HIIT) that never asks —
+  // see getRecoveryAdvice's own comment on how this feeds recoveryAdvice
+  // when there's no wearable connected.
+  readinessCheck: ReadinessCheckAnswers | null;
   // Whether the member's latest weekly check-in reported pain that's
   // still relevant to today's session (2026-08-30, coaching review — see
   // pain-caution.ts). Advisory only, same posture as recoveryAdvice —
@@ -160,8 +168,8 @@ async function getResourceEquipment(resourceId: number): Promise<EquipmentType[]
   return (data?.equipment as EquipmentType[] | null) ?? [];
 }
 
-function combineExcludedKeys(injuries: string | null, availableEquipment: EquipmentType[]): string[] {
-  return [...new Set([...getInjuryExcludedKeys(injuries), ...getEquipmentExcludedKeys(availableEquipment)])];
+function combineExcludedKeys(injuries: string | null, availableEquipment: EquipmentType[], avoidedKeys: string[] = []): string[] {
+  return [...new Set([...getInjuryExcludedKeys(injuries), ...getEquipmentExcludedKeys(availableEquipment), ...avoidedKeys])];
 }
 
 // Stage 3 (2026-08-29) — drives the pre-generation "build your own"
@@ -174,7 +182,8 @@ function combineExcludedKeys(injuries: string | null, availableEquipment: Equipm
 export async function getExcludedExerciseKeysForBooking(memberId: number, resourceId: number): Promise<string[]> {
   const profile = await getCoachProfile(memberId);
   const availableEquipment = await getResourceEquipment(resourceId);
-  return combineExcludedKeys(profile?.injuries ?? null, availableEquipment);
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
+  return combineExcludedKeys(profile?.injuries ?? null, availableEquipment, avoidedKeys);
 }
 
 // What the member chose on the pre-generation "choose" screen
@@ -255,10 +264,13 @@ async function getSessionRecoveryAdjustedAt(sessionId: number): Promise<string |
 }
 
 // No connection or no synced data at all both mean "nothing to assess
-// yet" — same insufficient_data outcome as too thin a baseline, never a
-// guess. Errors fail open to insufficient_data too, same posture as
-// resolveActiveBlock's try/catch above: a wearables hiccup must never
-// block a member from seeing their workout.
+// yet" from the wearable — but a member with no wearable can still have
+// answered a manual pre-workout readiness check (2026-09-06), which feeds
+// the exact same RecoverySignal union via getSelfReportedRecoverySignal,
+// so this falls through to it before finally giving up at
+// insufficient_data. Errors fail open to insufficient_data too, same
+// posture as resolveActiveBlock's try/catch above: a wearables/DB hiccup
+// must never block a member from seeing their workout.
 async function getRecoveryAdvice(memberId: number, sessionId: number | null): Promise<RecoverySignal> {
   try {
     if (sessionId !== null) {
@@ -267,19 +279,39 @@ async function getRecoveryAdvice(memberId: number, sessionId: number | null): Pr
     }
 
     const connection = await getWearableConnection(memberId);
-    if (!connection) return { kind: "insufficient_data" };
+    const today = connection ? await getLatestWearableSnapshot(memberId) : null;
+    if (today) {
+      const baseline = await getRecentWearableSnapshots(memberId);
+      return getRecoverySignal(today, baseline);
+    }
 
-    const today = await getLatestWearableSnapshot(memberId);
-    if (!today) return { kind: "insufficient_data" };
+    if (sessionId !== null) {
+      const readinessCheck = await getReadinessCheck(sessionId);
+      if (readinessCheck) return getSelfReportedRecoverySignal(readinessCheck);
+    }
 
-    const baseline = await getRecentWearableSnapshots(memberId);
-    return getRecoverySignal(today, baseline);
+    return { kind: "insufficient_data" };
   } catch (error) {
     console.error("[workout] failed to resolve recovery advice, defaulting to insufficient_data", {
       memberId,
       error: (error as Error).message,
     });
     return { kind: "insufficient_data" };
+  }
+}
+
+// Fail-open the same way getRecoveryAdvice/getPainCautionForSession do —
+// an error here must never block a member from seeing their workout, and
+// null (never-asked) is already a valid, common state for this field.
+async function getReadinessCheckSafe(sessionId: number): Promise<ReadinessCheckAnswers | null> {
+  try {
+    return await getReadinessCheck(sessionId);
+  } catch (error) {
+    console.error("[workout] failed to resolve readiness check, defaulting to null", {
+      sessionId,
+      error: (error as Error).message,
+    });
+    return null;
   }
 }
 
@@ -317,7 +349,8 @@ async function resolveTemplatedPlan(
   profile: CoachProfile,
   history: ExerciseHistoryEntry[],
   activeBlock: { blockType: BlockType; startedAt: string } | undefined,
-  availableEquipment: EquipmentType[]
+  availableEquipment: EquipmentType[],
+  avoidedKeys: string[]
 ): Promise<{ plan: GeneratedExercise[]; templateId: number } | null> {
   if (!activeBlock) return null;
 
@@ -325,7 +358,7 @@ async function resolveTemplatedPlan(
   let templates = await getTemplateSet(memberId, activeBlock.blockType, activeBlock.startedAt, phaseIndex);
 
   if (templates.length === 0) {
-    const generated = generateWorkoutTemplateSet({ profile, availableEquipment, activeBlock });
+    const generated = generateWorkoutTemplateSet({ profile, availableEquipment, avoidedKeys, activeBlock });
     templates = await createTemplateSet(memberId, activeBlock.blockType, activeBlock.startedAt, phaseIndex, generated);
     if (templates.length === 0) {
       // Lost a create race to a concurrent request (or generation itself
@@ -377,12 +410,14 @@ export async function getOrCreateWorkoutSession(
     // something odd happened to the profile afterward; a missing profile
     // just means no exclusion data to offer for swapping.
     const existingProfile = await getCoachProfile(memberId);
+    const existingAvoidedKeys = await getAvoidedExerciseKeys(memberId);
     const detail = await loadSessionDetail(existing.id);
     return {
       detail: {
         ...detail,
-        excludedExerciseKeys: combineExcludedKeys(existingProfile?.injuries ?? null, availableEquipment),
+        excludedExerciseKeys: combineExcludedKeys(existingProfile?.injuries ?? null, availableEquipment, existingAvoidedKeys),
         recoveryAdvice: await getRecoveryAdvice(memberId, existing.id),
+        readinessCheck: await getReadinessCheckSafe(existing.id),
         painCaution: await getPainCautionForSession(
           memberId,
           detail.exercises.map((e) => e.key)
@@ -504,6 +539,7 @@ async function generateAndPersistSession(
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
 
   // Stage 3 (2026-08-29) — "focus" and "custom" are member overrides for
   // this one session only (fresh choice every time, no remembered
@@ -515,7 +551,7 @@ async function generateAndPersistSession(
   let restByKey: Record<string, number> | undefined;
 
   if (choice.mode === "focus") {
-    const picks = pickFocusExercises(profile, availableEquipment, choice.focusMuscleGroups);
+    const picks = pickFocusExercises(profile, availableEquipment, choice.focusMuscleGroups, avoidedKeys);
     plan = instantiateTemplate(picks, profile, history, activeBlock);
     if (plan.length === 0) throw new Error("no_eligible_exercises");
   } else if (choice.mode === "custom") {
@@ -526,7 +562,7 @@ async function generateAndPersistSession(
     // invalid/excluded/duplicate key is silently dropped rather than
     // erroring the whole session, since the picker's own candidate list
     // should already prevent this in the honest case.
-    const excludedKeys = combineExcludedKeys(profile.injuries, availableEquipment);
+    const excludedKeys = combineExcludedKeys(profile.injuries, availableEquipment, avoidedKeys);
     const picks: TemplateExercisePick[] = [];
     for (const key of choice.customExerciseKeys) {
       const entry = EXERCISE_CATALOG.find((e) => e.key === key);
@@ -540,8 +576,8 @@ async function generateAndPersistSession(
     // excluded/duplicate) is simply never read.
     restByKey = choice.customExerciseRests;
   } else {
-    const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment);
-    plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment });
+    const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment, avoidedKeys);
+    plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment, avoidedKeys });
     templateId = templated?.templateId ?? null;
   }
 
@@ -577,8 +613,9 @@ async function generateAndPersistSession(
       return {
         detail: {
           ...detail,
-          excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment),
+          excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment, avoidedKeys),
           recoveryAdvice: await getRecoveryAdvice(memberId, winner.id),
+          readinessCheck: await getReadinessCheckSafe(winner.id),
           painCaution: await getPainCautionForSession(
             memberId,
             detail.exercises.map((e) => e.key)
@@ -605,8 +642,9 @@ async function generateAndPersistSession(
   return {
     detail: {
       ...detail,
-      excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment),
+      excludedExerciseKeys: combineExcludedKeys(profile.injuries, availableEquipment, avoidedKeys),
       recoveryAdvice: await getRecoveryAdvice(memberId, session.id),
+      readinessCheck: await getReadinessCheckSafe(session.id),
       painCaution: await getPainCautionForSession(
         memberId,
         detail.exercises.map((e) => e.key)
@@ -636,7 +674,8 @@ async function generateCircuitSession(
   availableEquipment: EquipmentType[]
 ): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
   const profile = await getCoachProfile(memberId);
-  const excludedKeys = combineExcludedKeys(profile?.injuries ?? null, availableEquipment);
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
+  const excludedKeys = combineExcludedKeys(profile?.injuries ?? null, availableEquipment, avoidedKeys);
 
   // Never trust the client's list wholesale, same posture as every other
   // mode — re-validated against the live catalog and injury/equipment
@@ -695,6 +734,7 @@ async function generateCircuitSession(
           ...detail,
           excludedExerciseKeys: excludedKeys,
           recoveryAdvice: { kind: "insufficient_data" },
+      readinessCheck: null,
           painCaution: await getPainCautionForSession(
             memberId,
             detail.exercises.map((e) => e.key)
@@ -735,6 +775,7 @@ async function generateCircuitSession(
       ...detail,
       excludedExerciseKeys: excludedKeys,
       recoveryAdvice: { kind: "insufficient_data" },
+      readinessCheck: null,
       painCaution: await getPainCautionForSession(
         memberId,
         detail.exercises.map((e) => e.key)
@@ -760,7 +801,8 @@ async function generateHiitSession(
   availableEquipment: EquipmentType[]
 ): Promise<{ detail: WorkoutSessionDetail; introNarration: string | null }> {
   const profile = await getCoachProfile(memberId);
-  const excludedKeys = combineExcludedKeys(profile?.injuries ?? null, availableEquipment);
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
+  const excludedKeys = combineExcludedKeys(profile?.injuries ?? null, availableEquipment, avoidedKeys);
 
   // Never trust the client's list wholesale, same posture as
   // generateCircuitSession — re-validated against the live catalog and
@@ -803,6 +845,7 @@ async function generateHiitSession(
           ...detail,
           excludedExerciseKeys: excludedKeys,
           recoveryAdvice: { kind: "insufficient_data" },
+      readinessCheck: null,
           painCaution: await getPainCautionForSession(
             memberId,
             detail.exercises.map((e) => e.key)
@@ -843,6 +886,7 @@ async function generateHiitSession(
       ...detail,
       excludedExerciseKeys: excludedKeys,
       recoveryAdvice: { kind: "insufficient_data" },
+      readinessCheck: null,
       painCaution: await getPainCautionForSession(
         memberId,
         detail.exercises.map((e) => e.key)
@@ -1017,7 +1061,8 @@ export async function swapExercise(
   // offer it.
   const resourceId = await getSessionResourceId(sessionId);
   const availableEquipment = resourceId !== null ? await getResourceEquipment(resourceId) : [];
-  const excludedKeys = combineExcludedKeys(profile.injuries, availableEquipment);
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
+  const excludedKeys = combineExcludedKeys(profile.injuries, availableEquipment, avoidedKeys);
   if (excludedKeys.includes(newExerciseKey)) {
     throw new Error("invalid_exercise");
   }
@@ -1054,10 +1099,91 @@ export async function swapExercise(
     ...updated,
     excludedExerciseKeys: excludedKeys,
     recoveryAdvice: await getRecoveryAdvice(memberId, sessionId),
+    readinessCheck: await getReadinessCheckSafe(sessionId),
     painCaution: await getPainCautionForSession(
       memberId,
       updated.exercises.map((e) => e.key)
     ),
+  };
+}
+
+// "Never suggest this again" (2026-09-06, member_avoided_exercises) —
+// records the avoidance first (so it's honoured from the next session
+// onward regardless of what happens next), then tries to swap today's
+// instance for a same-muscle-group alternative right away, same
+// ownership + hasProgress guard as swapExercise above. Unlike swapExercise,
+// the replacement is chosen automatically (the member never sees a
+// candidate list here) — the first eligible catalog entry not already
+// excluded or used elsewhere in this session. swapped: false (avoidance
+// still recorded, today's exercise left as-is) when no candidate exists,
+// so the caller can tell the member there was nothing to swap into today.
+export async function avoidAndSwapExercise(
+  memberId: number,
+  sessionId: number,
+  exerciseId: number,
+  reason?: string | null
+): Promise<{ detail: WorkoutSessionDetail; swapped: boolean }> {
+  const admin = createAdminClient();
+
+  const detail = await loadSessionDetail(sessionId);
+  const exerciseRow = detail.exercises.find((e) => e.id === exerciseId);
+  if (!exerciseRow) {
+    throw new Error("exercise_not_found");
+  }
+
+  const hasProgress = detail.exercises.some((e) => e.sets.some((s) => s.completedAt));
+  if (hasProgress) {
+    throw new Error("session_already_started");
+  }
+
+  await avoidExercise(memberId, exerciseRow.key, reason ?? null);
+
+  const profile = await getCoachProfile(memberId);
+  const resourceId = await getSessionResourceId(sessionId);
+  const availableEquipment = resourceId !== null ? await getResourceEquipment(resourceId) : [];
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
+  const excludedKeys = combineExcludedKeys(profile?.injuries ?? null, availableEquipment, avoidedKeys);
+
+  const otherKeys = detail.exercises.filter((e) => e.id !== exerciseId).map((e) => e.key);
+  const candidate = EXERCISE_CATALOG.find(
+    (e) => e.muscleGroup === exerciseRow.muscleGroup && !excludedKeys.includes(e.key) && !otherKeys.includes(e.key)
+  );
+
+  let swapped = false;
+  if (candidate && profile) {
+    const { history } = await getWorkoutHistory(memberId);
+    const activeBlock = await resolveActiveBlock(memberId, profile);
+    const prior = history.find((h) => h.exerciseKey === candidate.key);
+    const weightTargetKg = computeWeightKgForBlock(candidate, profile, prior, activeBlock);
+    const weightChangeReason = describeWeightChangeReason(prior, activeBlock);
+
+    const { error: exerciseUpdateError } = await admin
+      .from("workout_exercises")
+      .update({ exercise_key: candidate.key, name: candidate.name, weight_change_reason: weightChangeReason })
+      .eq("id", exerciseId);
+    if (exerciseUpdateError) throw new Error(exerciseUpdateError.message);
+
+    const { error: setsUpdateError } = await admin
+      .from("workout_sets")
+      .update({ weight_target_kg: weightTargetKg })
+      .eq("exercise_id", exerciseId);
+    if (setsUpdateError) throw new Error(setsUpdateError.message);
+    swapped = true;
+  }
+
+  const updated = await loadSessionDetail(sessionId);
+  return {
+    detail: {
+      ...updated,
+      excludedExerciseKeys: excludedKeys,
+      recoveryAdvice: await getRecoveryAdvice(memberId, sessionId),
+    readinessCheck: await getReadinessCheckSafe(sessionId),
+      painCaution: await getPainCautionForSession(
+        memberId,
+        updated.exercises.map((e) => e.key)
+      ),
+    },
+    swapped,
   };
 }
 
@@ -1073,6 +1199,26 @@ export async function swapExercise(
 // already-discounted weight by DELOAD_WEIGHT_MULTIPLIER a second time,
 // compounding the reduction. Found via a user-perspective walkthrough,
 // 2026-08-24, the same day this shipped.
+// Plain-English readout for the weight_change_reason column, same "never
+// invent a separate explanation" posture as describeWeightChangeReason in
+// generate-workout.ts — this is just the real reason recoveryAdvice
+// already computed, in prose. The non-low_recovery fallback only exists
+// for type-safety (this function is only ever actually called with a
+// low_recovery advice, since that's the only case the UI's "Reduce"
+// button is ever shown for) — never expected to render in practice.
+function describeRecoveryAdjustmentReason(advice: RecoverySignal): string {
+  if (advice.kind !== "low_recovery") {
+    return "Reduced today based on your recovery signal.";
+  }
+  if (advice.reason === "elevated_resting_hr") {
+    return "Reduced today — your resting heart rate was elevated vs. your recent average.";
+  }
+  if (advice.reason === "low_sleep") {
+    return "Reduced today — you slept noticeably less than your recent average.";
+  }
+  return "Reduced today — you reported feeling low on energy, sleep, or soreness.";
+}
+
 export async function applyRecoveryAdjustment(memberId: number, sessionId: number): Promise<WorkoutSessionDetail> {
   const admin = createAdminClient();
 
@@ -1087,9 +1233,17 @@ export async function applyRecoveryAdjustment(memberId: number, sessionId: numbe
     throw new Error("recovery_already_applied");
   }
 
+  // Computed before the discount below so the reason reflects what
+  // actually triggered this — wearable-driven or the manual readiness
+  // check (2026-09-06) — reusing the weight_change_reason column shipped
+  // this session for the RPE-driven "why" feature, not a separate one.
+  const advice = await getRecoveryAdvice(memberId, sessionId);
+  const reasonText = describeRecoveryAdjustmentReason(advice);
+
   const exerciseIds = detail.exercises.map((e) => e.id);
+  const adjustedExerciseIds = new Set<number>();
   if (exerciseIds.length > 0) {
-    const { data: sets, error: setsError } = await admin.from("workout_sets").select("id, weight_target_kg").in("exercise_id", exerciseIds);
+    const { data: sets, error: setsError } = await admin.from("workout_sets").select("id, exercise_id, weight_target_kg").in("exercise_id", exerciseIds);
     if (setsError) throw new Error(setsError.message);
 
     for (const set of sets ?? []) {
@@ -1103,7 +1257,16 @@ export async function applyRecoveryAdjustment(memberId: number, sessionId: numbe
         .update({ weight_target_kg: roundToNearestPlateForAdjustment(set.weight_target_kg * DELOAD_WEIGHT_MULTIPLIER) })
         .eq("id", set.id);
       if (updateError) throw new Error(updateError.message);
+      adjustedExerciseIds.add(set.exercise_id);
     }
+  }
+
+  if (adjustedExerciseIds.size > 0) {
+    const { error: reasonUpdateError } = await admin
+      .from("workout_exercises")
+      .update({ weight_change_reason: reasonText })
+      .in("id", [...adjustedExerciseIds]);
+    if (reasonUpdateError) throw new Error(reasonUpdateError.message);
   }
 
   const { error: markAdjustedError } = await admin
@@ -1116,10 +1279,18 @@ export async function applyRecoveryAdjustment(memberId: number, sessionId: numbe
   const profile = await getCoachProfile(memberId);
   const resourceId = await getSessionResourceId(sessionId);
   const availableEquipment = resourceId !== null ? await getResourceEquipment(resourceId) : [];
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
   return {
     ...updated,
-    excludedExerciseKeys: combineExcludedKeys(profile?.injuries ?? null, availableEquipment),
+    excludedExerciseKeys: combineExcludedKeys(profile?.injuries ?? null, availableEquipment, avoidedKeys),
+    // recovery_adjusted_at is now set, so this correctly comes back as
+    // "normal" (see getRecoveryAdvice's own early-return) — never
+    // re-shows the reduce-today banner after it's already been applied.
+    // `advice` above (computed before that write) is only used for the
+    // weight_change_reason text, which must reflect what actually
+    // triggered this rather than the now-neutralised post-write signal.
     recoveryAdvice: await getRecoveryAdvice(memberId, sessionId),
+    readinessCheck: await getReadinessCheckSafe(sessionId),
     painCaution: await getPainCautionForSession(
       memberId,
       updated.exercises.map((e) => e.key)
@@ -1133,6 +1304,39 @@ export async function applyRecoveryAdjustment(memberId: number, sessionId: numbe
 function roundToNearestPlateForAdjustment(kg: number, increment = 1.25): number {
   if (kg === 0) return 0;
   return Math.round(kg / increment) * increment;
+}
+
+// Pre-workout readiness check (2026-09-06) — same ownership + hasProgress
+// guard as swapExercise/applyRecoveryAdjustment above; only ever meaningful
+// before a member has actually started, since it feeds a same-session
+// recovery signal the overview screen reads before "Start workout". A
+// resubmission before starting overwrites the previous answer (upsert on
+// session_id, see readiness-check.ts) — this only ever asks once per
+// session in the UI, but nothing here needs to assume that.
+export async function submitReadinessCheck(memberId: number, sessionId: number, answers: ReadinessCheckAnswers): Promise<WorkoutSessionDetail> {
+  const detail = await loadSessionDetail(sessionId);
+  const hasProgress = detail.exercises.some((e) => e.sets.some((s) => s.completedAt));
+  if (hasProgress) {
+    throw new Error("session_already_started");
+  }
+
+  await logReadinessCheck(sessionId, memberId, answers);
+
+  const updated = await loadSessionDetail(sessionId);
+  const profile = await getCoachProfile(memberId);
+  const resourceId = await getSessionResourceId(sessionId);
+  const availableEquipment = resourceId !== null ? await getResourceEquipment(resourceId) : [];
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
+  return {
+    ...updated,
+    excludedExerciseKeys: combineExcludedKeys(profile?.injuries ?? null, availableEquipment, avoidedKeys),
+    recoveryAdvice: await getRecoveryAdvice(memberId, sessionId),
+    readinessCheck: await getReadinessCheckSafe(sessionId),
+    painCaution: await getPainCautionForSession(
+      memberId,
+      updated.exercises.map((e) => e.key)
+    ),
+  };
 }
 
 export async function logSet(
@@ -1336,12 +1540,13 @@ export async function completeSession(
 
   const { history, lastSession } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
+  const avoidedKeys = await getAvoidedExerciseKeys(memberId);
   // Same template-if-available, generate-fresh-otherwise resolution as
   // getOrCreateWorkoutSession — the preview should show what the next
   // *actual* session will contain, not a plan generated a different way
   // than what getOrCreateWorkoutSession will really produce next time.
-  const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, []);
-  const nextPlan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock });
+  const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, [], avoidedKeys);
+  const nextPlan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, avoidedKeys });
 
   const changes: WeightChangePreview[] = nextPlan
     .map((next) => {

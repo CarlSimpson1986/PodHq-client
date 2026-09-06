@@ -10,6 +10,7 @@ import { getLastCompletedSessionDetail } from "@/lib/coach/exercise-performance"
 import { getWeeklyReview } from "@/lib/coach/weekly-review";
 import { currentCheckInPeriod } from "@/lib/coach/checkin-state";
 import { askCoach } from "@/lib/coach/coach-chat";
+import { getAvoidedExercisesWithNames } from "@/lib/coach/avoided-exercises";
 import { appendCoachConversationTurn } from "@/lib/coach/coach-conversations";
 import { coachChatSchema } from "@/lib/validation/coach-chat";
 
@@ -53,11 +54,12 @@ export async function POST(request: Request) {
 
   try {
     const { periodStart, periodEnd } = currentCheckInPeriod(new Date());
-    const [blockHistory, recoveryStatus, lastSession, weeklyReview] = await Promise.all([
+    const [blockHistory, recoveryStatus, lastSession, weeklyReview, avoidedExercises] = await Promise.all([
       getBlockHistory(member.id),
       getRecoveryStatus(member.id),
       getLastCompletedSessionDetail(member.id),
       getWeeklyReview(member.id, periodStart, periodEnd, member.gender),
+      getAvoidedExercisesWithNames(member.id),
     ]);
     const blockState = getTrainingBlockState(coachProfile, blockHistory, new Date());
 
@@ -70,6 +72,8 @@ export async function POST(request: Request) {
         recoveryStatus,
         lastSession,
         weeklyReview,
+        injuries: coachProfile.injuries,
+        avoidedExerciseNames: avoidedExercises.map((e) => e.name),
       },
       parsed.data.message,
       parsed.data.history

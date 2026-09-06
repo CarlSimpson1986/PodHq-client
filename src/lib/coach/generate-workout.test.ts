@@ -250,6 +250,32 @@ describe("generateWorkout — equipment awareness", () => {
   });
 });
 
+describe("generateWorkout — member-avoided exercises (2026-09-06)", () => {
+  it("excludes a member-avoided exercise from the generated plan", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      avoidedKeys: ["barbell_squat"],
+    });
+    expect(result.some((e) => e.key === "barbell_squat")).toBe(false);
+  });
+
+  it("degrades honestly (never re-includes an avoided exercise) even when injury filtering also applies", () => {
+    // Same "knee, back, shoulders" heavy-filter case as the injury test
+    // above, plus avoiding one of the few remaining safe isolation
+    // exercises — the avoided key must still never appear.
+    const result = generateWorkout({
+      profile: profile({ injuries: "knee, back, shoulders" }),
+      history: [],
+      lastSession: null,
+      avoidedKeys: ["dumbbell_bicep_curl"],
+    });
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.some((e) => e.key === "dumbbell_bicep_curl")).toBe(false);
+  });
+});
+
 describe("getEquipmentExcludedKeys", () => {
   it("returns no excluded keys when unrestricted (undefined or empty)", () => {
     expect(getEquipmentExcludedKeys(undefined)).toEqual([]);
@@ -501,6 +527,12 @@ describe("generateWorkoutTemplateSet — persistent A/B/C rotation", () => {
     const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
     expect(allKeys.every((key) => allowedKeys.includes(key))).toBe(true);
   });
+
+  it("respects member-avoided exercises the same way generateWorkout does", () => {
+    const result = generateWorkoutTemplateSet({ profile: profile(), avoidedKeys: ["barbell_squat"] });
+    const allKeys = result.flatMap((t) => t.exercises.map((e) => e.key));
+    expect(allKeys).not.toContain("barbell_squat");
+  });
 });
 
 describe("generateWorkoutTemplateSet — Strength squat/bench/deadlift split (2026-08-29)", () => {
@@ -625,5 +657,10 @@ describe("pickFocusExercises — Stage 3 focus-day selection", () => {
     // both empties the core pool entirely, regardless of equipment.
     const result = pickFocusExercises(profile({ injuries: "back and wrist" }), undefined, ["core"]);
     expect(result).toEqual([]);
+  });
+
+  it("respects member-avoided exercises the same way generateWorkout does", () => {
+    const result = pickFocusExercises(profile(), undefined, ["chest"], ["barbell_bench_press"]);
+    expect(result.every((e) => e.key !== "barbell_bench_press")).toBe(true);
   });
 });

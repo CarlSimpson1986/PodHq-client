@@ -29,6 +29,13 @@ export type NutritionTrackingMode = (typeof NUTRITION_TRACKING_MODES)[number];
 export const HABIT_TYPES = ["checkbox", "counted"] as const;
 export type HabitType = (typeof HABIT_TYPES)[number];
 
+// Pre-workout readiness check (2026-09-06) — the no-wearable equivalent of
+// the wearable-driven recovery signal (see recovery-signal.ts). Same
+// TS-union-validated-at-the-API-boundary convention as every other enum in
+// this file, not a DB CHECK constraint.
+export const READINESS_LEVELS = ["low", "medium", "high"] as const;
+export type ReadinessLevel = (typeof READINESS_LEVELS)[number];
+
 // Portion-size approximations (brief's own numbers, 2026-08-25) — a
 // simple, invented-but-documented conversion from grams, same category as
 // PROTEIN_TARGET_G_PER_KG above: Carl can retune these.

@@ -8,9 +8,14 @@ import { HeartPulseIcon } from "@/components/icons";
 // and Google's own consumer app shows a "Vitals: N of 5 — Calibrating"
 // coverage indicator rather than a composite score. This mirrors that
 // same honest framing using data we actually have.
-const REASON_COPY: Record<"elevated_resting_hr" | "low_sleep", string> = {
+const REASON_COPY: Record<"elevated_resting_hr" | "low_sleep" | "self_reported", string> = {
   elevated_resting_hr: "Your resting heart rate is higher than your recent average.",
   low_sleep: "You slept noticeably less than your recent average.",
+  // Not currently reachable here — self_reported only ever comes from a
+  // per-session readiness check (workout-session.ts), and this card is fed
+  // by the wearable-only getRecoveryStatus — but the shared RecoverySignal
+  // union includes it, so this must stay exhaustive rather than assume.
+  self_reported: "You told us you're feeling low on energy, sleep, or soreness today.",
 };
 
 export function RecoveryStatusCard({ status }: { status: RecoveryStatus }) {

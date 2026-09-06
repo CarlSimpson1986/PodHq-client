@@ -65,6 +65,12 @@ export interface GenerateWorkoutInput {
   // its pod_resources row is explicitly configured (see
   // getOrCreateWorkoutSession in workout-session.ts).
   availableEquipment?: EquipmentType[];
+  // Member-chosen "never suggest this again" exclusions (2026-09-06,
+  // member_avoided_exercises) — same hard-exclusion tier as injury/
+  // equipment, unioned alongside them in every selection function below.
+  // Undefined/[] both mean no member exclusions, same idiom as the two
+  // exclusion sources above.
+  avoidedKeys?: string[];
   // Injectable for deterministic phase-boundary testing; defaults to the
   // real current time in production.
   now?: Date;
@@ -122,9 +128,9 @@ export function computeExerciseCount(activeBlock: { blockType: BlockType; starte
 }
 
 export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[] {
-  const { profile, history, lastSession, activeBlock, availableEquipment, now = new Date() } = input;
+  const { profile, history, lastSession, activeBlock, availableEquipment, avoidedKeys, now = new Date() } = input;
   const exerciseCount = computeExerciseCount(activeBlock, profile.goal, now);
-  const eligible = selectExercises(profile, lastSession, activeBlock ?? null, availableEquipment, exerciseCount);
+  const eligible = selectExercises(profile, lastSession, activeBlock ?? null, availableEquipment, avoidedKeys, exerciseCount);
   const repsTarget = repsTargetForBlock(activeBlock, profile.goal, now);
   const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
@@ -215,11 +221,13 @@ function selectExercises(
   lastSession: RecentSessionSummary | null,
   activeBlock: { blockType: BlockType } | null,
   availableEquipment: EquipmentType[] | undefined,
+  avoidedKeys: string[] | undefined,
   exerciseCount: number
 ): CatalogExercise[] {
   const excludedKeys = new Set([
     ...getInjuryExcludedKeys(profile.injuries),
     ...getEquipmentExcludedKeys(availableEquipment),
+    ...(avoidedKeys ?? []),
   ]);
   const safe = EXERCISE_CATALOG.filter((exercise) => !excludedKeys.has(exercise.key));
 
@@ -461,11 +469,16 @@ export interface GeneratedTemplate {
 export function generateWorkoutTemplateSet(input: {
   profile: CoachProfile;
   availableEquipment?: EquipmentType[];
+  avoidedKeys?: string[];
   activeBlock?: { blockType: BlockType; startedAt: string };
   now?: Date;
 }): GeneratedTemplate[] {
-  const { profile, availableEquipment, activeBlock, now = new Date() } = input;
-  const excludedKeys = new Set([...getInjuryExcludedKeys(profile.injuries), ...getEquipmentExcludedKeys(availableEquipment)]);
+  const { profile, availableEquipment, avoidedKeys, activeBlock, now = new Date() } = input;
+  const excludedKeys = new Set([
+    ...getInjuryExcludedKeys(profile.injuries),
+    ...getEquipmentExcludedKeys(availableEquipment),
+    ...(avoidedKeys ?? []),
+  ]);
   const safe = EXERCISE_CATALOG.filter((exercise) => !excludedKeys.has(exercise.key));
   const exerciseCount = computeExerciseCount(activeBlock, profile.goal, now);
 
@@ -530,9 +543,14 @@ const FOCUS_EXERCISE_MAX = 6;
 export function pickFocusExercises(
   profile: CoachProfile,
   availableEquipment: EquipmentType[] | undefined,
-  muscleGroups: MuscleGroup[]
+  muscleGroups: MuscleGroup[],
+  avoidedKeys?: string[]
 ): TemplateExercisePick[] {
-  const excludedKeys = new Set([...getInjuryExcludedKeys(profile.injuries), ...getEquipmentExcludedKeys(availableEquipment)]);
+  const excludedKeys = new Set([
+    ...getInjuryExcludedKeys(profile.injuries),
+    ...getEquipmentExcludedKeys(availableEquipment),
+    ...(avoidedKeys ?? []),
+  ]);
   const byGroup = muscleGroups.map((group) => EXERCISE_CATALOG.filter((e) => e.muscleGroup === group && !excludedKeys.has(e.key)));
 
   const picked: CatalogExercise[] = [];

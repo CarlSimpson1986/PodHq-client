@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   GOALS,
@@ -77,6 +77,66 @@ export interface CoachProfileEditFormValues {
   foodAllergies: string;
   foodPreferences: FoodPreference | null;
   nutritionTrackingMode: NutritionTrackingMode;
+}
+
+// "Never suggest this again" management list (2026-09-06) — self-fetching
+// and independent of the form's own save flow above (removing an avoided
+// exercise takes effect immediately via its own DELETE call, same as
+// un-ticking a habit elsewhere in the app), rather than being bundled into
+// CoachProfileEditForm's single "Save changes" submit. Empty state renders
+// nothing, matching this form's existing minimal style.
+function AvoidedExercisesSection() {
+  const [exercises, setExercises] = useState<{ key: string; name: string }[]>([]);
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/member/coach/avoided-exercises")
+      .then((res) => res.json())
+      .then((body) => {
+        if (body.status === "ok") setExercises(body.exercises);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (exercises.length === 0) return null;
+
+  async function remove(key: string) {
+    setRemovingKey(key);
+    try {
+      const res = await fetch("/api/member/coach/avoided-exercises", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exerciseKey: key }),
+      });
+      const body = await res.json();
+      if (body.status === "ok") {
+        setExercises((prev) => prev.filter((e) => e.key !== key));
+      }
+    } finally {
+      setRemovingKey(null);
+    }
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-semibold">Avoided exercises</p>
+      <div className="space-y-2">
+        {exercises.map((ex) => (
+          <div key={ex.key} className="flex items-center justify-between rounded-lg border border-card-light-border px-4 py-2">
+            <span className="text-sm">{ex.name}</span>
+            <button
+              type="button"
+              disabled={removingKey === ex.key}
+              onClick={() => remove(ex.key)}
+              className="text-xs font-semibold underline disabled:opacity-50"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // A real edit flow for coach_profiles — the earlier onboarding-only path
@@ -205,6 +265,8 @@ export function CoachProfileEditForm({ initial }: { initial: CoachProfileEditFor
           onChange={(e) => update("injuries", e.target.value)}
         />
       </div>
+
+      <AvoidedExercisesSection />
 
       <div className="grid grid-cols-3 gap-3">
         <div>

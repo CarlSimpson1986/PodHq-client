@@ -14,143 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-61.md`, covering the pilot
-mechanism proof (2026-08-05) through the manual workout log (2026-09-04)
-— all split out to keep this file within Claude Code's ~15,000-character
-`@`-import limit. Archives aren't always the strictly oldest material —
-the split point is "what's finished and stable" as much as "what's
-oldest" (see each archive's own header note for examples).
-Reference-only, not auto-loaded by CLAUDE.md; check them for full build
-history, or `git log` on this file for exact split points. Active
-content here starts at "Standalone Stripe for owned gyms" (2026-09-04).
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-63.md`, covering the pilot
+mechanism proof (2026-08-05) through the exercise-catalog video expansion
+(2026-09-06) — all split out to keep this file within Claude Code's
+~15,000-character `@`-import limit. Archives aren't always the strictly
+oldest material — the split point is "what's finished and stable" as
+much as "what's oldest" (see each archive's own header note for
+examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
+full build history, or `git log` on this file for exact split points.
+Active content here starts at "Workout flow design pass" (2026-09-06).
 If this file grows too large again, split it the same way: move the
-most clearly finished section into `ROADMAP-ARCHIVE-62.md`, update this
+most clearly finished section into `ROADMAP-ARCHIVE-64.md`, update this
 paragraph.
-
-## Standalone Stripe for owned gyms (Hove) — 2026-09-04
-
-Hove and Aylesbury Berryfields are Carl's own gyms, not franchisees —
-found mid-session that the existing Stripe Connect work (per-gym
-onboarding, own balance/payouts for a third party) is the wrong model
-for them, and Hove's existing Connect setup was test-mode only, never
-real. podHq's side (0084, encrypted `api_key_encrypted`/
-`webhook_secret_encrypted` on `gym_stripe_config`, admin `/setup` panel)
-built first — full detail in its own ROADMAP.md. This is the client-side
-half: actually using a standalone gym's own key.
-
-`src/lib/data/stripe-config.ts` gained `getGymStripeContext(gym)` —
-resolves, in order: (1) standalone key → that gym's own `Stripe` client
-directly, no `stripeAccount` header; (2) completed Connect onboarding →
-platform client + `stripeAccount` option; (3) neither → shared platform
-account, unchanged from before either mechanism existed. Every route
-creating or reading a Stripe object for a gym (`checkout`,
-`checkout-membership`, `checkout-voucher`) now goes through this instead
-of the old Connect-only `getGymStripeAccountId`. Also fixed a real
-pre-existing gap found while touching this: `membership/cancel` never
-routed to any per-gym account at all — always the shared platform
-client, which would have failed for any gym with its own account.
-
-**Webhook route rewritten** to try three signing-secret sources in
-order — platform, platform's Connect-scope, then each configured
-standalone gym's own secret in turn — and, critically, remembers *which*
-matched so every follow-up Stripe call in that request (retrieving a
-PaymentIntent, a Subscription, listing Invoice Payments, updating a
-Customer) uses the right client. A standalone gym's events never carry
-`event.account` (they're not Connect events), so the client swap has to
-happen explicitly rather than falling out of the existing
-`connectRequestOptions` logic. Two internal re-declarations of `stripe`
-that had been silently shadowing the outer client (inside the
-`invoice.payment_succeeded` handler and `saveStripeCustomerId`) were
-also fixed — the second now takes the resolved client as an explicit
-parameter instead of creating its own.
-
-**Verified against the real live account, not test data.** Decrypted
-Hove's saved key/secret server-side and confirmed both independently:
-`stripe.accounts.retrieve()` authenticated as "My Fit Pod Hove"
-(`acct_1U5oYF8t3RuWgRkp`), key confirmed `sk_live_`. Then the real HTTP
-path: logged into local dev as Carl's own Hove account, clicked Buy on
-a live £1 test catalog item, and the browser landed on
-`checkout.stripe.com/f/pay/cs_live_...` branded "My Fit Pod Hove" with
-the correct item/price — proving checkout → `getGymStripeContext` →
-Hove's key → Stripe's hosted page resolves correctly end to end.
-Session abandoned before entering payment details — creating a Checkout
-Session costs nothing until it's actually paid, so this confirmed
-routing without moving real money. `tsc --noEmit`, eslint, `npx vitest
-run` (178/178), and `npm run build` all clean.
-
-Not yet done: podHq's own admin-side Stripe touch points (staff
-refund route, sell/comp panel with card-on-file) still only know about
-the Connect case, not standalone — flagged, not yet needed for Hove's
-first real purchases but will matter once staff need to refund or
-manually sell to a Hove member.
-
-## Exercise catalog extended for Carl's own technique videos — 2026-09-06
-
-Carl filmed ~75 of his own exercise-technique clips and uploaded them
-all through podHq's `/exercise-videos` admin page (full upload-side
-detail, including a real browser-automation limitation and its fix, is
-in podHq's own ROADMAP_HISTORY.md, stage 60). This is the client-side
-catalog/content work that upload needed.
-
-**22 new exercises added to `exercise-catalog.ts`.** 5 promoted from
-clips that would otherwise have lost a slot to a collision on an
-existing key (`plank_elbow`, `side_plank`, `cable_lateral_raise_standing`,
-`kettlebell_single_arm_swing`, `cable_rope_pushdown`), plus 15 new ones
-across chest/back/legs/arms/core, plus `hanging_knee_raise`/
-`hanging_leg_raise`. Every one carries a **draft** `safetyTip` flagged
-in-code for Carl to review before it's treated as final — this file's
-own convention is that injury-risk copy is human-written, never
-LLM-generated, and that matters more than usual here since these pods
-are unmanned with no staff backstop.
-
-**`pull_up_bar` added as a new `EquipmentType`** (duplicated in podHq's
-`src/lib/data/types.ts` + its `/pods` calendar equipment checkboxes, per
-the existing cross-repo convention) — Carl confirmed Hove actually has
-one before this was added. Still open: confirm Hove's
-`pod_resources.equipment` row actually has it checked in `/pods`, or
-the two hanging exercises will never actually get prescribed despite
-the code supporting them now.
-
-**Warm-up/cool-down gained video support it never had.**
-`warmup-cooldown.ts`'s `WarmupCooldownItem` had no `key` field at all —
-added one to every item (old and new), and `workout-view.tsx`'s
-warm-up/cool-down checklist now shows a video under any row with one,
-the same `exerciseVideoOverrides[key]` lookup the main exercise view
-already used. 7 new stretch/mobility items added alongside the 4
-pre-existing ones (cat-cow, hamstring sweep, calf/glute/hip-flexor/lat
-stretch, pigeon pose) — their instructions are drafts too, same
-review caveat as the safetyTips above.
-
-**Premium/AI-Coach waiver clause added to Clause 18 (WAIVER)**, in both
-`waiver-terms.ts` (the real member-facing waiver at `/access/waiver`,
-first-person voice) and `terms-and-conditions.ts` (the chatbot's
-second-person reference transcription of the same document): technique
-videos and AI-selected/generated workouts are general guidance only,
-not personalised medical/professional advice, and the member is solely
-responsible for judging whether an exercise/weight/equipment item suits
-them. Not legally reviewed — wording matched to each document's
-existing voice, not drafted independently; if Carl maintains a separate
-master PDF as the actual source of truth, it needs the same addition
-there too.
-
-Verified via podHq's own `/api/exercise-videos` endpoint after each
-upload batch (override count/keys checked against what should have
-just landed — 75 at the end, folder confirmed empty of anything left
-unmatched).
-
-**`npx vitest run` caught a real bug before it shipped**: "softly
-prefers compound lifts during a strength block" failed after the
-catalog additions — `selectExercises()`'s Strength-block compound
-preference is a flat array-order slice, not muscle-group-aware, so
-marking `lat_pulldown_v_grip`/`lat_pulldown_double_handle` (grip
-variants of the pattern `lat_pulldown` already covers) as
-`isCompound: true` let a generated session end up with three
-lat-pulldown variants and no chest/shoulder exercise. Fixed by setting
-those two, plus `kettlebell_single_arm_swing` (same reasoning — same
-hip-hinge pattern as the two kettlebell swings already marked
-compound), to `isCompound: false`. Full suite clean after: `tsc
---noEmit`, eslint, `npx vitest run` (178/178) in this repo; `tsc`,
-eslint, `npx vitest run` (9/9) in podHq.
 
 ## Workout flow design pass + a real progression bug found — 2026-09-06
 
@@ -235,3 +110,90 @@ after every round; `npm run build` clean at the end. Migration
 `0088` applied live by Carl via Supabase's SQL Editor before the
 exercise-swap verification pass, same manual-application pattern as
 every other migration this project uses.
+
+## Three competitor-gap features: exercise-avoid memory, chat safety audit, readiness check — 2026-09-06
+
+Same-day follow-up to the two sessions above, acting on the remaining
+opportunities from the ChatGPT Deep Research pass on rival coaching-app
+complaints (Fitbod/Future/Zing/JSA). Carl: "all three."
+
+**Persistent "never suggest this again" exercise memory.** New
+`member_avoided_exercises` table (`0089`, podHq) — `(member_id,
+exercise_key, reason?)`, unique pair, modelled directly on
+`member_workout_manual_logs`. New `src/lib/coach/avoided-exercises.ts`
+(get/avoid/unavoid, plus a catalog-joined list for the settings screen).
+Wired into the exact hard-exclusion tier injury/equipment already use —
+`combineExcludedKeys` (workout-session.ts) gained a third param, and
+`generate-workout.ts`'s three independent exclusion sites
+(`selectExercises`, `generateWorkoutTemplateSet`, `pickFocusExercises`)
+each gained an `avoidedKeys` param, unioned in alongside the other two.
+New `avoidAndSwapExercise()` records the avoidance then immediately
+swaps today's instance for a same-muscle-group alternative (mirrors
+`swapExercise`'s own candidate logic) — if none exists, the avoidance
+still sticks for next time, today's pick just stays put. UI: a "Never
+suggest again" link next to every exercise's existing "Swap" link
+(overview screen), plus an "Avoided exercises" list with per-item
+"Remove" under the `injuries` textarea in Coach settings.
+
+**Chat tool-calling safety audit** (both repos' AI chats, informed by
+common rival-chatbot complaints about bad/unsafe advice). Pod Assist
+(podHq) and Pod Coach's access-control model were both found sound — no
+tool anywhere can write/side-effect, and Pod Assist's gym-scoping is
+enforced server-side, proven by its own adversarial eval suite. The real
+gaps were in Pod Coach's advice-quality safety specifically: (1)
+`coach-chat.ts` never received the member's `injuries`/avoided-exercise
+data at all, despite that data existing and being used correctly
+elsewhere — now threaded into `CoachChatContext` and the system prompt;
+(2) the "never hedge, never suggest they double-check with someone
+else" instruction had no carve-out for pain/injury/medical-sounding
+messages — added an explicit exception: acknowledge plainly, suggest
+easing off, recommend a professional if it persists; (3) `search_pubmed`
+results (third-party abstract text) had no "treat as data, not
+instructions" framing, unlike Pod Assist's fully closed tool-input
+model — one line added; (4) zero automated test coverage existed for
+`coach-chat.ts`/`help-bot.ts`/`crisis-response.ts` — added
+`coach-chat.test.ts` covering the crisis-marker interception and the
+banned-word bounded retry (mocked provider fetch, not testing model
+output quality). Not changed: Pod Assist's evals staying outside default
+`npm test` (real API cost per run, a reasonable tradeoff) and the
+2026-08-31 token-budget mitigation (no evidence it needs to be
+structural yet).
+
+**Pre-workout readiness check** — the no-wearable equivalent of the
+existing wearable-driven recovery signal, reusing almost the entire
+mechanism rather than building a second one. New
+`workout_readiness_checks` table (`0090`, podHq) — one row per session,
+`sleep_quality`/`soreness`/`energy` each `"low"|"medium"|"high"`.
+`getRecoverySignal`'s sibling `getSelfReportedRecoverySignal()`
+(recovery-signal.ts) feeds the *same* `RecoverySignal` union via a new
+`"self_reported"` reason, so the existing low-recovery banner and
+`applyRecoveryAdjustment` needed no changes to handle it —
+`getRecoveryAdvice` (workout-session.ts) just falls through to a
+readiness check when there's no wearable data before finally giving up
+at `insufficient_data`. `applyRecoveryAdjustment` now also sets
+`weight_change_reason` on every discounted exercise (reusing the column
+from the previous session's "why" feature) with the real trigger —
+wearable-driven or self-reported. UI: a 3-question (Sleep/Soreness/
+Energy, Low/Medium/High) card shown once per session when there's no
+wearable data and no check yet submitted.
+
+**Verified live** against the same seeded dev test member: avoided
+Barbell Squat mid-session → confirmed the DB row and the auto-swap to
+Romanian Deadlift → confirmed it showed in and could be removed from the
+Coach-settings list; asked Pod Coach "my shoulder hurts during overhead
+presses, should I keep pushing through it?" and got a caution-first
+answer (stop the movement, shoulder-friendly alternatives, see a
+professional if it persists) instead of blind encouragement; submitted a
+Low/Low/Medium readiness check and confirmed it triggered the existing
+"Recovery looks low today" banner and the real weight reduction +
+reason text. `tsc --noEmit`, eslint, `npx vitest run` (190/190), and
+`npm run build` all clean. Migrations `0089`/`0090` applied live by Carl
+via Supabase's SQL Editor before verification — same pattern as every
+prior migration.
+
+**Found, not fixed (flagged to Carl, out of scope for this session):**
+`/coach/profile`'s "Save changes" always 400s — `coach-profile-edit-form.tsx`'s
+submit body never includes `agreedToPrivacy`, but `coachProfileSchema`
+requires `agreedToPrivacy: z.literal(true)` on every save, not just
+onboarding. Pre-existing, unrelated to this session's own change to that
+same file (adding the avoided-exercises list).

@@ -55,7 +55,15 @@ interface WorkoutExercise {
   sets: WorkoutSet[];
 }
 
-type RecoveryAdvice = { kind: "low_recovery"; reason: "elevated_resting_hr" | "low_sleep" } | { kind: "normal" } | { kind: "insufficient_data" };
+type RecoveryAdvice =
+  | { kind: "low_recovery"; reason: "elevated_resting_hr" | "low_sleep" | "self_reported" }
+  | { kind: "normal" }
+  | { kind: "insufficient_data" };
+
+// Pre-workout readiness check (2026-09-06) — a member's own answers for
+// this session, mirrors readiness-check.ts's ReadinessCheckAnswers.
+type ReadinessLevel = "low" | "medium" | "high";
+type ReadinessCheck = { sleepQuality: ReadinessLevel; soreness: ReadinessLevel; energy: ReadinessLevel };
 
 // Pain caution (2026-08-30, coaching review) — surfaces the member's own
 // latest weekly check-in "any pain or discomfort" answer on the very next
@@ -89,12 +97,20 @@ interface WorkoutSessionDetail {
   excludedExerciseKeys: string[];
   recoveryAdvice: RecoveryAdvice;
   painCaution: PainCaution;
+  readinessCheck: ReadinessCheck | null;
 }
 
-const RECOVERY_REASON_COPY: Record<"elevated_resting_hr" | "low_sleep", string> = {
+const RECOVERY_REASON_COPY: Record<"elevated_resting_hr" | "low_sleep" | "self_reported", string> = {
   elevated_resting_hr: "your resting heart rate is up from your usual",
   low_sleep: "you slept less than usual",
+  self_reported: "you told us you're feeling low today",
 };
+
+const READINESS_LEVEL_OPTIONS: { value: ReadinessLevel; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
 
 interface WeightChange {
   name: string;
@@ -382,9 +398,21 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [swappingExerciseId, setSwappingExerciseId] = useState<number | null>(null);
   const [swapping, setSwapping] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
+  // "Never suggest this again" (2026-09-06) — avoidingExerciseId tracks
+  // which row's action is in flight so only that row disables its buttons;
+  // avoidMessage is a one-line confirmation/error shown under that same row.
+  const [avoidingExerciseId, setAvoidingExerciseId] = useState<number | null>(null);
+  const [avoidMessage, setAvoidMessage] = useState<{ exerciseId: number; text: string } | null>(null);
   const [recoveryDismissed, setRecoveryDismissed] = useState(false);
   const [applyingRecovery, setApplyingRecovery] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  // Pre-workout readiness check (2026-09-06) — answers build up locally as
+  // the member taps through the 3 questions, then submit in one POST once
+  // all 3 are answered (mirrors the RPE screen's single-tap-per-question
+  // pattern, just 3 short questions instead of 1).
+  const [readinessAnswers, setReadinessAnswers] = useState<Partial<ReadinessCheck>>({});
+  const [submittingReadiness, setSubmittingReadiness] = useState(false);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
 
   const generateStarted = useRef(false);
 
@@ -1809,6 +1837,71 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
 
         <PainCautionBanner detail={detail} allowSwap={true} />
 
+        {!hasProgress && !detail.readinessCheck && detail.recoveryAdvice.kind === "insufficient_data" && (
+          <div className="rounded-lg border border-card-light-border p-4">
+            <p className="text-sm font-semibold">How are you feeling today?</p>
+            <p className="mt-1 text-xs text-card-light-muted">A quick check before you start — helps us know if today should be a little lighter.</p>
+            <div className="mt-3 space-y-3">
+              {(
+                [
+                  { key: "sleepQuality" as const, label: "Sleep" },
+                  { key: "soreness" as const, label: "Soreness" },
+                  { key: "energy" as const, label: "Energy" },
+                ]
+              ).map((q) => (
+                <div key={q.key}>
+                  <p className="mb-1 text-xs font-medium text-card-light-muted">{q.label}</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {READINESS_LEVEL_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setReadinessAnswers((prev) => ({ ...prev, [q.key]: opt.value }))}
+                        className={`rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+                          readinessAnswers[q.key] === opt.value
+                            ? "border-card-light-foreground bg-card-light-foreground text-white"
+                            : "border-card-light-border text-card-light-foreground"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {readinessError && <p className="mt-2 text-sm text-danger">{readinessError}</p>}
+            <button
+              type="button"
+              disabled={submittingReadiness || !readinessAnswers.sleepQuality || !readinessAnswers.soreness || !readinessAnswers.energy}
+              onClick={async () => {
+                setSubmittingReadiness(true);
+                setReadinessError(null);
+                try {
+                  const res = await fetch(`/api/member/workout/${detail.sessionId}/readiness-check`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(readinessAnswers),
+                  });
+                  const body = await res.json();
+                  if (body.status !== "ok") {
+                    setReadinessError(body.message ?? "Couldn't save that. Try again.");
+                    return;
+                  }
+                  setDetail(body.session);
+                } catch {
+                  setReadinessError("Couldn't save that. Try again.");
+                } finally {
+                  setSubmittingReadiness(false);
+                }
+              }}
+              className="mt-3 w-full rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {submittingReadiness ? "Saving..." : "Continue"}
+            </button>
+          </div>
+        )}
+
         {!hasProgress && !recoveryDismissed && detail.recoveryAdvice.kind === "low_recovery" && (
           <div className="rounded-lg border border-card-light-border bg-card-light-foreground/5 p-4">
             <p className="text-sm font-semibold">Recovery looks low today</p>
@@ -1918,8 +2011,43 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                             Swap
                           </button>
                         )}
+                        {!hasProgress && (
+                          <button
+                            type="button"
+                            disabled={avoidingExerciseId === ex.id}
+                            onClick={async () => {
+                              setAvoidingExerciseId(ex.id);
+                              setAvoidMessage(null);
+                              try {
+                                const res = await fetch(`/api/member/workout/${detail.sessionId}/avoid-exercise`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ exerciseId: ex.id }),
+                                });
+                                const body = await res.json();
+                                if (body.status !== "ok") {
+                                  setAvoidMessage({ exerciseId: ex.id, text: body.message ?? "Couldn't do that. Try again." });
+                                  return;
+                                }
+                                setDetail(body.session);
+                                setAvoidMessage({
+                                  exerciseId: ex.id,
+                                  text: body.swapped ? "Won't suggest this again — swapped for today." : "Won't suggest this again.",
+                                });
+                              } catch {
+                                setAvoidMessage({ exerciseId: ex.id, text: "Couldn't do that. Try again." });
+                              } finally {
+                                setAvoidingExerciseId(null);
+                              }
+                            }}
+                            className="text-xs font-semibold text-card-light-muted underline disabled:opacity-50"
+                          >
+                            Never suggest again
+                          </button>
+                        )}
                       </div>
                     </div>
+                    {avoidMessage?.exerciseId === ex.id && <p className="mt-1 text-xs text-card-light-muted">{avoidMessage.text}</p>}
                     {swappingExerciseId === ex.id && (
                       <div className="mt-3 space-y-2 border-t border-card-light-border pt-3">
                         {getSwapCandidates(ex, detail).length === 0 ? (

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MUSCLE_GROUPS } from "@/lib/coach/exercise-catalog";
+import { READINESS_LEVELS } from "@/lib/coach/types";
 
 // Stage 3 (2026-08-29) — mode defaults to "default" so the pre-existing
 // caller shape (just a bookingId, no mode/picks) keeps working unchanged.
@@ -137,6 +138,17 @@ export const logSetSchema = z.object({
 export const swapExerciseSchema = z.object({
   exerciseId: z.number().int().positive(),
   newExerciseKey: z.string().min(1).max(100),
+});
+
+export const avoidExerciseSchema = z.object({
+  exerciseId: z.number().int().positive(),
+  reason: z.string().trim().max(200).optional(),
+});
+
+export const readinessCheckSchema = z.object({
+  sleepQuality: z.enum(READINESS_LEVELS),
+  soreness: z.enum(READINESS_LEVELS),
+  energy: z.enum(READINESS_LEVELS),
 });
 
 // AMRAP completion tally (Stage 2, 2026-08-29) — self-reported, same
