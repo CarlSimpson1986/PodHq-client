@@ -39,7 +39,7 @@ export default async function WorkoutPage({ params }: { params: Promise<{ bookin
 
   return (
     <main className="flex min-h-full flex-1 flex-col">
-      <PageHero title="Today's Workout" subtitle="Your AI Coach" icon={DumbbellIcon} iconHref="/profile" />
+      <PageHero title="Today's Workout" icon={DumbbellIcon} iconHref="/profile" />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md card-light p-6">
           <WorkoutView bookingId={bookingIdNum} />

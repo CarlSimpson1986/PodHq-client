@@ -6,6 +6,7 @@ import {
   getInjuryExcludedKeys,
   getEquipmentExcludedKeys,
   computeWeightKgForBlock,
+  describeWeightChangeReason,
   blockPhaseIndex,
   generateWorkoutTemplateSet,
   instantiateTemplate,
@@ -55,6 +56,10 @@ export interface WorkoutExercise {
   // default. Drives the "resting" screen between sets in workout-view.tsx;
   // null means no rest-timer screen, same self-paced behaviour as before.
   restSeconds: number | null;
+  // "Why did this change?" (2026-09-06) — plain-English readout of the
+  // RPE-adjustment rule that set this exercise's weightTargetKg. Null for
+  // a first-time exercise or a member's own custom/circuit pick.
+  weightChangeReason: string | null;
   sets: WorkoutSet[];
 }
 
@@ -861,6 +866,7 @@ async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise
         muscle_group: exercise.muscleGroup,
         sort_order: i,
         rest_seconds: restByKey?.[exercise.key] ?? null,
+        weight_change_reason: exercise.weightChangeReason,
       })
       .select("id")
       .single();
@@ -894,7 +900,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
 
   const { data: exercises, error: exercisesError } = await admin
     .from("workout_exercises")
-    .select("id, exercise_key, name, muscle_group, sort_order, rest_seconds")
+    .select("id, exercise_key, name, muscle_group, sort_order, rest_seconds, weight_change_reason")
     .eq("session_id", sessionId)
     .order("sort_order");
   if (exercisesError) throw new Error(exercisesError.message);
@@ -925,6 +931,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
       name: e.name,
       muscleGroup: e.muscle_group,
       restSeconds: e.rest_seconds,
+      weightChangeReason: e.weight_change_reason,
       sets: (sets ?? [])
         .filter((s) => s.exercise_id === e.id)
         .map((s) => ({
@@ -1024,12 +1031,13 @@ export async function swapExercise(
   const activeBlock = await resolveActiveBlock(memberId, profile);
   const prior = history.find((h) => h.exerciseKey === newExerciseKey);
   const weightTargetKg = computeWeightKgForBlock(newExercise, profile, prior, activeBlock);
+  const weightChangeReason = describeWeightChangeReason(prior, activeBlock);
 
   // A plain UPDATE — never delete+reinsert — so sort_order (and every
   // set's id/set_number) is preserved automatically.
   const { error: exerciseUpdateError } = await admin
     .from("workout_exercises")
-    .update({ exercise_key: newExercise.key, name: newExercise.name })
+    .update({ exercise_key: newExercise.key, name: newExercise.name, weight_change_reason: weightChangeReason })
     .eq("id", exerciseId);
   if (exerciseUpdateError) throw new Error(exerciseUpdateError.message);
 

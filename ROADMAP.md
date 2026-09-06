@@ -14,121 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-60.md`, covering the pilot
-mechanism proof (2026-08-05) through the Premium onboarding overhaul
-(2026-09-03) — all split out to keep this file within Claude Code's
-~15,000-character `@`-import limit. Archives aren't always the strictly
-oldest material — the split point is "what's finished and stable" as
-much as "what's oldest" (see each archive's own header note for
-examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
-full build history, or `git log` on this file for exact split points.
-Active content here starts at "Icon color revert; real Coach-tour bug
-found live" (2026-09-03). If this file grows too large again, split it
-the same way: move the most clearly finished section into
-`ROADMAP-ARCHIVE-61.md`, update this paragraph.
-
-## Icon color revert; real Coach-tour bug found live; tour extended to Training/Nutrition — 2026-09-03
-
-Same-day follow-up once Carl actually clicked through the above.
-
-**Icons reverted**: the white-bg/black-icon treatment from the entry
-above didn't survive contact — Carl: "I WANT THE ICONS BACK TO THE
-ORIGINAL COLOUR." Both `pod-assist-mark.png`/`pod-coach-mark.png` are
-white line art again (deleted the black-recolored variants entirely),
-and the label pills underneath now read "POD ASSIST"/"POD COACH" in
-full on white-background/black-text (was gold/black inconsistently
-before) — the one piece of the white/black direction that stuck.
-
-**The Coach tour's "Show me around" chip was genuinely invisible, not
-just stale-cached** — worth recording precisely, since it looked
-identical to this session's other caching false-alarms at first. Ruled
-caching out for real this time (Incognito window, zero cached state,
-still missing), then instrumented `coach-chat-view.tsx` with a
-temporary on-page debug readout rather than keep guessing — it showed
-`onReplayTour=true`, `isWelcomeOnly=true`, everything correct. Root
-cause: the button's className used `text-foreground`/`border-card-border`
-(dark-theme tokens, meant for the black page) inside Pod Coach's white
-`card-light` chat panel — white text on white, present in the DOM the
-whole render, just invisible. Fixed to the same light-context tokens
-(`text-card-light-foreground`/`border-card-light-border`) Pod Assist's
-own equivalent button in `help-chat-view.tsx` already used correctly —
-a straight copy-paste would have avoided this. Debug code removed after
-confirming the fix.
-
-**Coach tour extended from Dashboard-only to a real cross-page tour** —
-Carl, mid-walkthrough: "this is not it — you havent gone through the
-training system or the nutrition." Same architecture as Pod Assist's
-own cross-page tour (`tour-runner.tsx`/`tour-continuation.tsx`/
-`tour-state.ts`), mirrored: `coach-tour-state.ts` (separate sessionStorage
-key, `podCoachTourResumeIndex`), `coach-tour-continuation.tsx` (mounted
-on `/training` and `/nutrition`, passive), `coach-tour-runner.tsx`
-rebuilt to hand off between pages via `onDoneClick` (with the explicit
-`driverRef.current?.destroy()` calls the Pod Assist debugging session
-upstream already proved necessary, baked in from the start this time).
-New sequence, 12 steps: Dashboard (week strip, recovery, sessions,
-nutrition summary, recommendation, leaderboard) → Training (next
-session, training block, consistency) → Nutrition (daily targets, log a
-meal, done). Real anchors added on both pages
-(`#tour-coach-training-next/-block/-consistency`,
-`#tour-coach-nutrition-summary/-log`) — the nutrition summary anchor
-needed its own inner wrapper div rather than reusing the outer
-`card-light` container, which also held the meal log and would have
-made the two steps' spotlights visually identical.
-
-Also removed the "Your habit streak" Dashboard step (Carl: redundant —
-the same Main Effort card already shows on Home) and the `#tour-coach-habit`
-id it targeted.
-
-**Verified**: `tsc --noEmit` clean throughout. The invisible-button root
-cause was confirmed via live instrumentation, not guessed — the debug
-readout's values were screenshotted before the fix. Dashboard's 6 steps
-re-verified live via direct DOM inspection (correct order, glow on
-every step); Training/Nutrition's cross-page hand-off itself hit the
-same automation-tab `requestAnimationFrame` limitation again when
-re-tested this way, but the resume pointer and page navigation were
-confirmed correct, and Carl's own real-tab click-through afterward
-("ok that will do!") confirms the full sequence actually works live.
-
-## More meal suggestion variety — 2026-09-03
-
-Carl: "I would like to add more options for what to eat next" →
-"I want as much variety as possible." `meal-suggestions.ts`'s
-`SUGGESTION_COUNT` (2 → 4, one idea per open meal slot on a day with
-nothing logged yet, not always just two) and its top-up pass (was a
-couple of fixed calls that could silently return fewer than asked for —
-now loops until it actually reaches the count or the catalog's
-exhausted). `meal-catalog.ts` doubled, 24 → 48 hand-written meals (12
-per slot) — more proteins (pork, beef, prawns, halloumi), cuisines
-(curry, fajitas, shakshuka), and vegetarian options, same
-reviewed-not-runtime-LLM-generated convention as the rest of the file.
-`tsc --noEmit` clean; not yet checked live.
-
-## Manual "worked out anyway" workout log — 2026-09-04
-
-Continuation of the 2026-09-03 session, which drafted and applied
-`member_workout_manual_logs` (podHq's `0083`, shared DB) but left the
-migration file uncommitted in podHq and never built this side. Picked
-back up 2026-09-04: `src/lib/coach/workout-manual-log.ts` (get/log/undo,
-same insert-only + same-day-only-delete convention as `habit_logs`),
-`/api/member/workout-manual-log` (POST/DELETE, same session/rate-limit/
-member-lookup shape as every other member route), and
-`todays-mission.ts`'s `no_booking` workout state extended with a
-`manuallyLogged` flag.
-
-`todays-mission-card.tsx`'s Workout row (no-booking case) changed from
-a single `Link` wrapping the whole row to a tickable `StatusDot` button
-(same look/behaviour as `DailyHabitsCard`'s tick/untick) plus a separate
-`/training` preview `Link`, so ticking and previewing don't fight over
-the same tap target.
-
-**Verified live**: `tsc --noEmit`, eslint, and `npx vitest run`
-(178/178) all clean. Logged into local dev as Carl's own real
-trial-active Hove account — ticked the Workout dot (POST 200, dot went
-green, text → "Logged today — preview →"), reloaded the page fresh to
-confirm the server-rendered state persisted (0/4 → 1/4 today), then
-undid it (DELETE 200) and reloaded again to confirm it reverted to
-0/4. Full round trip confirmed against the real DB, not just optimistic
-client state.
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-61.md`, covering the pilot
+mechanism proof (2026-08-05) through the manual workout log (2026-09-04)
+— all split out to keep this file within Claude Code's ~15,000-character
+`@`-import limit. Archives aren't always the strictly oldest material —
+the split point is "what's finished and stable" as much as "what's
+oldest" (see each archive's own header note for examples).
+Reference-only, not auto-loaded by CLAUDE.md; check them for full build
+history, or `git log` on this file for exact split points. Active
+content here starts at "Standalone Stripe for owned gyms" (2026-09-04).
+If this file grows too large again, split it the same way: move the
+most clearly finished section into `ROADMAP-ARCHIVE-62.md`, update this
+paragraph.
 
 ## Standalone Stripe for owned gyms (Hove) — 2026-09-04
 
@@ -254,3 +151,87 @@ hip-hinge pattern as the two kettlebell swings already marked
 compound), to `isCompound: false`. Full suite clean after: `tsc
 --noEmit`, eslint, `npx vitest run` (178/178) in this repo; `tsc`,
 eslint, `npx vitest run` (9/9) in podHq.
+
+## Workout flow design pass + a real progression bug found — 2026-09-06
+
+Same session, continued: Carl clicked through the newly-filled exercise
+library live and drove a full redesign pass on the workout screens,
+plus asked for a proper competitor-informed feature. All verified live
+against the dev server with a seeded test member (Hove, credits/bookings
+granted via one-off scripts, matching this project's established
+throwaway-script convention).
+
+**Overview redesigned into three collapsible sections** — Warm-up /
+Main workout / Static stretching, replacing the old flat exercise list
+plus two separate "Add a warm-up"/"Add a cool-down" checkboxes. Main
+workout starts expanded, the other two collapsed with a one-line
+summary. The checkboxes were removed entirely in a follow-up round —
+both sections are now always part of the flow by default, and a member
+opts out live via a "Skip warm-up"/"Skip to stretching" link instead of
+pre-deciding on the overview screen. `skipMainWorkout()` added so a
+member can also bail out of the main workout early and jump straight to
+stretching (previously only reachable by finishing every set).
+
+**"← Exit" replaced with "← Home"** plus `ArrowLeftIcon` (already
+defined in `icons.tsx` for exactly this "leave this nav" case, but
+unused until now) — Carl: the plain underlined text was easy to miss as
+the way back out of the workout flow entirely.
+
+**Core exercises now always sort to the end** of the main workout
+(Carl: "core should be the end") — a stable partition applied in both
+`generateWorkout()` and `instantiateTemplate()` (the template-based path
+is what most sessions actually take, once there's an active block), so
+whichever muscle-group rotation ran, any `core`-tagged pick moves after
+everything else while keeping its own relative order. Deliberately
+left "Build your own" (manual/AMRAP/RFT/HIIT picks) untouched — that's
+the member's own explicit order, not an AI-generated one.
+
+**Warm-up/cool-down redesigned to step through one item at a time**,
+matching the main workout's own flow, instead of showing the full
+checklist at once (Carl: "yes" once he understood why it had been a
+checklist — no reps/weight to log per item, so a flat list was the
+original reasoning, but a step-through reads clearer). `warmupItemIndex`/
+`cooldownItemIndex` replace the old shared `checkedIndices` set, reset
+to 0 on entering each phase.
+
+**"Why did this change?" explainability shipped**, prompted by a
+ChatGPT Deep Research pass on competitor complaints (Fitbod/Future/
+Zing/JSA — full findings not reproduced here, ask Carl for the
+document) that named "forgotten previous weight/no visible reasoning"
+as the single most-repeated failure across the category. Every working
+set's weight target now shows a plain-English "Why:" line — held/
+increased/reduced against last time's real RPE, or a deload-week note —
+computed by a new `describeWeightChangeReason()` that's a pure readout
+of the exact rule `adjustForRpe` already runs, never a separately
+invented explanation. New `workout_exercises.weight_change_reason`
+column (`0088_workout_exercise_weight_reason.sql`, podHq), threaded
+through `generateWorkout`, `instantiateTemplate`, and the exercise-swap
+flow so it stays correct after a member swaps an exercise mid-session
+too.
+
+**Found and fixed a real pre-existing bug while building the above**:
+`getWorkoutHistory()` read `weight_target_kg` (the *suggested* number)
+instead of `weight_actual_kg` (what the member actually lifted) when
+building progression history. A first-time exercise's target is null by
+design (see generate-workout.ts's own comment on why), so this silently
+zeroed out `lastWeightKg` the very next time that exercise came up —
+exactly the "previous weight forgotten" complaint the research named,
+caught live via the exercise-swap flow producing "Held the same as
+nullkg last time" before the fix. Also skips any completed set with a
+null `weight_actual_kg` (a duration-based hold, or an anomaly) rather
+than recording a bogus zero, so an older real-weight completion wins
+instead of being shadowed.
+
+Also fixed along the way: the workout page's `PageHero` dropped its
+"Your AI Coach" subtitle (Carl: not needed) — `subtitle` is now optional
+on `PageHero` itself, not just blanked for this one caller.
+
+**Verified live throughout** via a seeded dev-only test member (not a
+real customer) — booked/re-booked sessions, swapped an exercise into
+one with real prior history to force a non-null "Why:" line, confirmed
+the DB write directly after each change rather than trusting the UI
+alone. `tsc --noEmit`, eslint, and `npx vitest run` (178/178) clean
+after every round; `npm run build` clean at the end. Migration
+`0088` applied live by Carl via Supabase's SQL Editor before the
+exercise-swap verification pass, same manual-application pattern as
+every other migration this project uses.

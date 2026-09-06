@@ -43,6 +43,10 @@ export interface GeneratedExercise {
   // their second time on, same as it always has for every session
   // after the first.
   weightTargetKg: number | null;
+  // Plain-English readout of the same deterministic rule that produced
+  // weightTargetKg (see describeWeightChangeReason) — null exactly when
+  // weightTargetKg is null (no prior history to explain against).
+  weightChangeReason: string | null;
 }
 
 export interface GenerateWorkoutInput {
@@ -125,14 +129,28 @@ export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[
   const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
 
-  return eligible.map((exercise) => ({
-    key: exercise.key,
-    name: exercise.name,
-    muscleGroup: exercise.muscleGroup,
-    sets,
-    repsTarget,
-    weightTargetKg: computeWeightKgForBlock(exercise, profile, historyByKey.get(exercise.key), activeBlock),
-  }));
+  const generated = eligible.map((exercise) => {
+    const prior = historyByKey.get(exercise.key);
+    return {
+      key: exercise.key,
+      name: exercise.name,
+      muscleGroup: exercise.muscleGroup,
+      sets,
+      repsTarget,
+      weightTargetKg: computeWeightKgForBlock(exercise, profile, prior, activeBlock),
+      weightChangeReason: describeWeightChangeReason(prior, activeBlock),
+    };
+  });
+
+  // Core moves to the end of the session (Carl's call, 2026-09-06) — real
+  // programming convention (spinal/ab work last, once the big compound
+  // lifts are done), not just a display preference. A stable partition,
+  // not a full sort — every other muscle group keeps its existing
+  // relative order from selectExercises' own rotation, core exercises
+  // keep theirs too, just moved after everything else.
+  const nonCore = generated.filter((e) => e.muscleGroup !== "core");
+  const core = generated.filter((e) => e.muscleGroup === "core");
+  return [...nonCore, ...core];
 }
 
 // Extracted from selectExercises's own filter so the exercise-swap flow
@@ -262,6 +280,36 @@ export function computeWeightKgForBlock(
     return roundToNearestPlate(raw * DELOAD_WEIGHT_MULTIPLIER);
   }
   return raw;
+}
+
+// "Why did this change?" (Carl, 2026-09-06, from competitor research — the
+// single most-repeated complaint across Fitbod/Future/Zing/JSA was weight
+// targets that felt random with no visible reasoning). Deliberately just a
+// plain-English readout of the exact rule adjustForRpe/computeWeightKgForBlock
+// already ran — never a separately-invented explanation, so it can never
+// drift out of sync with the real number shown. Null exactly when
+// computeWeightKgForBlock also returns null (no prior history to explain
+// against — the "first time doing this" copy already in workout-view.tsx
+// covers that case on its own).
+export function describeWeightChangeReason(
+  prior: ExerciseHistoryEntry | undefined,
+  activeBlock: { blockType: BlockType } | undefined
+): string | null {
+  if (!prior) return null;
+  if (activeBlock?.blockType === "deload") {
+    return "Deload week — weight reduced on purpose so you can recover.";
+  }
+  const lastWeight = `${prior.lastWeightKg}kg last time`;
+  if (prior.lastRpe === null) {
+    return `Held the same as ${lastWeight} — no difficulty rating was logged.`;
+  }
+  if (prior.lastRpe <= 2) {
+    return `Increased from ${lastWeight} — that felt easy (RPE ${prior.lastRpe}).`;
+  }
+  if (prior.lastRpe === 3) {
+    return `Held the same as ${lastWeight} — that felt just right (RPE 3).`;
+  }
+  return `Reduced slightly from ${lastWeight} — that felt hard (RPE ${prior.lastRpe}).`;
 }
 
 // RPE 1-2 (Effortless/Easy) trends the weight up, 3 (Just Right) holds it,
@@ -519,18 +567,29 @@ export function instantiateTemplate(
   const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
 
-  return templateExercises
+  const instantiated = templateExercises
     .map((ex) => {
       const catalogEntry = EXERCISE_CATALOG.find((c) => c.key === ex.key);
       if (!catalogEntry) return null;
+      const prior = historyByKey.get(ex.key);
       return {
         key: ex.key,
         name: ex.name,
         muscleGroup: ex.muscleGroup,
         sets,
         repsTarget,
-        weightTargetKg: computeWeightKgForBlock(catalogEntry, profile, historyByKey.get(ex.key), activeBlock),
+        weightTargetKg: computeWeightKgForBlock(catalogEntry, profile, prior, activeBlock),
+        weightChangeReason: describeWeightChangeReason(prior, activeBlock),
       };
     })
     .filter((e): e is GeneratedExercise => e !== null);
+
+  // Core last (see generateWorkout's own identical comment) — applied
+  // here too since a template's fixed exercise list is the path an
+  // onboarded member with an active block actually takes every session,
+  // not generateWorkout's own ordering, which only ever runs as its
+  // fallback when resolveActiveBlock finds no block at all.
+  const nonCore = instantiated.filter((e) => e.muscleGroup !== "core");
+  const core = instantiated.filter((e) => e.muscleGroup === "core");
+  return [...nonCore, ...core];
 }

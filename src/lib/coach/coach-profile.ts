@@ -146,7 +146,7 @@ export async function getWorkoutHistory(
   const exerciseIds = exercises.map((e) => e.id);
   const { data: sets, error: setsError } = await admin
     .from("workout_sets")
-    .select("exercise_id, set_number, weight_target_kg, rpe, completed_at")
+    .select("exercise_id, set_number, weight_actual_kg, rpe, completed_at")
     .in("exercise_id", exerciseIds)
     .not("completed_at", "is", null);
 
@@ -169,6 +169,12 @@ export async function getWorkoutHistory(
   const bestSetNumberByKey = new Map<string, number>();
 
   for (const set of sets ?? []) {
+    // A completed set with no logged weight (a duration-based hold like a
+    // plank, or a set somehow completed without weight entered) has
+    // nothing real to progress from — skip it entirely rather than record
+    // a bogus lastWeightKg, so an older real-weight completion (if any)
+    // still wins instead of being shadowed by this one.
+    if (set.weight_actual_kg === null) continue;
     const exercise = exerciseById.get(set.exercise_id);
     if (!exercise) continue;
     const thisRank = sessionOrder.get(exercise.session_id) ?? Infinity;
@@ -180,7 +186,12 @@ export async function getWorkoutHistory(
       bestSetNumberByKey.set(exercise.exercise_key, set.set_number);
       latestByKey.set(exercise.exercise_key, {
         exerciseKey: exercise.exercise_key,
-        lastWeightKg: set.weight_target_kg,
+        // Progression must be based on what the member actually lifted,
+        // not what was suggested (weight_target_kg) — the bug this fix
+        // corrects (2026-09-06): a first-time exercise's target is null
+        // by design, so reading target here silently zeroed out the very
+        // next progression step for every exercise's second-ever use.
+        lastWeightKg: set.weight_actual_kg,
         lastRpe: set.rpe,
       });
     }

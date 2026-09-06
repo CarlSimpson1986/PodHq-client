@@ -15,6 +15,7 @@ import {
 } from "@/lib/coach/exercise-catalog";
 import { WARMUP_ITEMS, COOLDOWN_ITEMS } from "@/lib/coach/warmup-cooldown";
 import { useExerciseVideoOverrides } from "@/lib/hooks/use-exercise-video-overrides";
+import { ArrowLeftIcon } from "@/components/icons";
 
 // How long each frame shows before auto-switching — reads as motion
 // without needing a real animated asset (the source images are two
@@ -47,6 +48,10 @@ interface WorkoutExercise {
   // Custom-workout member override (Stage 1, 2026-08-29) — null means no
   // rest-timer screen, same self-paced behaviour as before this existed.
   restSeconds: number | null;
+  // "Why did this change?" (2026-09-06) — see generate-workout.ts's
+  // describeWeightChangeReason. Null for a first-time exercise or a
+  // member's own custom/circuit pick.
+  weightChangeReason: string | null;
   sets: WorkoutSet[];
 }
 
@@ -180,10 +185,16 @@ const inputClass =
 // set is already persisted immediately (log-set is an UPDATE on a
 // pre-existing row), so there's nothing destructive to confirm. Matches
 // CoachBottomNav's own Exit convention (same destination, "/").
+// A plain underlined text link was too easy to miss as "the way back to
+// Home" (Carl, 2026-09-06, testing the workout flow) — an icon + label
+// reads unambiguously as a real back button, same ArrowLeftIcon already
+// reserved for exactly this "leave this nav, go back" case (see its own
+// comment in icons.tsx).
 function ExitLink() {
   return (
-    <Link href="/" className="inline-block text-xs font-medium text-card-light-muted underline">
-      ← Exit
+    <Link href="/" className="inline-flex items-center gap-1 text-sm font-medium text-card-light-foreground">
+      <ArrowLeftIcon className="h-4 w-4" />
+      Home
     </Link>
   );
 }
@@ -350,9 +361,24 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [imageMissing, setImageMissing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [summary, setSummary] = useState<{ totalVolumeKg: number; changes: WeightChange[]; narration: string | null } | null>(null);
-  const [warmupEnabled, setWarmupEnabled] = useState(false);
-  const [cooldownEnabled, setCooldownEnabled] = useState(false);
-  const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
+  // Overview's three-section accordion (2026-09-06, Carl's design pass) —
+  // warm-up/cool-down are always part of the flow now (no opt-in
+  // checkbox) — a member who doesn't want one uses the section's own
+  // "Skip" link once they're actually in it, rather than pre-deciding on
+  // the overview screen.
+  // main workout open by default since that's the primary content;
+  // warm-up/stretching start collapsed, just a preview until expanded.
+  const [expandedSections, setExpandedSections] = useState<{ warmup: boolean; main: boolean; cooldown: boolean }>({
+    warmup: false,
+    main: true,
+    cooldown: false,
+  });
+  // Warm-up/cool-down step through one item at a time (2026-09-06, Carl's
+  // call — same one-exercise-at-a-time flow as the main workout, instead
+  // of the original full-checklist screen) — each index resets to 0 on
+  // entering its phase, see the setPhase("warmup"/"cooldown") call sites.
+  const [warmupItemIndex, setWarmupItemIndex] = useState(0);
+  const [cooldownItemIndex, setCooldownItemIndex] = useState(0);
   const [swappingExerciseId, setSwappingExerciseId] = useState<number | null>(null);
   const [swapping, setSwapping] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
@@ -1826,89 +1852,147 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           </div>
         )}
 
-        <ul className="space-y-3">
-          {detail.exercises.map((ex, i) => (
-            <li key={ex.id} className="rounded-lg border border-card-light-border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
-                    {i + 1}. {ex.muscleGroup}
-                  </p>
-                  <p className="text-base font-semibold">{ex.name}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-sm text-card-light-muted">
-                    {ex.sets.length}×{ex.sets[0]?.repsTarget}
-                  </p>
-                  {!hasProgress && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSwapError(null);
-                        setSwappingExerciseId(swappingExerciseId === ex.id ? null : ex.id);
-                      }}
-                      className="text-xs font-semibold underline"
-                    >
-                      Swap
-                    </button>
-                  )}
-                </div>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-card-light-border">
+            <button
+              type="button"
+              onClick={() => setExpandedSections((s) => ({ ...s, warmup: !s.warmup }))}
+              className="relative flex w-full items-center justify-center p-4 text-center"
+            >
+              <div>
+                <p className="text-base font-semibold text-card-light-foreground">Warm-up</p>
+                <p className="text-sm text-card-light-muted">2-5 min — cardio &amp; mobility</p>
               </div>
-              {swappingExerciseId === ex.id && (
-                <div className="mt-3 space-y-2 border-t border-card-light-border pt-3">
-                  {getSwapCandidates(ex, detail).length === 0 ? (
-                    <p className="text-sm text-card-light-muted">No alternatives available for this muscle group.</p>
-                  ) : (
-                    getSwapCandidates(ex, detail).map((candidate) => (
-                      <button
-                        key={candidate.key}
-                        type="button"
-                        disabled={swapping}
-                        onClick={async () => {
-                          setSwapping(true);
-                          setSwapError(null);
-                          try {
-                            const res = await fetch(`/api/member/workout/${detail.sessionId}/swap-exercise`, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ exerciseId: ex.id, newExerciseKey: candidate.key }),
-                            });
-                            const body = await res.json();
-                            if (body.status !== "ok") {
-                              setSwapError(body.message ?? "Couldn't swap that exercise.");
-                              return;
-                            }
-                            setDetail(body.session);
-                            setSwappingExerciseId(null);
-                          } catch {
-                            setSwapError("Couldn't swap that exercise. Try again.");
-                          } finally {
-                            setSwapping(false);
-                          }
-                        }}
-                        className="block w-full rounded-lg border border-card-light-border px-3 py-2 text-left text-sm hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
-                      >
-                        {candidate.name}
-                      </button>
-                    ))
-                  )}
-                  {swapError && <p className="text-sm text-danger">{swapError}</p>}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+              <span className="absolute right-4 text-lg text-card-light-foreground">{expandedSections.warmup ? "−" : "+"}</span>
+            </button>
+            {expandedSections.warmup && (
+              <div className="space-y-3 border-t border-card-light-border p-4">
+                <ul className="space-y-2">
+                  {WARMUP_ITEMS.map((item) => (
+                    <li key={item.key} className="text-sm">
+                      <span className="font-medium">{item.name}</span>{" "}
+                      <span className="text-card-light-muted">— {item.instruction}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
 
-        {!hasProgress && (
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={warmupEnabled} onChange={(e) => setWarmupEnabled(e.target.checked)} />
-            Add a warm-up
-          </label>
-        )}
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={cooldownEnabled} onChange={(e) => setCooldownEnabled(e.target.checked)} />
-          Add a cool-down
-        </label>
+          <div className="rounded-lg border border-card-light-border">
+            <button
+              type="button"
+              onClick={() => setExpandedSections((s) => ({ ...s, main: !s.main }))}
+              className="relative flex w-full items-center justify-center p-4 text-center"
+            >
+              <div>
+                <p className="text-base font-semibold text-card-light-foreground">Main workout</p>
+                <p className="text-sm text-card-light-muted">{detail.exercises.length} exercises</p>
+              </div>
+              <span className="absolute right-4 text-lg text-card-light-foreground">{expandedSections.main ? "−" : "+"}</span>
+            </button>
+            {expandedSections.main && (
+              <ul className="space-y-3 border-t border-card-light-border p-4">
+                {detail.exercises.map((ex, i) => (
+                  <li key={ex.id} className="rounded-lg border border-card-light-border p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
+                          {i + 1}. {ex.muscleGroup}
+                        </p>
+                        <p className="text-base font-semibold">{ex.name}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <p className="text-sm text-card-light-muted">
+                          {ex.sets.length}×{ex.sets[0]?.repsTarget}
+                        </p>
+                        {!hasProgress && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSwapError(null);
+                              setSwappingExerciseId(swappingExerciseId === ex.id ? null : ex.id);
+                            }}
+                            className="text-xs font-semibold underline"
+                          >
+                            Swap
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {swappingExerciseId === ex.id && (
+                      <div className="mt-3 space-y-2 border-t border-card-light-border pt-3">
+                        {getSwapCandidates(ex, detail).length === 0 ? (
+                          <p className="text-sm text-card-light-muted">No alternatives available for this muscle group.</p>
+                        ) : (
+                          getSwapCandidates(ex, detail).map((candidate) => (
+                            <button
+                              key={candidate.key}
+                              type="button"
+                              disabled={swapping}
+                              onClick={async () => {
+                                setSwapping(true);
+                                setSwapError(null);
+                                try {
+                                  const res = await fetch(`/api/member/workout/${detail.sessionId}/swap-exercise`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ exerciseId: ex.id, newExerciseKey: candidate.key }),
+                                  });
+                                  const body = await res.json();
+                                  if (body.status !== "ok") {
+                                    setSwapError(body.message ?? "Couldn't swap that exercise.");
+                                    return;
+                                  }
+                                  setDetail(body.session);
+                                  setSwappingExerciseId(null);
+                                } catch {
+                                  setSwapError("Couldn't swap that exercise. Try again.");
+                                } finally {
+                                  setSwapping(false);
+                                }
+                              }}
+                              className="block w-full rounded-lg border border-card-light-border px-3 py-2 text-left text-sm hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
+                            >
+                              {candidate.name}
+                            </button>
+                          ))
+                        )}
+                        {swapError && <p className="text-sm text-danger">{swapError}</p>}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-card-light-border">
+            <button
+              type="button"
+              onClick={() => setExpandedSections((s) => ({ ...s, cooldown: !s.cooldown }))}
+              className="relative flex w-full items-center justify-center p-4 text-center"
+            >
+              <div>
+                <p className="text-base font-semibold text-card-light-foreground">Static stretching</p>
+                <p className="text-sm text-card-light-muted">Cool down and stretch</p>
+              </div>
+              <span className="absolute right-4 text-lg text-card-light-foreground">{expandedSections.cooldown ? "−" : "+"}</span>
+            </button>
+            {expandedSections.cooldown && (
+              <div className="space-y-3 border-t border-card-light-border p-4">
+                <ul className="space-y-2">
+                  {COOLDOWN_ITEMS.map((item) => (
+                    <li key={item.key} className="text-sm">
+                      <span className="font-medium">{item.name}</span>{" "}
+                      <span className="text-card-light-muted">— {item.instruction}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
 
         <button
           type="button"
@@ -1922,8 +2006,8 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             setWeight(resumeSet?.weightTargetKg ?? "");
             setImageFrame(0);
             setImageMissing(false);
-            setCheckedIndices(new Set());
-            setPhase(warmupEnabled && !hasProgress ? "warmup" : "active");
+            setWarmupItemIndex(0);
+            setPhase(hasProgress ? "active" : "warmup");
           }}
         >
           {hasProgress ? "Resume workout →" : "Start workout →"}
@@ -1933,43 +2017,38 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   }
 
   if (phase === "warmup") {
+    const item = WARMUP_ITEMS[warmupItemIndex];
+    const isLastWarmupItem = warmupItemIndex === WARMUP_ITEMS.length - 1;
     return (
       <div className="space-y-5">
-        <ExitLink />
-        <p className="text-lg font-semibold">Warm-up</p>
-        <ul className="space-y-3">
-          {WARMUP_ITEMS.map((item, i) => (
-            <li key={item.key} className="space-y-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setCheckedIndices((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(i)) next.delete(i);
-                    else next.add(i);
-                    return next;
-                  })
-                }
-                className="flex w-full items-center justify-between rounded-lg border border-card-light-border p-4 text-left"
-              >
-                <div>
-                  <p className="text-base font-semibold">{item.name}</p>
-                  <p className="text-sm text-card-light-muted">{item.instruction}</p>
-                </div>
-                <span className={`text-lg ${checkedIndices.has(i) ? "text-success" : "text-card-light-muted"}`}>
-                  {checkedIndices.has(i) ? "✓" : ""}
-                </span>
-              </button>
-              {exerciseVideoOverrides[item.key] && (
-                <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-                  <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-        <button type="button" className={buttonClass} onClick={() => setPhase("active")}>
-          Continue →
+        <div className="flex items-center justify-between">
+          <ExitLink />
+          <button
+            type="button"
+            onClick={() => setPhase("active")}
+            className="text-xs font-medium text-card-light-muted underline"
+          >
+            Skip warm-up
+          </button>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
+            {warmupItemIndex + 1} of {WARMUP_ITEMS.length}
+          </p>
+          <p className="mt-1 text-lg font-semibold">{item.name}</p>
+          <p className="text-sm text-card-light-muted">{item.instruction}</p>
+        </div>
+        {exerciseVideoOverrides[item.key] && (
+          <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
+            <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
+          </div>
+        )}
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={() => (isLastWarmupItem ? setPhase("active") : setWarmupItemIndex((i) => i + 1))}
+        >
+          {isLastWarmupItem ? "Continue to workout →" : "Next →"}
         </button>
       </div>
     );
@@ -2009,15 +2088,20 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     }
   }
 
+  // Lets a member bail out of the main workout early (Carl's "skip
+  // section" request, 2026-09-06) — jumps straight to whichever section
+  // would normally follow the very last set, same branch applyAdvance's
+  // own end-of-workout case already takes.
+  function skipMainWorkout() {
+    setCooldownItemIndex(0);
+    setPhase("cooldown");
+  }
+
   function applyAdvance() {
     if (isLastSetOfExercise) {
       if (isLastExercise) {
-        if (cooldownEnabled) {
-          setCheckedIndices(new Set());
-          setPhase("cooldown");
-        } else {
-          finishSession();
-        }
+        setCooldownItemIndex(0);
+        setPhase("cooldown");
         return;
       }
       const nextExercise = detail!.exercises[exerciseIndex + 1];
@@ -2093,43 +2177,29 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   }
 
   if (phase === "cooldown") {
+    const item = COOLDOWN_ITEMS[cooldownItemIndex];
+    const isLastCooldownItem = cooldownItemIndex === COOLDOWN_ITEMS.length - 1;
     return (
       <div className="space-y-5">
         <ExitLink />
-        <p className="text-lg font-semibold">Cool-down</p>
-        <ul className="space-y-3">
-          {COOLDOWN_ITEMS.map((item, i) => (
-            <li key={item.key} className="space-y-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setCheckedIndices((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(i)) next.delete(i);
-                    else next.add(i);
-                    return next;
-                  })
-                }
-                className="flex w-full items-center justify-between rounded-lg border border-card-light-border p-4 text-left"
-              >
-                <div>
-                  <p className="text-base font-semibold">{item.name}</p>
-                  <p className="text-sm text-card-light-muted">{item.instruction}</p>
-                </div>
-                <span className={`text-lg ${checkedIndices.has(i) ? "text-success" : "text-card-light-muted"}`}>
-                  {checkedIndices.has(i) ? "✓" : ""}
-                </span>
-              </button>
-              {exerciseVideoOverrides[item.key] && (
-                <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-                  <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-        <button type="button" className={buttonClass} onClick={() => finishSession()}>
-          Finish →
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
+            {cooldownItemIndex + 1} of {COOLDOWN_ITEMS.length}
+          </p>
+          <p className="mt-1 text-lg font-semibold">{item.name}</p>
+          <p className="text-sm text-card-light-muted">{item.instruction}</p>
+        </div>
+        {exerciseVideoOverrides[item.key] && (
+          <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
+            <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
+          </div>
+        )}
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={() => (isLastCooldownItem ? finishSession() : setCooldownItemIndex((i) => i + 1))}
+        >
+          {isLastCooldownItem ? "Finish →" : "Next →"}
         </button>
       </div>
     );
@@ -2268,7 +2338,12 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   if (youtubeTiming.end !== undefined) youtubeEmbedParams.set("end", String(youtubeTiming.end));
   return (
     <div className="space-y-6">
-      <ExitLink />
+      <div className="flex items-center justify-between">
+        <ExitLink />
+        <button type="button" onClick={skipMainWorkout} className="text-xs font-medium text-card-light-muted underline">
+          Skip to stretching →
+        </button>
+      </div>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
           Exercise {exerciseIndex + 1} of {detail.exercises.length}
@@ -2348,6 +2423,11 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <p className="text-xs text-card-light-muted">
           First time doing {exercise.name} — try a lighter warm-up set or two first to find a comfortable weight, then log what
           you actually use here. We&apos;ll suggest a starting point from here next time.
+        </p>
+      )}
+      {exercise.weightChangeReason && (
+        <p className="text-xs text-card-light-muted">
+          <span className="font-medium">Why:</span> {exercise.weightChangeReason}
         </p>
       )}
 

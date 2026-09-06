@@ -17,7 +17,10 @@ export function PageHero({
   rightSlot,
 }: {
   title: string;
-  subtitle: string;
+  // Optional (2026-09-06) — the workout page dropped its "Your AI Coach"
+  // subtitle as unneeded, and forcing every other caller to keep passing
+  // one would be worse than just allowing this to be omitted.
+  subtitle?: string;
   icon?: ComponentType<{ className?: string }>;
   // Only pass this on pages behind auth — the icon becomes a link to
   // /profile. Left unset on the auth pages (login/signup/forgot-password)
@@ -37,7 +40,7 @@ export function PageHero({
       <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
         </div>
         {rightSlot ? (
           rightSlot
