@@ -191,9 +191,18 @@ reason text. `tsc --noEmit`, eslint, `npx vitest run` (190/190), and
 via Supabase's SQL Editor before verification — same pattern as every
 prior migration.
 
-**Found, not fixed (flagged to Carl, out of scope for this session):**
-`/coach/profile`'s "Save changes" always 400s — `coach-profile-edit-form.tsx`'s
-submit body never includes `agreedToPrivacy`, but `coachProfileSchema`
-requires `agreedToPrivacy: z.literal(true)` on every save, not just
-onboarding. Pre-existing, unrelated to this session's own change to that
-same file (adding the avoided-exercises list).
+**Found and fixed same session**: `/coach/profile`'s "Save changes" always
+400'd — `coach-profile-edit-form.tsx`'s submit body never includes
+`agreedToPrivacy`, but `coachProfileSchema` required
+`agreedToPrivacy: z.literal(true)` on every save, not just onboarding.
+Fixed by making the field optional in the schema and enforcing "must be
+true" only in the route, only when `!member.privacy_policy_accepted_at`
+— a returning member editing their profile is never asked to re-consent.
+Also fixed a second bug the same code exposed: the route unconditionally
+re-stamped `privacy_policy_accepted_at` on every save, resetting a
+member's real original consent timestamp on every routine edit; now only
+stamped the first time, same guarded-once pattern the adjacent
+`trial_started_at` logic already used. Verified live against the seeded
+dev test member: save succeeded and `privacy_policy_accepted_at` stayed
+at its original timestamp. `tsc --noEmit`, eslint, `npx vitest run`
+(190/190) clean.

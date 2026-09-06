@@ -41,6 +41,13 @@ export async function POST(request: Request) {
     );
   }
 
+  // Consent must be freshly given on a first-time submission (onboarding)
+  // but is never re-asked of a member who's already accepted — the edit
+  // form has no checkbox for this at all, and shouldn't need one.
+  if (!member.privacy_policy_accepted_at && parsed.data.agreedToPrivacy !== true) {
+    return NextResponse.json({ status: "error", message: "You must agree to the Privacy Policy to continue." }, { status: 400 });
+  }
+
   try {
     await createCoachProfile(member.id, {
       goal: parsed.data.goal,
@@ -69,22 +76,28 @@ export async function POST(request: Request) {
   // "booked a session," since a member without a completed profile has
   // nothing for Pod Coach to actually run yet.
   //
-  // Privacy Policy consent also stamps here now, not on first tap into
-  // the Coach bubble — the schema already requires agreedToPrivacy to be
-  // true to reach this point, so this just records it. hasAcceptedPrivacyPolicy()
+  // Privacy Policy consent stamps here too, but only the first time
+  // (2026-09-07 fix) — this route now also handles a returning member's
+  // plain profile edit, which must never reset an already-real consent
+  // timestamp just because they changed their weight. hasAcceptedPrivacyPolicy()
   // (member.ts) reads this same column, so PrivacyConsentForm simply never
   // renders for anyone who completed onboarding through this route.
-  const memberUpdate: Record<string, string> = { privacy_policy_accepted_at: new Date().toISOString() };
+  const memberUpdate: Record<string, string> = {};
+  if (!member.privacy_policy_accepted_at) {
+    memberUpdate.privacy_policy_accepted_at = new Date().toISOString();
+  }
   if (member.trial_activated_at && !member.trial_started_at) {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     memberUpdate.trial_started_at = now.toISOString();
     memberUpdate.trial_expires_at = expiresAt.toISOString();
   }
-  const admin = createAdminClient();
-  const { error: memberUpdateError } = await admin.from("members").update(memberUpdate).eq("id", member.id);
-  if (memberUpdateError) {
-    console.error("[coach-profile] failed to update member trial/consent state", { error: memberUpdateError.message });
+  if (Object.keys(memberUpdate).length > 0) {
+    const admin = createAdminClient();
+    const { error: memberUpdateError } = await admin.from("members").update(memberUpdate).eq("id", member.id);
+    if (memberUpdateError) {
+      console.error("[coach-profile] failed to update member trial/consent state", { error: memberUpdateError.message });
+    }
   }
 
   return NextResponse.json({ status: "ok" });

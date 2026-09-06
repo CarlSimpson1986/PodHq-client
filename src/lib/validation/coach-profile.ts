@@ -22,10 +22,14 @@ export const coachProfileSchema = z.object({
   foodAllergies: z.string().trim().max(500).optional().or(z.literal("")),
   foodPreferences: z.enum(FOOD_PREFERENCES).optional(),
   nutritionTrackingMode: z.enum(NUTRITION_TRACKING_MODES).optional(),
-  // Required true, not optional — Pod Coach's Privacy Policy consent
-  // (2026-09-03, moved from a separate gate the first time a member opened
-  // the Coach bubble, per Carl: onboarding is a better place to ask than
-  // ambushing them later). See api/member/coach-profile/route.ts, which
-  // stamps members.privacy_policy_accepted_at once this is true.
-  agreedToPrivacy: z.literal(true),
+  // Optional here, not required — this schema is shared by onboarding
+  // (which must collect real consent, gated by its own checkbox) and the
+  // profile *edit* form for a returning member who already consented at
+  // onboarding and has no reason to be asked again. The route enforces
+  // "must be true" only when the member hasn't already accepted (see
+  // api/member/coach-profile/route.ts) — a bare zod shape can't see
+  // member state, so that check has to live there, not here. Found
+  // 2026-09-07: the edit form never sent this field at all, and the
+  // schema's old `z.literal(true)` made every edit-form save 400.
+  agreedToPrivacy: z.boolean().optional(),
 });
