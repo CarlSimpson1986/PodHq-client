@@ -1939,7 +1939,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <p className="text-lg font-semibold">Warm-up</p>
         <ul className="space-y-3">
           {WARMUP_ITEMS.map((item, i) => (
-            <li key={item.name}>
+            <li key={item.key} className="space-y-2">
               <button
                 type="button"
                 onClick={() =>
@@ -1960,6 +1960,11 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                   {checkedIndices.has(i) ? "✓" : ""}
                 </span>
               </button>
+              {exerciseVideoOverrides[item.key] && (
+                <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
+                  <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -2094,7 +2099,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
         <p className="text-lg font-semibold">Cool-down</p>
         <ul className="space-y-3">
           {COOLDOWN_ITEMS.map((item, i) => (
-            <li key={item.name}>
+            <li key={item.key} className="space-y-2">
               <button
                 type="button"
                 onClick={() =>
@@ -2115,6 +2120,11 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
                   {checkedIndices.has(i) ? "✓" : ""}
                 </span>
               </button>
+              {exerciseVideoOverrides[item.key] && (
+                <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
+                  <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
+                </div>
+              )}
             </li>
           ))}
         </ul>

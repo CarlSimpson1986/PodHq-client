@@ -141,6 +141,43 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     requiredEquipment: "cable_machine",
   },
   {
+    // DRAFT safetyTip — Carl to review/rewrite before this goes live, per
+    // this file's own convention that safety cues are human-written, not
+    // LLM-generated. Added 2026-09-06 alongside lat_pulldown_double_handle
+    // for Carl's own technique-video shoot — same movement as lat_pulldown,
+    // different attachment.
+    // isCompound: false (not true, unlike lat_pulldown itself) — this is
+    // the same movement pattern with a different grip attachment, not a
+    // distinct compound pattern of its own. selectExercises's Strength-
+    // block preference does a flat array-order slice over every
+    // isCompound exercise, not a one-per-muscle-group pick, so marking a
+    // same-pattern grip variant compound too would let it crowd out a
+    // genuinely different pattern (found via generate-workout.test.ts's
+    // "softly prefers compound lifts" test going from 6 distinct patterns
+    // to 3 lat-pulldown variants when this was true).
+    key: "lat_pulldown_v_grip",
+    name: "V-Grip Lat Pulldown",
+    muscleGroup: "back",
+    avoidIfInjury: ["shoulders", "elbow"],
+    safetyTip: "Pull the handles down to your upper chest, keeping elbows close to your body. Pull with your back, not your arms — avoid leaning back excessively or using momentum.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    // DRAFT safetyTip — see lat_pulldown_v_grip above.
+    // isCompound: false — see lat_pulldown_v_grip's comment above, same
+    // reasoning.
+    key: "lat_pulldown_double_handle",
+    name: "Double-Handle Lat Pulldown",
+    muscleGroup: "back",
+    avoidIfInjury: ["shoulders", "elbow"],
+    safetyTip: "Pull both handles down and out to the sides, driving your elbows down and back. Pull with your back, not your arms — avoid leaning back excessively or using momentum.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
     key: "seated_row",
     name: "Seated Row",
     muscleGroup: "back",
@@ -1329,6 +1366,226 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     isCompound: true,
     isConditioning: true,
     requiredEquipment: null,
+  },
+  // Everything below added 2026-09-06 for Carl's own technique-video
+  // shoot, alongside lat_pulldown_v_grip/lat_pulldown_double_handle above.
+  // DRAFT safetyTip on every entry — Carl to review/rewrite before these
+  // go live, per this file's own convention that safety cues are
+  // human-written, not LLM-generated. Higher stakes than usual: these pods
+  // are unmanned (no staff supervision), so a bad safety tip here has no
+  // human backstop.
+  {
+    // Promoted from a clip that would otherwise have been discarded when
+    // "plank" only had room for one video (Full Plank won that slot).
+    key: "plank_elbow",
+    name: "Elbow Plank",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "shoulders"],
+    safetyTip: "Rest on your forearms with elbows under your shoulders. Keep your body in a straight line from head to heels — don't let your hips sag or pike up.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: null,
+  },
+  {
+    key: "side_plank",
+    name: "Side Plank",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "shoulders", "wrist"],
+    safetyTip: "Stack your feet and prop up on one forearm, keeping your body in a straight line. Don't let your hips drop toward the floor.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: null,
+  },
+  {
+    // Promoted from a clip that lost the cable_single_arm_lateral_raise
+    // slot to the leaning variant — same movement family, standing stance.
+    key: "cable_lateral_raise_standing",
+    name: "Standing Cable Lateral Raise",
+    muscleGroup: "shoulders",
+    avoidIfInjury: ["shoulders"],
+    safetyTip: "Raise the handle out to shoulder height with a slight bend in your elbow, standing tall throughout. Avoid using your body to swing the weight up — control it on the way down.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    // Promoted from a clip that lost the kettlebell_alternating_swing slot
+    // — same hinge pattern, one arm throughout instead of alternating.
+    // isCompound: false, unlike its two swing siblings above — same
+    // hip-hinge pattern as kettlebell_double_arm_swing/
+    // kettlebell_alternating_swing, differing only in arm usage. See
+    // lat_pulldown_v_grip's comment for why a same-pattern variant
+    // shouldn't also carry the compound flag.
+    key: "kettlebell_single_arm_swing",
+    name: "Single-Arm Kettlebell Swing",
+    muscleGroup: "legs",
+    avoidIfInjury: ["back", "hamstring", "groin"],
+    safetyTip: "Hinge at the hips and swing the kettlebell up to shoulder height using your hips, not your arms, keeping the same hand throughout the set. Keep your back flat throughout — don't round forward as you hinge.",
+    isCompound: false,
+    isConditioning: true,
+    requiredEquipment: "kettlebells",
+  },
+  {
+    // Promoted from the clip that lost the cable_rope_tricep_extension
+    // slot to the overhead-extension clip — this is the plain pushdown.
+    key: "cable_rope_pushdown",
+    name: "Cable Rope Pushdown",
+    muscleGroup: "arms",
+    avoidIfInjury: ["shoulders", "elbow"],
+    safetyTip: "Keep your elbows pinned to your sides and push the rope down and apart at the bottom. Avoid leaning your whole body into the movement.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "barbell_incline_bench_press",
+    name: "Barbell Incline Bench Press",
+    muscleGroup: "chest",
+    avoidIfInjury: ["shoulders", "elbow"],
+    safetyTip: "Feet flat on the floor, shoulder blades pulled back. Control the bar down to your upper chest — don't bounce it.",
+    isCompound: true,
+    isConditioning: false,
+    requiredEquipment: "barbell_rack",
+  },
+  {
+    key: "cable_behind_back_curl",
+    name: "Behind-the-Back Cable Curl",
+    muscleGroup: "arms",
+    avoidIfInjury: ["elbow", "wrist", "shoulders"],
+    safetyTip: "Stand facing away from the low pulley, keeping your elbow pinned behind your hip as you curl. Avoid swinging your torso to generate momentum.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "cable_hip_abduction",
+    name: "Cable Hip Abduction",
+    muscleGroup: "legs",
+    avoidIfInjury: ["hip", "groin", "knee"],
+    safetyTip: "Attach the cuff to your ankle and stand side-on to the machine, keeping your leg straight as you lift it out to the side. Avoid leaning your torso to swing the leg.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "cable_hip_adduction",
+    name: "Cable Hip Adduction",
+    muscleGroup: "legs",
+    avoidIfInjury: ["hip", "groin", "knee"],
+    safetyTip: "Attach the cuff to your ankle and stand side-on to the machine, pulling your leg across your body under control. Avoid leaning your torso to generate momentum.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "dumbbell_cross_body_tricep_extension",
+    name: "Cross-Body Dumbbell Triceps Extension",
+    muscleGroup: "arms",
+    avoidIfInjury: ["shoulders", "elbow"],
+    safetyTip: "Keep your upper arm close to your body as you extend the dumbbell across and down. Control the weight on the way back up — don't let it drop.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "dumbbells",
+  },
+  {
+    key: "bicycle_crunches",
+    name: "Bicycle Crunches",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "neck"],
+    safetyTip: "Bring opposite elbow to opposite knee in a smooth pedalling motion, keeping your lower back pressed into the floor. Avoid pulling on your neck with your hands.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: null,
+  },
+  {
+    key: "crunches",
+    name: "Crunches",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "neck"],
+    safetyTip: "Curl your shoulders off the floor towards your hips, keeping your lower back pressed down. Avoid pulling on your neck with your hands.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: null,
+  },
+  {
+    key: "dumbbell_incline_curl",
+    name: "Incline Dumbbell Curl",
+    muscleGroup: "arms",
+    avoidIfInjury: ["elbow", "wrist", "shoulders"],
+    safetyTip: "Sit back on an incline bench and let your arms hang straight down, curling with your palms facing up. Avoid letting your elbows drift forward as you lift.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "dumbbells",
+  },
+  {
+    key: "lying_leg_raises",
+    name: "Lying Leg Raises",
+    muscleGroup: "core",
+    avoidIfInjury: ["back"],
+    safetyTip: "Lie flat and lower your legs under control without your lower back arching off the floor. Stop the descent before your back lifts.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: null,
+  },
+  {
+    key: "pallof_press",
+    name: "Pallof Press",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "shoulders"],
+    safetyTip: "Stand side-on to the cable and press the handle straight out from your chest, resisting the pull rotating your torso. Keep your hips and shoulders square throughout.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "pallof_press_hold",
+    name: "Pallof Press Hold",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "shoulders"],
+    safetyTip: "Press the handle out from your chest and hold, bracing your core to resist the cable pulling you to rotate. Keep breathing normally throughout the hold.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "standing_cable_row",
+    name: "Standing Cable Row",
+    muscleGroup: "back",
+    avoidIfInjury: ["back", "shoulders", "elbow"],
+    safetyTip: "Stand tall and pull the handle to your torso, squeezing your shoulder blades together. Avoid leaning back excessively or using momentum.",
+    isCompound: true,
+    isConditioning: false,
+    requiredEquipment: "cable_machine",
+  },
+  {
+    key: "windscreen_wipers",
+    name: "Windscreen Wipers",
+    muscleGroup: "core",
+    avoidIfInjury: ["back"],
+    safetyTip: "Lie on your back with legs raised and lower them slowly side to side, keeping your shoulders flat on the floor. Stop the range where you can keep control — don't force it further.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: null,
+  },
+  {
+    key: "hanging_knee_raise",
+    name: "Hanging Knee Raise",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "shoulders", "elbow"],
+    safetyTip: "Hang with a straight grip and raise your knees towards your chest without swinging. Avoid using momentum to throw your legs up.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "pull_up_bar",
+  },
+  {
+    key: "hanging_leg_raise",
+    name: "Hanging Leg Raise",
+    muscleGroup: "core",
+    avoidIfInjury: ["back", "shoulders", "elbow"],
+    safetyTip: "Hang with a straight grip and raise your legs straight out in front without swinging. Avoid using momentum to throw your legs up.",
+    isCompound: false,
+    isConditioning: false,
+    requiredEquipment: "pull_up_bar",
   },
 ];
 

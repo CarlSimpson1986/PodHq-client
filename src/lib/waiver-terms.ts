@@ -347,6 +347,14 @@ export const WAIVER_TERMS: WaiverBlock[] = [
     text: "I further understand that there are possible risks involved in participating in exercise and My Fit Pod will accept no responsibility for my actions, injuries or health during my use of My Fit Pod.",
   },
   {
+    // Added 2026-09-06 alongside the Premium AI Coach's exercise technique
+    // video library — Carl's call, following on from that feature's own
+    // safetyTip content review. Not legally reviewed; matched to the
+    // existing first-person Waiver voice, not drafted independently.
+    type: "paragraph",
+    text: "Where the Mobile Application's Premium features provide exercise technique videos, exercise instructions, or a workout generated or selected by an automated tool (\"AI Coach\" or similar), I understand that this content is provided as general guidance only, is not personalised medical or professional advice, and does not replace the judgement of a qualified professional. I am solely responsible for judging whether any exercise, weight or item of equipment shown or suggested is appropriate for my own ability, fitness and health, and for stopping immediately if it is not.",
+  },
+  {
     type: "paragraph",
     text: 'If you start to feel unwell or a life threatening emergency occurs in a My Fit Pod facility, you should immediately call the Emergency Services by dialling 999 (or the relevant country code) on your phone and you should press the allocated "Emergency Button" to notify My Fit Pod so we can take necessary action.',
   },

@@ -43,7 +43,12 @@ export const THUMB_FAT_G = 15;
 // deliberately covers both dual- and single-pulley setups — that nuance
 // belongs in exercise copy, not as a separate filterable dimension
 // (Carl's call, 2026-08-24).
-export const EQUIPMENT_TYPES = ["barbell_rack", "cable_machine", "dumbbells", "leg_extension_curl_machine", "kettlebells"] as const;
+// pull_up_bar added 2026-09-06 for Hove's hanging knee/leg raise clips —
+// confirmed with Carl that a real pull-up bar exists there. Any gym
+// without one must NOT have it checked in its pod_resources.equipment
+// (podHq's /pods calendar-view.tsx), or hanging exercises will get
+// prescribed to members who have nothing to hang from.
+export const EQUIPMENT_TYPES = ["barbell_rack", "cable_machine", "dumbbells", "leg_extension_curl_machine", "kettlebells", "pull_up_bar"] as const;
 export type EquipmentType = (typeof EQUIPMENT_TYPES)[number];
 
 // Daily protein target — flat 1.8g/kg bodyweight, Carl's call (2026-08-23):
