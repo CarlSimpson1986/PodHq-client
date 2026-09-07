@@ -39,7 +39,7 @@ describe("generateWorkout — RPE-based weight progression", () => {
   it("increases weight ~5% after an Easy (RPE 2) set for intermediate (this app's default), rounded to the nearest 1.25kg plate", () => {
     const result = generateWorkout({
       profile: profile(),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
     });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
@@ -54,7 +54,7 @@ describe("generateWorkout — RPE-based weight progression", () => {
   it("increases weight ~8% after an Easy set for a beginner", () => {
     const result = generateWorkout({
       profile: profile({ experience_level: "beginner" }),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
     });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
@@ -65,7 +65,7 @@ describe("generateWorkout — RPE-based weight progression", () => {
   it("increases weight ~3% after an Easy set for an advanced lifter", () => {
     const result = generateWorkout({
       profile: profile({ experience_level: "advanced" }),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
     });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
@@ -76,7 +76,7 @@ describe("generateWorkout — RPE-based weight progression", () => {
   it("holds weight after a Just Right (RPE 3) set", () => {
     const result = generateWorkout({
       profile: profile(),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3 }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
     });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
@@ -86,7 +86,7 @@ describe("generateWorkout — RPE-based weight progression", () => {
   it("decreases weight after a Hard (RPE 4) set", () => {
     const result = generateWorkout({
       profile: profile(),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 4 }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 4, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
     });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
@@ -97,7 +97,7 @@ describe("generateWorkout — RPE-based weight progression", () => {
   it("holds weight when the prior set was never rated", () => {
     const result = generateWorkout({
       profile: profile(),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: null }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: null, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
     });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
@@ -113,6 +113,125 @@ describe("generateWorkout — RPE-based weight progression", () => {
     const result = generateWorkout({ profile: profile({ experience_level: "beginner" }), history: [], lastSession: null });
     const exercise = result.find((e) => e.key === "barbell_bench_press")!;
     expect(exercise.weightTargetKg).toBeNull();
+  });
+});
+
+// Rest-timer intelligence loop (2026-09-07, Carl: "full!"). barbell_bench_press
+// is isCompound: true, so hypertrophy's base is REST_SECONDS_BY_BLOCK's
+// compound value (120s) throughout — no activeBlock given, so
+// computeRestSecondsForBlock's own "hypertrophy" fallback applies.
+describe("generateWorkout — rest-timer intelligence (2026-09-07)", () => {
+  it("uses the flat block-type default with no explanation when there's no prior rest data", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
+      lastSession: null,
+    });
+    const exercise = result.find((e) => e.key === "barbell_bench_press")!;
+    expect(exercise.restSeconds).toBe(120);
+    expect(exercise.restChangeReason).toBeNull();
+  });
+
+  it("shortens rest when the member cut it short last time and still rated the set easy/moderate", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2, lastRestActualSeconds: 80, lastRestPrescribedSeconds: 120 }],
+      lastSession: null,
+    });
+    const exercise = result.find((e) => e.key === "barbell_bench_press")!;
+    expect(exercise.restSeconds).toBe(105);
+    expect(exercise.restChangeReason).toMatch(/^Shortened slightly/);
+  });
+
+  it("extends rest when the member cut it short last time but still rated the set hard", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 5, lastRestActualSeconds: 80, lastRestPrescribedSeconds: 120 }],
+      lastSession: null,
+    });
+    const exercise = result.find((e) => e.key === "barbell_bench_press")!;
+    expect(exercise.restSeconds).toBe(135);
+    expect(exercise.restChangeReason).toMatch(/^Extended slightly/);
+  });
+
+  it("extends rest when the member consistently went over the prescribed time, even without cutting it short", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 5, lastRestActualSeconds: 140, lastRestPrescribedSeconds: 120 }],
+      lastSession: null,
+    });
+    const exercise = result.find((e) => e.key === "barbell_bench_press")!;
+    expect(exercise.restSeconds).toBe(135);
+  });
+
+  it("holds the block-type default when the member rested roughly on-target last time", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3, lastRestActualSeconds: 115, lastRestPrescribedSeconds: 120 }],
+      lastSession: null,
+    });
+    const exercise = result.find((e) => e.key === "barbell_bench_press")!;
+    expect(exercise.restSeconds).toBe(120);
+    expect(exercise.restChangeReason).toBe("Same as usual for this kind of exercise.");
+  });
+});
+
+// Duration-feedback loop (2026-09-07). Corrected mid-build per Carl: the
+// lever is accessory (isCompound: false) SETS, never exercise count or
+// which exercises get picked — core compound lifts (barbell_bench_press
+// here, isCompound: true) must always stay at the standard 3 sets so
+// their own RPE-based progression is never disrupted; only an accessory
+// exercise's set count moves. computeExerciseCount itself is untouched by
+// any of this — still a pure time-budget estimate, same as before this
+// feature existed.
+//
+// findAccessory looks up isCompound from the real catalog rather than
+// hardcoding one key — selectExercises' muscle-group rotation doesn't
+// guarantee any single named accessory always gets picked, only that
+// *some* accessory exercise reliably does for a default profile.
+function findAccessory(result: ReturnType<typeof generateWorkout>) {
+  const accessory = result.find((e) => EXERCISE_CATALOG.find((c) => c.key === e.key)?.isCompound === false);
+  if (!accessory) throw new Error("Expected at least one accessory exercise in the generated plan.");
+  return accessory;
+}
+
+describe("generateWorkout — duration-feedback adjusts accessory sets only (2026-09-07)", () => {
+  it("never changes a compound exercise's sets, regardless of feedback", () => {
+    for (const feedback of [null, "just_right", "too_long", "too_short"] as const) {
+      const result = generateWorkout({ profile: profile(), history: [], lastSession: null, lastDurationFeedback: feedback });
+      const bench = result.find((e) => e.key === "barbell_bench_press")!;
+      expect(bench.sets).toBe(3);
+    }
+  });
+
+  it("holds an accessory exercise at the standard 3 sets with no feedback or 'just right'", () => {
+    for (const feedback of [null, "just_right"] as const) {
+      const result = generateWorkout({ profile: profile(), history: [], lastSession: null, lastDurationFeedback: feedback });
+      expect(findAccessory(result).sets).toBe(3);
+    }
+  });
+
+  it("drops an accessory exercise to 2 sets when the member said last session was too long", () => {
+    const result = generateWorkout({ profile: profile(), history: [], lastSession: null, lastDurationFeedback: "too_long" });
+    expect(findAccessory(result).sets).toBe(2);
+  });
+
+  it("raises an accessory exercise to 4 sets when the member said last session was too short", () => {
+    const result = generateWorkout({ profile: profile(), history: [], lastSession: null, lastDurationFeedback: "too_short" });
+    expect(findAccessory(result).sets).toBe(4);
+  });
+
+  it("deload's own reduced sets take priority over duration feedback, for both compound and accessory exercises", () => {
+    const result = generateWorkout({
+      profile: profile(),
+      history: [],
+      lastSession: null,
+      lastDurationFeedback: "too_short", // would push accessory sets to 4 outside deload
+      activeBlock: { blockType: "deload", startedAt: "2026-01-01T00:00:00.000Z" },
+    });
+    const bench = result.find((e) => e.key === "barbell_bench_press")!;
+    expect(bench.sets).toBe(2); // DELOAD_SETS_PER_EXERCISE — compound is also reduced in deload, unlike the non-deload case
+    expect(findAccessory(result).sets).toBe(2); // deload's own reduction, not the too_short value it would otherwise get
   });
 });
 
@@ -327,12 +446,12 @@ describe("generateWorkout — training blocks (Stage 12)", () => {
   it("discounts weight by the deload multiplier, rounded to the nearest plate", () => {
     const withoutBlock = generateWorkout({
       profile: profile(),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3 }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
     });
     const withDeload = generateWorkout({
       profile: profile(),
-      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3 }],
+      history: [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 3, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       lastSession: null,
       activeBlock: { blockType: "deload", startedAt: BLOCK_START },
     });
@@ -596,7 +715,7 @@ describe("instantiateTemplate — turns a fixed template into a live plan", () =
     const result = instantiateTemplate(
       template,
       profile(),
-      [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2 }],
+      [{ exerciseKey: "barbell_bench_press", lastWeightKg: 40, lastRpe: 2, lastRestActualSeconds: null, lastRestPrescribedSeconds: null }],
       undefined,
       new Date("2026-01-15T00:00:00.000Z")
     );

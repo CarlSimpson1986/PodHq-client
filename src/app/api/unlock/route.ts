@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { unlockSchema } from "@/lib/validation/unlock";
 import { distanceMeters } from "@/lib/geo";
 import { isWithinUnlockWindow } from "@/lib/unlock-window";
+import { markSessionStartedByBookingId } from "@/lib/coach/workout-session";
 
 // Matches GymFlow's own existing requirement for general door access —
 // GPS-based, hard gate (confirmed 2026-08-10, ROADMAP.md Stage 7). Not
@@ -221,6 +222,19 @@ export async function POST(request: NextRequest) {
     reported_longitude: longitude ?? null,
     distance_meters: distanceToGym ?? null,
   });
+
+  // Ties the overall session timer to the moment the member is genuinely
+  // in the pod, not whenever they happen to open the workout tab — see
+  // markSessionStartedByBookingId's own comment. Best-effort: a failure
+  // here must never turn a real, successful door unlock into an error
+  // response.
+  if (success) {
+    try {
+      await markSessionStartedByBookingId(active.id);
+    } catch (err) {
+      console.error("[unlock] failed to mark session started", { error: err instanceof Error ? err.message : err });
+    }
+  }
 
   if (!success) {
     return NextResponse.json({ status: "error", message: "Unlock failed. Try again." }, { status: 502 });

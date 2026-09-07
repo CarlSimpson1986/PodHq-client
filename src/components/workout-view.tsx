@@ -22,6 +22,38 @@ import { ArrowLeftIcon } from "@/components/icons";
 // static JPGs, see exercise-catalog.ts).
 const IMAGE_FRAME_MS = 900;
 
+// Overall session timer (2026-09-07) — the phases where a member is
+// genuinely "in" the workout, as opposed to still choosing a mode or
+// already looking at the finished summary. Used both to decide when to
+// start the clock and which screens display it.
+const IN_WORKOUT_PHASES: Phase[] = [
+  "warmup",
+  "active",
+  "resting",
+  "rpe",
+  "cooldown",
+  "amrap-active",
+  "amrap-tally",
+  "rft-active",
+  "rft-tally",
+  "hiit-active",
+  "hiit-tally",
+];
+
+function formatSessionElapsed(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function SessionElapsedBadge({ seconds }: { seconds: number }) {
+  return (
+    <p className="text-center text-xs font-medium text-card-light-muted">
+      Session time: <span className="tabular-nums">{formatSessionElapsed(seconds)}</span>
+    </p>
+  );
+}
+
 interface WorkoutSet {
   id: number;
   setNumber: number;
@@ -37,6 +69,10 @@ interface WorkoutSet {
   repsActual: number | null;
   weightActualKg: number | null;
   rpe: number | null;
+  // Real seconds rested before this set (2026-09-07 rest-timer
+  // intelligence loop) — null until the log-set call for this set
+  // reports it, or for any session predating this feature.
+  restActualSeconds: number | null;
   completedAt: string | null;
 }
 
@@ -45,13 +81,18 @@ interface WorkoutExercise {
   key: string;
   name: string;
   muscleGroup: string;
-  // Custom-workout member override (Stage 1, 2026-08-29) — null means no
-  // rest-timer screen, same self-paced behaviour as before this existed.
+  // Prescribed rest after each set, in seconds — null means no rest-timer
+  // screen (an old session from before this was computed for every
+  // exercise, or a custom pick deliberately left at "no timer").
   restSeconds: number | null;
   // "Why did this change?" (2026-09-06) — see generate-workout.ts's
   // describeWeightChangeReason. Null for a first-time exercise or a
   // member's own custom/circuit pick.
   weightChangeReason: string | null;
+  // Same pattern for restSeconds (2026-09-07) — see
+  // describeRestChangeReason. Null for a first-time exercise or a
+  // member's own explicit rest choice.
+  restChangeReason: string | null;
   sets: WorkoutSet[];
 }
 
@@ -93,6 +134,9 @@ interface WorkoutSessionDetail {
   workSeconds: number | null;
   restSeconds: number | null;
   restBetweenRoundsSeconds: number | null;
+  // Overall session timer (2026-09-07) — when the member actually entered
+  // the active workout, null until markSessionStarted stamps it.
+  startedAt: string | null;
   exercises: WorkoutExercise[];
   excludedExerciseKeys: string[];
   recoveryAdvice: RecoveryAdvice;
@@ -275,14 +319,50 @@ function getSwapCandidates(exercise: WorkoutExercise, detail: WorkoutSessionDeta
   );
 }
 
-export function WorkoutView({ bookingId }: { bookingId: number }) {
+export function WorkoutView({
+  bookingId,
+  memberName,
+  justUnlocked = false,
+}: {
+  bookingId: number;
+  memberName: string;
+  // True only when the unlock flow's redirect set it (bookings-view.tsx/
+  // upcoming-session-card.tsx, 2026-09-07) — read server-side from the
+  // URL in page.tsx and passed down as a plain prop rather than this
+  // component calling useSearchParams() itself, which would force a
+  // Suspense boundary around the whole view for no real benefit. "You
+  // just walked in and unlocked" is a genuinely different arrival than
+  // organically browsing into today's workout, so it skips the
+  // intro-narration screen (a member standing in the pod doesn't need a
+  // hype paragraph before seeing today's plan) and shows a one-time
+  // personal welcome instead.
+  justUnlocked?: boolean;
+}) {
   const exerciseVideoOverrides = useExerciseVideoOverrides();
+  const firstName = memberName.split(" ")[0] || memberName;
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusSelection, setFocusSelection] = useState<MuscleGroup[]>([]);
   const [customSelection, setCustomSelection] = useState<string[]>([]);
   const [customRests, setCustomRests] = useState<Record<string, number>>({});
   const [restSecondsRemaining, setRestSecondsRemaining] = useState(0);
+  // Rest-timer intelligence loop (2026-09-07) — restStartedAtRef marks the
+  // real clock time the rest phase began; read once when it ends (timeout
+  // or "Skip rest", both converge on applyAdvance) to compute genuine
+  // elapsed seconds rather than trusting the countdown state (which a
+  // backgrounded/throttled tab can under-tick). pendingRestActualSeconds
+  // then rides along with the *next* logCurrentSet call, since that's the
+  // set the rest actually preceded.
+  const restStartedAtRef = useRef<number | null>(null);
+  const [pendingRestActualSeconds, setPendingRestActualSeconds] = useState<number | null>(null);
+  // Overall session timer (2026-09-07) — sessionStartedAt is the real
+  // clock reference (from the server once markSessionStarted's write is
+  // confirmed, or from detail.startedAt if it was already stamped by an
+  // earlier mount), elapsed is a purely-derived tick for display, never
+  // the source of truth — recomputed from the real timestamp every
+  // second rather than incremented, so it can't drift.
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState(0);
   // AMRAP builder + taking-the-workout state (Stage 2, 2026-08-29).
   // customFormat is 4-way (Stage 3, 2026-08-30; HIIT added Stage 4) —
   // "amrap"/"rounds_for_time"/"hiit" are all Cardio sub-modes, sharing
@@ -377,6 +457,12 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   const [imageMissing, setImageMissing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [summary, setSummary] = useState<{ totalVolumeKg: number; changes: WeightChange[]; narration: string | null } | null>(null);
+  // "How was your workout?" (2026-09-07) — feeds next session's exercise
+  // count (see computeExerciseCount). durationFeedbackSubmitted holds
+  // which option was picked, purely to swap the buttons for a thank-you
+  // line — the actual value already reached the server by then.
+  const [durationFeedbackSubmitted, setDurationFeedbackSubmitted] = useState(false);
+  const [submittingDurationFeedback, setSubmittingDurationFeedback] = useState(false);
   // Overview's three-section accordion (2026-09-06, Carl's design pass) —
   // warm-up/cool-down are always part of the flow now (no opt-in
   // checkbox) — a member who doesn't want one uses the section's own
@@ -442,7 +528,12 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       const firstSet = body.session.exercises[0]?.sets[0];
       setReps(firstSet?.repsTarget ?? 0);
       setWeight(firstSet?.weightTargetKg ?? "");
-      setPhase(body.introNarration ? "intro" : "overview");
+      // A member arriving via the unlock flow (justUnlocked) skips the
+      // intro-narration screen regardless — they're already standing in
+      // the pod, not deciding whether to open the app, so the hype
+      // paragraph has nothing left to do; straight to the plan itself,
+      // with the welcome banner there instead (see the "overview" phase).
+      setPhase(body.introNarration && !justUnlocked ? "intro" : "overview");
     } catch {
       setErrorMessage("Something went wrong. Try again.");
       setPhase("error");
@@ -537,6 +628,61 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     const interval = setInterval(() => setImageFrame((f) => (f === 0 ? 1 : 0)), IMAGE_FRAME_MS);
     return () => clearInterval(interval);
   }, [phase, exerciseIndex, detail]);
+
+  // Overall session timer (2026-09-07) — fires markSessionStarted once
+  // when the member first enters any real workout phase (not overview,
+  // where they might still back out, or summary, which is after
+  // finishing). Seeds sessionStartedAt from the server's own confirmed
+  // value when the session was already started in an earlier mount
+  // (detail.startedAt non-null), so a tab refocus/remount never resets
+  // the clock — only ever fires the network call on a session's genuine
+  // first entry. Async-function-in-effect + cancelled flag, same pattern
+  // as the eligible-exercises loader above — every setState here happens
+  // inside that nested function, never synchronously in the effect body.
+  useEffect(() => {
+    if (!detail || !IN_WORKOUT_PHASES.includes(phase) || sessionStartedAt !== null) return;
+    let cancelled = false;
+    async function start() {
+      if (detail!.startedAt) {
+        const startedAtMs = new Date(detail!.startedAt).getTime();
+        if (!cancelled) {
+          setSessionStartedAt(startedAtMs);
+          setSessionElapsedSeconds(Math.floor((Date.now() - startedAtMs) / 1000));
+        }
+        return;
+      }
+      const startedAtMs = Date.now();
+      try {
+        await fetch(`/api/member/workout/${detail!.sessionId}/start`, { method: "POST" });
+      } catch {
+        // Best-effort — the client-side clock starts either way below;
+        // worst case a refresh mid-session resets it to zero, same
+        // "no timer at all" experience as before this feature existed.
+      }
+      if (!cancelled) {
+        setSessionStartedAt(startedAtMs);
+        setSessionElapsedSeconds(0);
+      }
+    }
+    start();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, phase, sessionStartedAt]);
+
+  // Ticks the session-elapsed display once a second while in a real
+  // workout phase — same self-rescheduling setTimeout idiom as the rest
+  // countdown below (re-runs because sessionElapsedSeconds is its own
+  // dependency), rather than setInterval, so the state update always
+  // happens inside the timeout callback, never synchronously in the
+  // effect body. Recomputed from the real timestamp each tick
+  // (Date.now() - sessionStartedAt), never a flat +1 — can't drift from
+  // time the tab spent backgrounded/throttled.
+  useEffect(() => {
+    if (sessionStartedAt === null || !IN_WORKOUT_PHASES.includes(phase)) return;
+    const timer = setTimeout(() => setSessionElapsedSeconds(Math.floor((Date.now() - sessionStartedAt) / 1000)), 1000);
+    return () => clearTimeout(timer);
+  }, [sessionStartedAt, phase, sessionElapsedSeconds]);
 
   // Rest countdown (custom workouts, Stage 1, 2026-08-29) — ticks once a
   // second while phase is "resting"; hitting zero runs the exact same
@@ -1826,6 +1972,12 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return (
       <div className="space-y-5">
         <ExitLink />
+        {justUnlocked && !hasProgress && (
+          <div className="rounded-lg border border-card-light-border bg-card-light-foreground/5 p-4 text-center">
+            <p className="text-base font-semibold">Welcome, {firstName}</p>
+            <p className="mt-1 text-sm text-card-light-muted">Here&apos;s your session for today.</p>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3">
           <p className="text-lg font-semibold">{hasProgress ? "Continue today's session" : "Today's session"}</p>
           {!hasProgress && (
@@ -2159,6 +2311,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             Skip warm-up
           </button>
         </div>
+        <SessionElapsedBadge seconds={sessionElapsedSeconds} />
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
             {warmupItemIndex + 1} of {WARMUP_ITEMS.length}
@@ -2194,8 +2347,15 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
       await fetch(`/api/member/workout/${detail!.sessionId}/log-set`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ setId: currentSet.id, repsActual: reps, weightActualKg: weight, rpe }),
+        body: JSON.stringify({
+          setId: currentSet.id,
+          repsActual: reps,
+          weightActualKg: weight,
+          rpe,
+          restActualSeconds: pendingRestActualSeconds ?? undefined,
+        }),
       });
+      setPendingRestActualSeconds(null);
       advance();
     } catch {
       setErrorMessage("Couldn't save that set. Try again.");
@@ -2226,6 +2386,17 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   }
 
   function applyAdvance() {
+    // Real elapsed rest, measured against the wall clock, not the
+    // countdown's own tick count — a backgrounded/throttled tab can
+    // under-tick setTimeout, which would otherwise under-report how long
+    // the member actually rested. Only set when a rest phase genuinely
+    // ran (advance() below), so a set with no preceding rest (the very
+    // first set of the session) correctly carries no rest-actual value.
+    if (restStartedAtRef.current !== null) {
+      // eslint-disable-next-line react-hooks/purity -- applyAdvance only ever runs from an event handler (Skip rest / logCurrentSet) or a setTimeout/ref callback, never during render, same as applyAdvanceRef's own disable below.
+      setPendingRestActualSeconds(Math.round((Date.now() - restStartedAtRef.current) / 1000));
+      restStartedAtRef.current = null;
+    }
     if (isLastSetOfExercise) {
       if (isLastExercise) {
         setCooldownItemIndex(0);
@@ -2279,6 +2450,8 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
   function advance() {
     const isVeryLastSet = isLastSetOfExercise && isLastExercise;
     if (exercise.restSeconds && !isVeryLastSet) {
+      // eslint-disable-next-line react-hooks/purity -- advance() only ever runs from logCurrentSet, an event-handler-triggered async function, never during render.
+      restStartedAtRef.current = Date.now();
       setRestSecondsRemaining(exercise.restSeconds);
       setPhase("resting");
       return;
@@ -2294,9 +2467,15 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return (
       <div className="space-y-5 text-center">
         <ExitLink />
+        <SessionElapsedBadge seconds={sessionElapsedSeconds} />
         <p className="text-lg font-semibold">Rest</p>
         <p className="text-5xl font-bold tabular-nums">{restSecondsRemaining}s</p>
         {nextExerciseName && <p className="text-sm text-card-light-muted">Next: {nextExerciseName}</p>}
+        {exercise.restChangeReason && (
+          <p className="text-xs text-card-light-muted">
+            <span className="font-medium">Why:</span> {exercise.restChangeReason}
+          </p>
+        )}
         <button type="button" className={buttonClass} onClick={applyAdvance}>
           Skip rest →
         </button>
@@ -2310,6 +2489,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
     return (
       <div className="space-y-5">
         <ExitLink />
+        <SessionElapsedBadge seconds={sessionElapsedSeconds} />
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
             {cooldownItemIndex + 1} of {COOLDOWN_ITEMS.length}
@@ -2425,6 +2605,54 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
             {summary.narration && <p className="rounded-lg border border-card-light-border p-4 text-sm">{summary.narration}</p>}
           </>
         )}
+
+        <div className="rounded-lg border border-card-light-border p-4">
+          {durationFeedbackSubmitted ? (
+            <p className="text-sm font-medium">Thanks — that&apos;ll shape your next session.</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold">How was your workout?</p>
+              <p className="mt-1 text-xs text-card-light-muted">Length, not difficulty — helps us get next time&apos;s session right.</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { value: "too_long", label: "Too long" },
+                    { value: "too_short", label: "Too short" },
+                    { value: "just_right", label: "Just right" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={submittingDurationFeedback}
+                    onClick={async () => {
+                      setSubmittingDurationFeedback(true);
+                      try {
+                        await fetch(`/api/member/workout/${detail.sessionId}/duration-feedback`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ feedback: opt.value }),
+                        });
+                        setDurationFeedbackSubmitted(true);
+                      } catch {
+                        // Best-effort, same posture as the intro narration —
+                        // a member's finished session is already fully
+                        // logged regardless of whether this one extra
+                        // signal saved.
+                      } finally {
+                        setSubmittingDurationFeedback(false);
+                      }
+                    }}
+                    className="rounded-lg border border-card-light-border px-3 py-2 text-center text-xs font-medium text-card-light-foreground hover:bg-card-light-foreground hover:text-white disabled:opacity-50"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         <Link href="/" className={`${buttonClass} block`}>
           Back to Home
         </Link>
@@ -2472,6 +2700,7 @@ export function WorkoutView({ bookingId }: { bookingId: number }) {
           Skip to stretching →
         </button>
       </div>
+      <SessionElapsedBadge seconds={sessionElapsedSeconds} />
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
           Exercise {exerciseIndex + 1} of {detail.exercises.length}

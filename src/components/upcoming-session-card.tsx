@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Booking } from "@/lib/data/member";
 import { LockIcon } from "@/components/icons";
 import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
@@ -24,6 +25,7 @@ export function UpcomingSessionCard({
   accessComplete: boolean;
   slotDurationMinutes: number;
 }) {
+  const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000);
@@ -64,6 +66,12 @@ export function UpcomingSessionCard({
       });
       const body = await res.json();
       setMessage(body.status === "ok" ? "Unlocked — door should open now." : body.message);
+      // Carl, 2026-09-07: a real unlock means the member is physically in
+      // the pod now, so straight into today's workout. Brief delay so the
+      // success message is actually readable before the screen changes.
+      if (body.status === "ok") {
+        setTimeout(() => router.push(`/workout/${booking.id}?justUnlocked=1`), 900);
+      }
     } catch {
       setMessage("Something went wrong. Try again.");
     } finally {

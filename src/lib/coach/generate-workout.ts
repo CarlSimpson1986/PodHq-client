@@ -1,5 +1,5 @@
 import { EXERCISE_CATALOG, type CatalogExercise, type MuscleGroup } from "@/lib/coach/exercise-catalog";
-import type { CoachProfile, ExerciseHistoryEntry, RecentSessionSummary } from "@/lib/coach/coach-profile";
+import type { CoachProfile, ExerciseHistoryEntry, RecentSessionSummary, DurationFeedback } from "@/lib/coach/coach-profile";
 import {
   REP_TARGET_BY_BLOCK_PHASE,
   DELOAD_REP_TARGET,
@@ -47,6 +47,15 @@ export interface GeneratedExercise {
   // weightTargetKg (see describeWeightChangeReason) — null exactly when
   // weightTargetKg is null (no prior history to explain against).
   weightChangeReason: string | null;
+  // Prescribed rest after each of this exercise's sets, in seconds — see
+  // computeRestSecondsForBlock. Always a real number (never null): every
+  // exercise gets a rest value now, not just custom-built workouts.
+  restSeconds: number;
+  // Same "readout of the exact rule that ran" pattern as
+  // weightChangeReason — see describeRestChangeReason. Null only when
+  // there's no prior rest data to explain against (first time doing this
+  // exercise, or its only prior instance never had a rest phase run).
+  restChangeReason: string | null;
 }
 
 export interface GenerateWorkoutInput {
@@ -71,6 +80,11 @@ export interface GenerateWorkoutInput {
   // Undefined/[] both mean no member exclusions, same idiom as the two
   // exclusion sources above.
   avoidedKeys?: string[];
+  // Self-reported "too long/too short/just right" from the member's most
+  // recent completed session (2026-09-07) — see computeExerciseCount.
+  // Undefined/null both mean "no signal yet," same idiom as every other
+  // optional history-derived input here.
+  lastDurationFeedback?: DurationFeedback | null;
   // Injectable for deterministic phase-boundary testing; defaults to the
   // real current time in production.
   now?: Date;
@@ -127,12 +141,32 @@ export function computeExerciseCount(activeBlock: { blockType: BlockType; starte
   return Math.max(MIN_EXERCISE_COUNT, Math.floor(SESSION_SECONDS / blendedSeconds));
 }
 
+// Duration-feedback loop (2026-09-07, Carl: "too long, too short, just
+// right — then it auto adjusts"). The exercise COUNT above never changes
+// for this — Carl's explicit requirement is that core compound lifts
+// (bench press, bent-over row, squat — whatever the block's own
+// muscle-group rotation picked) always stay and always keep progressing,
+// so exercise count is off-limits as a lever here. The real lever is
+// accessory (isCompound: false) volume: same exercises, fewer or more
+// sets. Never touches deload weeks (already its own separate, orthogonal
+// reduced-volume mechanism) or compound exercises (protects progression).
+const ACCESSORY_SETS_REDUCED = 2;
+const ACCESSORY_SETS_INCREASED = 4;
+
+function setsForExercise(exercise: CatalogExercise, blockType: BlockType, lastDurationFeedback: DurationFeedback | null | undefined): number {
+  if (blockType === "deload") return DELOAD_SETS_PER_EXERCISE;
+  if (exercise.isCompound) return SETS_PER_EXERCISE;
+  if (lastDurationFeedback === "too_long") return ACCESSORY_SETS_REDUCED;
+  if (lastDurationFeedback === "too_short") return ACCESSORY_SETS_INCREASED;
+  return SETS_PER_EXERCISE;
+}
+
 export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[] {
-  const { profile, history, lastSession, activeBlock, availableEquipment, avoidedKeys, now = new Date() } = input;
+  const { profile, history, lastSession, activeBlock, availableEquipment, avoidedKeys, lastDurationFeedback, now = new Date() } = input;
   const exerciseCount = computeExerciseCount(activeBlock, profile.goal, now);
   const eligible = selectExercises(profile, lastSession, activeBlock ?? null, availableEquipment, avoidedKeys, exerciseCount);
   const repsTarget = repsTargetForBlock(activeBlock, profile.goal, now);
-  const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
+  const blockType = activeBlock?.blockType ?? "hypertrophy";
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
 
   const generated = eligible.map((exercise) => {
@@ -141,10 +175,12 @@ export function generateWorkout(input: GenerateWorkoutInput): GeneratedExercise[
       key: exercise.key,
       name: exercise.name,
       muscleGroup: exercise.muscleGroup,
-      sets,
+      sets: setsForExercise(exercise, blockType, lastDurationFeedback),
       repsTarget,
       weightTargetKg: computeWeightKgForBlock(exercise, profile, prior, activeBlock),
       weightChangeReason: describeWeightChangeReason(prior, activeBlock),
+      restSeconds: computeRestSecondsForBlock(exercise, prior, activeBlock),
+      restChangeReason: describeRestChangeReason(exercise, prior, activeBlock),
     };
   });
 
@@ -334,6 +370,78 @@ function adjustForRpe(lastWeightKg: number, lastRpe: number | null, experienceLe
   if (lastRpe <= 2) return lastWeightKg * (1 + delta);
   if (lastRpe === 3) return lastWeightKg;
   return lastWeightKg * (1 - delta);
+}
+
+// Rest-timer intelligence loop (2026-09-07, Carl: "full!" — capture actual
+// rest taken and use it to adjust future prescriptions, not just display a
+// countdown). REST_SECONDS_BY_BLOCK already existed but was only ever used
+// to estimate session length (computeExerciseCount above), never actually
+// applied as a real per-set value — this is that same baseline, now
+// surfaced and made adaptive per member, same spirit as adjustForRpe.
+const REST_ADJUSTMENT_SECONDS = 15;
+const REST_MIN_SECONDS = 45;
+const REST_MAX_SECONDS = 240;
+
+function baseRestSeconds(exercise: CatalogExercise, blockType: BlockType): number {
+  const rest = REST_SECONDS_BY_BLOCK[blockType];
+  return exercise.isCompound ? rest.compound : rest.isolation;
+}
+
+// Cutting the prescribed rest short (<=80% of it) with an easy-to-moderate
+// RPE afterward (<=3, or no RPE logged) means the member recovered fine on
+// less than the flat default assumes — trim it. Cutting it short AND
+// still rating it hard (RPE 4-5), or consistently going well over the
+// prescribed time (>=115%), means they needed more than prescribed either
+// way — extend it. Anything else (roughly on-target) holds. A single-step
+// adjustment from last time only, same "no cumulative memory, just react
+// to the most recent real signal" design as adjustForRpe — bounded by
+// REST_MIN/MAX so repeated adjustments can't drift to an unreasonable
+// extreme over many sessions.
+function adjustRestSeconds(baseSeconds: number, prior: ExerciseHistoryEntry | undefined): number {
+  if (!prior || prior.lastRestActualSeconds === null || prior.lastRestPrescribedSeconds === null) {
+    return baseSeconds;
+  }
+  const ratio = prior.lastRestActualSeconds / prior.lastRestPrescribedSeconds;
+  const cutShort = ratio <= 0.8;
+  const wentOver = ratio >= 1.15;
+  const rpe = prior.lastRpe;
+
+  if (cutShort && (rpe === null || rpe <= 3)) {
+    return Math.max(REST_MIN_SECONDS, baseSeconds - REST_ADJUSTMENT_SECONDS);
+  }
+  if ((cutShort || wentOver) && rpe !== null && rpe >= 4) {
+    return Math.min(REST_MAX_SECONDS, baseSeconds + REST_ADJUSTMENT_SECONDS);
+  }
+  return baseSeconds;
+}
+
+export function computeRestSecondsForBlock(
+  exercise: CatalogExercise,
+  prior: ExerciseHistoryEntry | undefined,
+  activeBlock: { blockType: BlockType } | undefined
+): number {
+  const base = baseRestSeconds(exercise, activeBlock?.blockType ?? "hypertrophy");
+  return adjustRestSeconds(base, prior);
+}
+
+// Same "never a separately-invented explanation" rule as
+// describeWeightChangeReason — a plain readout of what adjustRestSeconds
+// above actually did, so it can never drift out of sync with the real
+// number shown. Null exactly when there's no real prior rest data to
+// explain against (first time doing this exercise, or its last instance
+// never had a rest phase run) — the "first time doing this" copy already
+// in workout-view.tsx covers that case on its own, same as weight.
+export function describeRestChangeReason(
+  exercise: CatalogExercise,
+  prior: ExerciseHistoryEntry | undefined,
+  activeBlock: { blockType: BlockType } | undefined
+): string | null {
+  if (!prior || prior.lastRestActualSeconds === null || prior.lastRestPrescribedSeconds === null) return null;
+  const base = baseRestSeconds(exercise, activeBlock?.blockType ?? "hypertrophy");
+  const adjusted = adjustRestSeconds(base, prior);
+  if (adjusted < base) return "Shortened slightly — you rested less than this last time and it still felt fine.";
+  if (adjusted > base) return "Extended slightly — last time either you needed more than this, or cutting it short felt hard.";
+  return "Same as usual for this kind of exercise.";
 }
 
 function roundToNearestPlate(kg: number, increment = 1.25): number {
@@ -579,10 +687,11 @@ export function instantiateTemplate(
   profile: CoachProfile,
   history: ExerciseHistoryEntry[],
   activeBlock: { blockType: BlockType; startedAt: string } | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
+  lastDurationFeedback?: DurationFeedback | null
 ): GeneratedExercise[] {
   const repsTarget = repsTargetForBlock(activeBlock, profile.goal, now);
-  const sets = activeBlock?.blockType === "deload" ? DELOAD_SETS_PER_EXERCISE : SETS_PER_EXERCISE;
+  const blockType = activeBlock?.blockType ?? "hypertrophy";
   const historyByKey = new Map(history.map((h) => [h.exerciseKey, h]));
 
   const instantiated = templateExercises
@@ -594,10 +703,12 @@ export function instantiateTemplate(
         key: ex.key,
         name: ex.name,
         muscleGroup: ex.muscleGroup,
-        sets,
+        sets: setsForExercise(catalogEntry, blockType, lastDurationFeedback),
         repsTarget,
         weightTargetKg: computeWeightKgForBlock(catalogEntry, profile, prior, activeBlock),
         weightChangeReason: describeWeightChangeReason(prior, activeBlock),
+        restSeconds: computeRestSecondsForBlock(catalogEntry, prior, activeBlock),
+        restChangeReason: describeRestChangeReason(catalogEntry, prior, activeBlock),
       };
     })
     .filter((e): e is GeneratedExercise => e !== null);

@@ -1,12 +1,14 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCoachProfile, getWorkoutHistory, type CoachProfile, type ExerciseHistoryEntry } from "@/lib/coach/coach-profile";
+import { getCoachProfile, getWorkoutHistory, type CoachProfile, type ExerciseHistoryEntry, type DurationFeedback } from "@/lib/coach/coach-profile";
 import {
   generateWorkout,
   getInjuryExcludedKeys,
   getEquipmentExcludedKeys,
   computeWeightKgForBlock,
   describeWeightChangeReason,
+  computeRestSecondsForBlock,
+  describeRestChangeReason,
   blockPhaseIndex,
   generateWorkoutTemplateSet,
   instantiateTemplate,
@@ -45,6 +47,12 @@ export interface WorkoutSet {
   repsActual: number | null;
   weightActualKg: number | null;
   rpe: number | null;
+  // Actual seconds rested before this set started (2026-09-07 rest-timer
+  // intelligence loop) — null until the rest phase after the *previous*
+  // set completes (or for a session predating this feature). Recorded
+  // against the set that followed the rest, not the one that preceded it,
+  // matching how the UI experiences it: you rest, then log the next set.
+  restActualSeconds: number | null;
   completedAt: string | null;
 }
 
@@ -53,15 +61,23 @@ export interface WorkoutExercise {
   key: string;
   name: string;
   muscleGroup: string;
-  // Custom-workout member override (Stage 1, 2026-08-29) — null for every
-  // default/focus exercise and for a custom pick left at the builder's
-  // default. Drives the "resting" screen between sets in workout-view.tsx;
-  // null means no rest-timer screen, same self-paced behaviour as before.
+  // Prescribed rest after each set, in seconds. Always a real number for
+  // any session generated from 2026-09-07 on (default/focus/template
+  // exercises now get a computed value same as custom ones always could —
+  // see generate-workout.ts's computeRestSecondsForBlock); still null for
+  // any older session that predates this feature, or a custom pick
+  // deliberately left at the builder's "no rest timer" default. Drives
+  // the "resting" screen between sets in workout-view.tsx; null means no
+  // rest-timer screen, same self-paced behaviour as before this existed.
   restSeconds: number | null;
   // "Why did this change?" (2026-09-06) — plain-English readout of the
   // RPE-adjustment rule that set this exercise's weightTargetKg. Null for
   // a first-time exercise or a member's own custom/circuit pick.
   weightChangeReason: string | null;
+  // Same pattern, for restSeconds (2026-09-07) — see
+  // generate-workout.ts's describeRestChangeReason. Null for a first-time
+  // exercise or a member's own explicit rest choice.
+  restChangeReason: string | null;
   sets: WorkoutSet[];
 }
 
@@ -111,6 +127,12 @@ interface SessionExerciseDetail {
   workSeconds: number | null;
   restSeconds: number | null;
   restBetweenRoundsSeconds: number | null;
+  // Overall session timer (2026-09-07) — when the member actually entered
+  // the active workout, stamped once by markSessionStarted and left null
+  // until then. Deliberately distinct from workout_sessions.created_at
+  // (plan-generation time, which can be well before the member actually
+  // starts — a session generated at booking time, opened hours later).
+  startedAt: string | null;
   exercises: WorkoutExercise[];
 }
 
@@ -350,7 +372,8 @@ async function resolveTemplatedPlan(
   history: ExerciseHistoryEntry[],
   activeBlock: { blockType: BlockType; startedAt: string } | undefined,
   availableEquipment: EquipmentType[],
-  avoidedKeys: string[]
+  avoidedKeys: string[],
+  lastDurationFeedback?: DurationFeedback | null
 ): Promise<{ plan: GeneratedExercise[]; templateId: number } | null> {
   if (!activeBlock) return null;
 
@@ -371,7 +394,7 @@ async function resolveTemplatedPlan(
 
   const usedCount = await countSessionsForTemplates(templates.map((t) => t.id));
   const chosen = templates[usedCount % templates.length];
-  const plan = instantiateTemplate(chosen.exercises, profile, history, activeBlock);
+  const plan = instantiateTemplate(chosen.exercises, profile, history, activeBlock, new Date(), lastDurationFeedback);
   if (plan.length === 0) return null;
 
   return { plan, templateId: chosen.id };
@@ -537,7 +560,7 @@ async function generateAndPersistSession(
     throw new Error("coach_profile_missing");
   }
 
-  const { history, lastSession } = await getWorkoutHistory(memberId);
+  const { history, lastSession, lastDurationFeedback } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
   const avoidedKeys = await getAvoidedExerciseKeys(memberId);
 
@@ -552,7 +575,7 @@ async function generateAndPersistSession(
 
   if (choice.mode === "focus") {
     const picks = pickFocusExercises(profile, availableEquipment, choice.focusMuscleGroups, avoidedKeys);
-    plan = instantiateTemplate(picks, profile, history, activeBlock);
+    plan = instantiateTemplate(picks, profile, history, activeBlock, new Date(), lastDurationFeedback);
     if (plan.length === 0) throw new Error("no_eligible_exercises");
   } else if (choice.mode === "custom") {
     // Never trust the client's list wholesale — re-validated against the
@@ -569,15 +592,15 @@ async function generateAndPersistSession(
       if (!entry || excludedKeys.includes(key) || picks.some((p) => p.key === key)) continue;
       picks.push({ key: entry.key, name: entry.name, muscleGroup: entry.muscleGroup });
     }
-    plan = instantiateTemplate(picks, profile, history, activeBlock);
+    plan = instantiateTemplate(picks, profile, history, activeBlock, new Date(), lastDurationFeedback);
     if (plan.length === 0) throw new Error("no_eligible_exercises");
     // Only the picked exercises' own keys matter — an entry in the
     // client-supplied map for a key that got dropped above (invalid/
     // excluded/duplicate) is simply never read.
     restByKey = choice.customExerciseRests;
   } else {
-    const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment, avoidedKeys);
-    plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment, avoidedKeys });
+    const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, availableEquipment, avoidedKeys, lastDurationFeedback);
+    plan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, availableEquipment, avoidedKeys, lastDurationFeedback });
     templateId = templated?.templateId ?? null;
   }
 
@@ -909,7 +932,13 @@ async function insertExercisesAndSets(sessionId: number, plan: GeneratedExercise
         name: exercise.name,
         muscle_group: exercise.muscleGroup,
         sort_order: i,
-        rest_seconds: restByKey?.[exercise.key] ?? null,
+        // A member's own explicit rest choice (custom-built workouts)
+        // always wins over the computed default — and since they picked
+        // it themselves, the auto-generated "why" explanation for the
+        // default doesn't apply, so it's dropped rather than shown
+        // against a number the member didn't actually get.
+        rest_seconds: restByKey?.[exercise.key] ?? exercise.restSeconds,
+        rest_change_reason: restByKey?.[exercise.key] !== undefined ? null : exercise.restChangeReason,
         weight_change_reason: exercise.weightChangeReason,
       })
       .select("id")
@@ -936,7 +965,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
     .select(
-      "id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps, target_rounds, elapsed_seconds, work_seconds, rest_seconds, rest_between_rounds_seconds"
+      "id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps, target_rounds, elapsed_seconds, work_seconds, rest_seconds, rest_between_rounds_seconds, started_at"
     )
     .eq("id", sessionId)
     .single();
@@ -944,7 +973,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
 
   const { data: exercises, error: exercisesError } = await admin
     .from("workout_exercises")
-    .select("id, exercise_key, name, muscle_group, sort_order, rest_seconds, weight_change_reason")
+    .select("id, exercise_key, name, muscle_group, sort_order, rest_seconds, weight_change_reason, rest_change_reason")
     .eq("session_id", sessionId)
     .order("sort_order");
   if (exercisesError) throw new Error(exercisesError.message);
@@ -969,6 +998,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
     workSeconds: session.work_seconds,
     restSeconds: session.rest_seconds,
     restBetweenRoundsSeconds: session.rest_between_rounds_seconds,
+    startedAt: session.started_at,
     exercises: (exercises ?? []).map((e) => ({
       id: e.id,
       key: e.exercise_key,
@@ -976,6 +1006,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
       muscleGroup: e.muscle_group,
       restSeconds: e.rest_seconds,
       weightChangeReason: e.weight_change_reason,
+      restChangeReason: e.rest_change_reason,
       sets: (sets ?? [])
         .filter((s) => s.exercise_id === e.id)
         .map((s) => ({
@@ -987,6 +1018,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
           repsActual: s.reps_actual,
           weightActualKg: s.weight_actual_kg,
           rpe: s.rpe,
+          restActualSeconds: s.rest_actual_seconds,
           completedAt: s.completed_at,
         })),
     })),
@@ -1077,12 +1109,20 @@ export async function swapExercise(
   const prior = history.find((h) => h.exerciseKey === newExerciseKey);
   const weightTargetKg = computeWeightKgForBlock(newExercise, profile, prior, activeBlock);
   const weightChangeReason = describeWeightChangeReason(prior, activeBlock);
+  const restSeconds = computeRestSecondsForBlock(newExercise, prior, activeBlock);
+  const restChangeReason = describeRestChangeReason(newExercise, prior, activeBlock);
 
   // A plain UPDATE — never delete+reinsert — so sort_order (and every
   // set's id/set_number) is preserved automatically.
   const { error: exerciseUpdateError } = await admin
     .from("workout_exercises")
-    .update({ exercise_key: newExercise.key, name: newExercise.name, weight_change_reason: weightChangeReason })
+    .update({
+      exercise_key: newExercise.key,
+      name: newExercise.name,
+      weight_change_reason: weightChangeReason,
+      rest_seconds: restSeconds,
+      rest_change_reason: restChangeReason,
+    })
     .eq("id", exerciseId);
   if (exerciseUpdateError) throw new Error(exerciseUpdateError.message);
 
@@ -1156,10 +1196,18 @@ export async function avoidAndSwapExercise(
     const prior = history.find((h) => h.exerciseKey === candidate.key);
     const weightTargetKg = computeWeightKgForBlock(candidate, profile, prior, activeBlock);
     const weightChangeReason = describeWeightChangeReason(prior, activeBlock);
+    const restSeconds = computeRestSecondsForBlock(candidate, prior, activeBlock);
+    const restChangeReason = describeRestChangeReason(candidate, prior, activeBlock);
 
     const { error: exerciseUpdateError } = await admin
       .from("workout_exercises")
-      .update({ exercise_key: candidate.key, name: candidate.name, weight_change_reason: weightChangeReason })
+      .update({
+        exercise_key: candidate.key,
+        name: candidate.name,
+        weight_change_reason: weightChangeReason,
+        rest_seconds: restSeconds,
+        rest_change_reason: restChangeReason,
+      })
       .eq("id", exerciseId);
     if (exerciseUpdateError) throw new Error(exerciseUpdateError.message);
 
@@ -1341,7 +1389,7 @@ export async function submitReadinessCheck(memberId: number, sessionId: number, 
 
 export async function logSet(
   setId: number,
-  input: { repsActual: number; weightActualKg: number; rpe?: number }
+  input: { repsActual: number; weightActualKg: number; rpe?: number; restActualSeconds?: number }
 ): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
@@ -1350,10 +1398,60 @@ export async function logSet(
       reps_actual: input.repsActual,
       weight_actual_kg: input.weightActualKg,
       rpe: input.rpe ?? null,
+      // Recorded against the set that followed the rest, not the one
+      // before it — see WorkoutSet.restActualSeconds's own comment. Absent
+      // (the very first set of the session, which has no preceding rest)
+      // or when the rest-timer's own effect couldn't measure it stays
+      // null, same "no signal, don't guess" treatment as a missing RPE.
+      rest_actual_seconds: input.restActualSeconds ?? null,
       completed_at: new Date().toISOString(),
     })
     .eq("id", setId);
   if (error) throw new Error(error.message);
+}
+
+// Overall session timer (2026-09-07) — stamps started_at the first time a
+// member actually enters the active workout, distinct from created_at
+// (plan-generation time). Idempotent: a session already stamped is left
+// untouched (`.is("started_at", null)` matches zero rows on a second
+// call), so the client can safely call this every time it mounts into the
+// active flow without worrying about resetting an in-progress timer.
+export async function markSessionStarted(sessionId: number): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("workout_sessions")
+    .update({ started_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .is("started_at", null);
+  if (error) throw new Error(error.message);
+}
+
+// Real-world trigger for the same clock (2026-09-07, Carl: "would it be
+// cool if the session time starts as soon as you unlock the door?") —
+// called from unlock/route.ts on a successful unlock, tying the timer to
+// the moment the member actually physically enters the pod rather than
+// whenever they happen to open the workout tab (which could be well
+// before or after). Looks the session up by booking_id rather than
+// taking a sessionId directly, since the unlock route only ever has the
+// booking, not the workout session (the two can be created independently
+// — a session doesn't exist yet if the member hasn't opened the workout
+// tab for this booking before unlocking). A booking with no session yet
+// is a deliberate silent no-op, not an error: the workout-view mount
+// trigger (markSessionStarted above) still covers that case once the
+// member does open it, and the same `.is("started_at", null)` guard on
+// both means whichever one runs first wins, with no double-stamp risk. A
+// second unlock for the same booking (retry, or letting someone else in)
+// is likewise a no-op once started_at is already set.
+export async function markSessionStartedByBookingId(bookingId: number): Promise<void> {
+  const admin = createAdminClient();
+  const { data: session, error: lookupError } = await admin
+    .from("workout_sessions")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!session) return;
+  await markSessionStarted(session.id);
 }
 
 export interface WeightChangePreview {
@@ -1538,15 +1636,15 @@ export async function completeSession(
     return { totalVolumeKg, changes: [], narration: null };
   }
 
-  const { history, lastSession } = await getWorkoutHistory(memberId);
+  const { history, lastSession, lastDurationFeedback } = await getWorkoutHistory(memberId);
   const activeBlock = await resolveActiveBlock(memberId, profile);
   const avoidedKeys = await getAvoidedExerciseKeys(memberId);
   // Same template-if-available, generate-fresh-otherwise resolution as
   // getOrCreateWorkoutSession — the preview should show what the next
   // *actual* session will contain, not a plan generated a different way
   // than what getOrCreateWorkoutSession will really produce next time.
-  const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, [], avoidedKeys);
-  const nextPlan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, avoidedKeys });
+  const templated = await resolveTemplatedPlan(memberId, profile, history, activeBlock, [], avoidedKeys, lastDurationFeedback);
+  const nextPlan = templated?.plan ?? generateWorkout({ profile, history, lastSession, activeBlock, avoidedKeys, lastDurationFeedback });
 
   const changes: WeightChangePreview[] = nextPlan
     .map((next) => {

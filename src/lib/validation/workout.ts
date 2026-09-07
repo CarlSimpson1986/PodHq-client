@@ -133,6 +133,11 @@ export const logSetSchema = z.object({
   repsActual: z.number().int().min(0).max(100),
   weightActualKg: z.number().min(0).max(500),
   rpe: z.number().int().min(1).max(5).optional(),
+  // Real elapsed seconds since the rest phase before this set began —
+  // capped generously (an hour), not at the prescribed max, since a
+  // member genuinely leaving the app mid-rest is real data too, not a
+  // client bug to reject.
+  restActualSeconds: z.number().int().min(0).max(3600).optional(),
 });
 
 export const swapExerciseSchema = z.object({
@@ -201,4 +206,10 @@ export const logHiitRepsSchema = z.object({
       })
     )
     .max(6),
+});
+
+// "How was your workout?" (2026-09-07) — self-reported once at session
+// completion, feeds computeExerciseCount's next-session exercise count.
+export const durationFeedbackSchema = z.object({
+  feedback: z.enum(["too_long", "too_short", "just_right"]),
 });

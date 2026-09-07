@@ -7,7 +7,13 @@ import { PageHero } from "@/components/page-hero";
 import { DumbbellIcon } from "@/components/icons";
 import { WorkoutView } from "@/components/workout-view";
 
-export default async function WorkoutPage({ params }: { params: Promise<{ bookingId: string }> }) {
+export default async function WorkoutPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ bookingId: string }>;
+  searchParams: Promise<{ justUnlocked?: string }>;
+}) {
   const session = await createSessionClient();
   const {
     data: { user },
@@ -37,12 +43,14 @@ export default async function WorkoutPage({ params }: { params: Promise<{ bookin
     redirect("/");
   }
 
+  const { justUnlocked } = await searchParams;
+
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Today's Workout" icon={DumbbellIcon} iconHref="/profile" />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md card-light p-6">
-          <WorkoutView bookingId={bookingIdNum} />
+          <WorkoutView bookingId={bookingIdNum} memberName={member.name} justUnlocked={justUnlocked === "1"} />
         </div>
       </div>
     </main>

@@ -211,6 +211,14 @@ export function BookingsView({
         ...prev,
         [bookingId]: body.status === "ok" ? "Unlocked — door should open now." : body.message,
       }));
+      // Carl, 2026-09-07: "then it automatic goes to your session on the
+      // app" — a real unlock means the member is physically in the pod
+      // now, so straight into today's workout rather than leaving them on
+      // the bookings list. Brief delay so the success message is actually
+      // readable before the screen changes.
+      if (body.status === "ok") {
+        setTimeout(() => router.push(`/workout/${bookingId}?justUnlocked=1`), 900);
+      }
     } catch {
       setUnlockMessages((prev) => ({ ...prev, [bookingId]: "Something went wrong. Try again." }));
     } finally {

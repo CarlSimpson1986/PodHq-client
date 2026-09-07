@@ -107,46 +107,67 @@ export interface ExerciseHistoryEntry {
   exerciseKey: string;
   lastWeightKg: number;
   lastRpe: number | null;
+  // Added 2026-09-07 for the rest-timer intelligence loop — null whenever
+  // no set of the last time this exercise ran ever logged a real rest
+  // (e.g. it was the very last exercise of the session, so no rest
+  // followed any of its sets), same "no signal, don't guess" treatment
+  // as lastRpe being null.
+  lastRestActualSeconds: number | null;
+  lastRestPrescribedSeconds: number | null;
 }
 
 export interface RecentSessionSummary {
   muscleGroups: string[];
 }
 
+// Self-reported once at session completion (2026-09-07, Carl: "how was
+// your workout — too long, too short, just right — then it auto
+// adjusts"). Plain TS union, not a DB CHECK constraint — same "burned
+// twice by the SQL Editor mangling a CHECK constraint's string literal on
+// paste" reasoning as credits.reason and friends.
+export type DurationFeedback = "too_long" | "too_short" | "just_right";
+
 // Pulls just enough from the last few workout_sessions to drive
 // generate-workout.ts: the most recent weight/RPE per exercise (for
-// progressive overload) and the immediately preceding session's muscle
-// groups (for rotation). Not a full session history read — this app
-// never needs more than that for generation.
+// progressive overload), the immediately preceding session's muscle
+// groups (for rotation), and its duration feedback (for exercise-count
+// adjustment). Not a full session history read — this app never needs
+// more than that for generation.
 export async function getWorkoutHistory(
   memberId: number,
   limit = 6
-): Promise<{ history: ExerciseHistoryEntry[]; lastSession: RecentSessionSummary | null }> {
+): Promise<{ history: ExerciseHistoryEntry[]; lastSession: RecentSessionSummary | null; lastDurationFeedback: DurationFeedback | null }> {
   const admin = createAdminClient();
 
   const { data: sessions, error: sessionsError } = await admin
     .from("workout_sessions")
-    .select("id, created_at")
+    .select("id, created_at, duration_feedback")
     .eq("member_id", memberId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (sessionsError) throw new Error(sessionsError.message);
-  if (!sessions || sessions.length === 0) return { history: [], lastSession: null };
+  if (!sessions || sessions.length === 0) return { history: [], lastSession: null, lastDurationFeedback: null };
+
+  // The most recent session's own feedback, regardless of whether it (or
+  // any session) has exercises to build the rest of this function's
+  // return value from — a genuinely separate signal from the per-exercise
+  // history below, so it's read before either early-return that follows.
+  const lastDurationFeedback = (sessions[0].duration_feedback as DurationFeedback | null) ?? null;
 
   const sessionIds = sessions.map((s) => s.id);
   const { data: exercises, error: exercisesError } = await admin
     .from("workout_exercises")
-    .select("id, session_id, exercise_key, muscle_group")
+    .select("id, session_id, exercise_key, muscle_group, rest_seconds")
     .in("session_id", sessionIds);
 
   if (exercisesError) throw new Error(exercisesError.message);
-  if (!exercises || exercises.length === 0) return { history: [], lastSession: null };
+  if (!exercises || exercises.length === 0) return { history: [], lastSession: null, lastDurationFeedback };
 
   const exerciseIds = exercises.map((e) => e.id);
   const { data: sets, error: setsError } = await admin
     .from("workout_sets")
-    .select("exercise_id, set_number, weight_actual_kg, rpe, completed_at")
+    .select("exercise_id, set_number, weight_actual_kg, rpe, rest_actual_seconds, completed_at")
     .in("exercise_id", exerciseIds)
     .not("completed_at", "is", null);
 
@@ -167,6 +188,11 @@ export async function getWorkoutHistory(
   const latestByKey = new Map<string, ExerciseHistoryEntry>();
   const bestRankByKey = new Map<string, number>();
   const bestSetNumberByKey = new Map<string, number>();
+  // Which specific workout_exercises row "won" for each key — needed
+  // separately from latestByKey because rest is a per-exercise-instance
+  // average across ALL its sets, not the single tie-broken set weight/RPE
+  // are read from.
+  const bestExerciseIdByKey = new Map<string, number>();
 
   for (const set of sets ?? []) {
     // A completed set with no logged weight (a duration-based hold like a
@@ -184,6 +210,7 @@ export async function getWorkoutHistory(
     if (isBetter) {
       bestRankByKey.set(exercise.exercise_key, thisRank);
       bestSetNumberByKey.set(exercise.exercise_key, set.set_number);
+      bestExerciseIdByKey.set(exercise.exercise_key, exercise.id);
       latestByKey.set(exercise.exercise_key, {
         exerciseKey: exercise.exercise_key,
         // Progression must be based on what the member actually lifted,
@@ -193,8 +220,34 @@ export async function getWorkoutHistory(
         // next progression step for every exercise's second-ever use.
         lastWeightKg: set.weight_actual_kg,
         lastRpe: set.rpe,
+        lastRestActualSeconds: null,
+        lastRestPrescribedSeconds: exercise.rest_seconds,
       });
     }
+  }
+
+  // Second pass: average rest_actual_seconds across every completed set of
+  // each key's winning exercise instance — a session-level average of how
+  // this exercise's rest actually went, not just one set's value. Null
+  // sets (no rest followed, or the member's set was completed without the
+  // rest phase ever running — e.g. an old session predating this feature)
+  // are excluded rather than counted as 0, so they don't drag the average
+  // down to look like the member is cutting rest short when really there's
+  // just no data.
+  const restSumByKey = new Map<string, number>();
+  const restCountByKey = new Map<string, number>();
+  for (const set of sets ?? []) {
+    if (set.rest_actual_seconds === null) continue;
+    const exercise = exerciseById.get(set.exercise_id);
+    if (!exercise) continue;
+    if (bestExerciseIdByKey.get(exercise.exercise_key) !== exercise.id) continue;
+    restSumByKey.set(exercise.exercise_key, (restSumByKey.get(exercise.exercise_key) ?? 0) + set.rest_actual_seconds);
+    restCountByKey.set(exercise.exercise_key, (restCountByKey.get(exercise.exercise_key) ?? 0) + 1);
+  }
+  for (const [key, entry] of latestByKey) {
+    const count = restCountByKey.get(key);
+    if (!count) continue;
+    entry.lastRestActualSeconds = Math.round((restSumByKey.get(key) ?? 0) / count);
   }
 
   const mostRecentSessionId = sessions[0].id;
@@ -205,5 +258,12 @@ export async function getWorkoutHistory(
   return {
     history: [...latestByKey.values()],
     lastSession: lastSessionMuscleGroups.length > 0 ? { muscleGroups: lastSessionMuscleGroups } : null,
+    lastDurationFeedback,
   };
+}
+
+export async function submitDurationFeedback(sessionId: number, feedback: DurationFeedback): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("workout_sessions").update({ duration_feedback: feedback }).eq("id", sessionId);
+  if (error) throw new Error(error.message);
 }
