@@ -38,4 +38,20 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Found 2026-09-07 pre-Play-submission check: the door-unlock flow
+         (src/app/api/unlock/route.ts's geofence check) calls plain
+         navigator.geolocation.getCurrentPosition() in the WebView, but no
+         location permission was declared here at all. Android's WebView
+         geolocation bridge (Capacitor's BridgeActivity wires this up
+         automatically) always denies a getCurrentPosition() call with no
+         matching manifest permission — every unlock attempt in the native
+         app would have silently hit the "Turn on location services to
+         unlock the door" error, indistinguishable from a member with
+         location actually off. FINE for GPS accuracy (needed to compare
+         against a resource's unlock_radius_meters, often tens of metres);
+         COARSE kept alongside it since some OEM WebViews only grant what's
+         explicitly asked for. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>
