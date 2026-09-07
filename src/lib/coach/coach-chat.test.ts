@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { askCoach, type CoachChatContext } from "./coach-chat";
-import { CRISIS_MARKER, CRISIS_REPLY } from "@/lib/crisis-response";
+import { CRISIS_MARKER, CRISIS_REPLY, MEDICAL_EMERGENCY_MARKER, MEDICAL_EMERGENCY_REPLY } from "@/lib/crisis-response";
 
 // Safety-audit fix (2026-09-06) — coach-chat.ts had no automated coverage
 // at all, unlike Pod Assist's adversarial eval suite for the equivalent
@@ -64,6 +64,13 @@ describe("askCoach", () => {
     const reply = await askCoach(baseContext(), "I don't want to be here anymore", []);
     expect(reply).toBe(CRISIS_REPLY);
     expect(reply).not.toContain(CRISIS_MARKER);
+  });
+
+  it("never returns the raw medical-emergency marker — always the fixed MEDICAL_EMERGENCY_REPLY instead", async () => {
+    global.fetch = vi.fn().mockResolvedValue(groqResponse(MEDICAL_EMERGENCY_MARKER));
+    const reply = await askCoach(baseContext(), "my chest feels really tight and I can't breathe properly", []);
+    expect(reply).toBe(MEDICAL_EMERGENCY_REPLY);
+    expect(reply).not.toContain(MEDICAL_EMERGENCY_MARKER);
   });
 
   it("retries once when the banned word appears, and ships the retry's answer", async () => {

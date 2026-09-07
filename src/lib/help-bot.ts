@@ -1,7 +1,7 @@
 import "server-only";
 import { getFaqItems } from "@/lib/data/help-faq";
 import { TERMS_AND_CONDITIONS } from "@/lib/terms-and-conditions";
-import { CRISIS_MARKER, CRISIS_REPLY, CRISIS_SYSTEM_PROMPT_RULE } from "@/lib/crisis-response";
+import { CRISIS_MARKER, CRISIS_REPLY, MEDICAL_EMERGENCY_MARKER, MEDICAL_EMERGENCY_REPLY, CRISIS_SYSTEM_PROMPT_RULE } from "@/lib/crisis-response";
 
 // Q&A-only help assistant ("POD" chat, graduating the static /faq accordion
 // to a real LLM per the 2026-08-22 scoping discussion). Deliberately no
@@ -68,6 +68,9 @@ function extractReply(raw: string): HelpBotReply {
   if (raw.includes(CRISIS_MARKER)) {
     return { reply: CRISIS_REPLY, needsStaff: false };
   }
+  if (raw.includes(MEDICAL_EMERGENCY_MARKER)) {
+    return { reply: MEDICAL_EMERGENCY_REPLY, needsStaff: false };
+  }
   const needsStaff = raw.includes(UNRESOLVED_MARKER);
   const reply = raw.split(UNRESOLVED_MARKER).join("").trim();
   return { reply, needsStaff };
@@ -103,11 +106,17 @@ async function askGroq(systemPrompt: string, message: string, history: ChatMessa
       // gpt-oss-120b is a reasoning model — it spends completion tokens on
       // a hidden `reasoning` field before the actual reply, which was
       // found silently truncating coach-bot.ts's replies mid-sentence
-      // (2026-08-23, same model, tighter budget). reasoning_effort: "low"
-      // keeps that overhead small for a task this simple (a short FAQ
-      // answer, not a task that benefits from deep reasoning); max_tokens
-      // bumped slightly as a backstop.
-      reasoning_effort: "low",
+      // (2026-08-23, same model, tighter budget). "low" was also found
+      // live in coach-chat.ts to be unreliable at following an explicit
+      // instruction consistently (a rep-range question skipped a required
+      // tool call) — bumped to "medium" there for that reason on
+      // 2026-08-27. This bot carries the identical crisis/medical-
+      // emergency marker instruction (CRISIS_SYSTEM_PROMPT_RULE) on the
+      // same model, so it gets the same fix (2026-09-07 pre-launch
+      // review): the latency cost is worth it for reliably catching that
+      // instruction, not just for the FAQ-answer quality it was
+      // originally tuned for.
+      reasoning_effort: "medium",
       max_tokens: 350,
       temperature: 0.3,
     }),

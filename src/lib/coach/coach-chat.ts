@@ -4,7 +4,7 @@ import type { TrainingBlockState } from "@/lib/coach/training-block-state";
 import type { RecoveryStatus } from "@/lib/coach/recovery-status";
 import type { WeeklyReview } from "@/lib/coach/weekly-review";
 import type { LastSessionDetail } from "@/lib/coach/exercise-performance";
-import { CRISIS_MARKER, CRISIS_REPLY, CRISIS_SYSTEM_PROMPT_RULE } from "@/lib/crisis-response";
+import { CRISIS_MARKER, CRISIS_REPLY, MEDICAL_EMERGENCY_MARKER, MEDICAL_EMERGENCY_REPLY, CRISIS_SYSTEM_PROMPT_RULE } from "@/lib/crisis-response";
 import { searchPubMed, formatPubMedResultsForModel, extractCitedPmids, sanitizeCitedPmids } from "@/lib/coach/pubmed";
 import { COACH_MANUAL } from "@/lib/coach/coach-manual";
 export interface ChatTurn {
@@ -303,6 +303,9 @@ export async function askCoach(ctx: CoachChatContext, message: string, history: 
   if (raw.includes(CRISIS_MARKER)) {
     return CRISIS_REPLY;
   }
+  if (raw.includes(MEDICAL_EMERGENCY_MARKER)) {
+    return MEDICAL_EMERGENCY_REPLY;
+  }
 
   // One bounded retry, not a loop — if the model uses the banned word
   // again on the retry, ship that answer anyway rather than making a
@@ -310,7 +313,7 @@ export async function askCoach(ctx: CoachChatContext, message: string, history: 
   if (BANNED_WORD_PATTERN.test(raw)) {
     const correction = `${message}\n\n(Your previous answer used the word "functional" or "functional training/strength," which isn't allowed — rewrite your answer making the same point without that word or phrase.)`;
     const retry = await askProvider(systemPrompt, correction, history);
-    if (!retry.includes(CRISIS_MARKER)) {
+    if (!retry.includes(CRISIS_MARKER) && !retry.includes(MEDICAL_EMERGENCY_MARKER)) {
       raw = retry;
     }
   }
