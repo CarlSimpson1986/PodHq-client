@@ -59,18 +59,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "error", message: "Could not cancel booking." }, { status: 500 });
   }
 
-  if (user.email) {
-    // cancel_booking() only returns the refund boolean, not the booking's
-    // own slot_start/gym — a cheap extra lookup rather than widening the
-    // RPC's return shape for every other caller of it. gym comes from the
-    // booking's own row, not member.gym — since cross-gym PAYG booking
-    // (2026-08-26), those can genuinely differ.
-    const { data: booking } = await admin
-      .from("bookings")
-      .select("slot_start, resource_id, gym")
-      .eq("id", parsed.data.bookingId)
-      .maybeSingle();
+  // cancel_booking() only returns the refund boolean, not the booking's own
+  // slot_start/gym — a cheap extra lookup rather than widening the RPC's
+  // return shape for every other caller of it. gym comes from the booking's
+  // own row, not member.gym — since cross-gym PAYG booking (2026-08-26),
+  // those can genuinely differ. Fetched unconditionally (not just when the
+  // cancelling member has an email) — whether the *next waitlisted* member
+  // should be offered this slot has nothing to do with the canceller's own
+  // email, and gating it there previously left the slot silently un-offered
+  // whenever a member with no email on file cancelled (found in the
+  // 2026-09-07 pre-launch review).
+  const { data: booking } = await admin
+    .from("bookings")
+    .select("slot_start, resource_id, gym")
+    .eq("id", parsed.data.bookingId)
+    .maybeSingle();
 
+  if (user.email) {
     const { subject, html } = bookingCancelledEmail({
       memberName: member.name,
       gym: booking?.gym ?? member.gym,
@@ -85,10 +90,10 @@ export async function POST(request: NextRequest) {
       memberId: member.id,
       gym: booking?.gym ?? member.gym,
     });
+  }
 
-    if (booking?.slot_start && booking.resource_id) {
-      await offerNextWaitlistEntry(booking.resource_id, booking.slot_start);
-    }
+  if (booking?.slot_start && booking.resource_id) {
+    await offerNextWaitlistEntry(booking.resource_id, booking.slot_start);
   }
 
   return NextResponse.json({ status: "ok", refunded });

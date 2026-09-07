@@ -403,19 +403,47 @@ export async function POST(request: NextRequest) {
     const subscription = event.data.object as Stripe.Subscription;
     const status = event.type === "customer.subscription.deleted" ? "canceled" : normalizeStatus(subscription.status);
 
-    const { error } = await admin
+    // Stripe does not guarantee webhook delivery order. Guarded on
+    // `event.created` (Stripe's own event timestamp, monotonic per
+    // subscription for practical purposes) so a stale, redelivered event
+    // landing after a newer one is a no-op instead of reverting a real
+    // status change backward — e.g. re-marking a reactivated membership
+    // 'canceled'. Found in the 2026-09-07 pre-launch review; see migration
+    // 0092 for the new column this relies on. The `.or()` also matches a
+    // never-before-updated row (column still null).
+    const eventCreatedIso = new Date(event.created * 1000).toISOString();
+    const { data: updated, error } = await admin
       .from("memberships")
-      .update({ status, current_period_end: periodEndIso(subscription), updated_at: new Date().toISOString() })
-      .eq("stripe_subscription_id", subscription.id);
+      .update({
+        status,
+        current_period_end: periodEndIso(subscription),
+        updated_at: new Date().toISOString(),
+        last_stripe_event_created_at: eventCreatedIso,
+      })
+      .eq("stripe_subscription_id", subscription.id)
+      .or(`last_stripe_event_created_at.is.null,last_stripe_event_created_at.lte.${eventCreatedIso}`)
+      .select("id");
 
     if (error) {
       console.error("[stripe-webhook] failed to update membership status", { error: error.message });
       return NextResponse.json({ status: "error", message: "Could not update membership." }, { status: 500 });
     }
 
+    const wasApplied = Boolean(updated && updated.length > 0);
+    if (!wasApplied) {
+      console.error("[stripe-webhook] skipped stale/out-of-order subscription event", {
+        subscriptionId: subscription.id,
+        eventId: event.id,
+        eventCreatedIso,
+      });
+    }
+
     // Only a genuine cancellation gets a staff alert — not every status
     // change (e.g. a plain past_due transition on the same "updated" event).
-    if (event.type === "customer.subscription.deleted") {
+    // Gated on wasApplied too: a stale/out-of-order 'deleted' event must
+    // not revoke founding-member status or alert staff about a
+    // cancellation that a newer event has already superseded.
+    if (event.type === "customer.subscription.deleted" && wasApplied) {
       const memberId = Number(subscription.metadata?.member_id);
       const tierName = subscription.metadata?.tier_name;
 

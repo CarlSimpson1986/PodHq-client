@@ -87,6 +87,12 @@ export async function POST(request: NextRequest) {
     if (error.message.includes("slot_full")) {
       return NextResponse.json({ status: "error", message: "That slot is fully booked." }, { status: 409 });
     }
+    // New in 0091 — see that migration's header for why this guard was
+    // added (a multi-capacity resource + a double-tap could otherwise
+    // burn two credits booking the same slot twice).
+    if (error.message.includes("already_booked")) {
+      return NextResponse.json({ status: "error", message: "You already have this slot booked." }, { status: 409 });
+    }
     if (error.message.includes("slot_reserved")) {
       return NextResponse.json(
         { status: "error", message: "This slot is reserved for someone on the waitlist right now." },

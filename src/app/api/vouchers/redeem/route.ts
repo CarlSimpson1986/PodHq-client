@@ -92,10 +92,28 @@ export async function POST(request: NextRequest) {
   });
 
   if (creditError) {
-    console.error("[vouchers-redeem] failed to grant credits after claiming voucher", {
+    console.error("[vouchers-redeem] failed to grant credits after claiming voucher, rolling back claim", {
       error: creditError.message,
       code: parsed.data.code,
     });
+    // Compensating rollback — found in the 2026-09-07 pre-launch review:
+    // the claim above is a real, already-committed write, so a failure
+    // here previously left the voucher permanently marked redeemed with
+    // zero credits ever granted. Conditioned on this member still being
+    // the one who holds the claim, so it can't undo a genuinely different
+    // concurrent change.
+    const { error: rollbackError } = await admin
+      .from("gift_vouchers")
+      .update({ redeemed_by_member_id: null, redeemed_at: null })
+      .eq("code", parsed.data.code)
+      .eq("redeemed_by_member_id", member.id);
+    if (rollbackError) {
+      console.error("[vouchers-redeem] rollback also failed — voucher claimed with no credits granted, needs manual fix", {
+        error: rollbackError.message,
+        code: parsed.data.code,
+        memberId: member.id,
+      });
+    }
     return NextResponse.json({ status: "error", message: "Something went wrong. Try again." }, { status: 500 });
   }
 
