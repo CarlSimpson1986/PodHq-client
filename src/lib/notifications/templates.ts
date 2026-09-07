@@ -1,3 +1,5 @@
+import { appUrl } from "./core";
+
 // Member-supplied names (signup `name`, no character restriction beyond
 // length — src/lib/validation/auth.ts) are interpolated into these HTML
 // email bodies. Found in the 2026-08-16 OWASP audit: unescaped, a name like
@@ -22,21 +24,40 @@ function formatSlot(iso: string): string {
   return `${day} at ${time}`;
 }
 
-/** Shared header/footer — plain inline styles only, email clients can't use the app's Tailwind tokens. */
+// Shared header/footer — plain inline styles only, email clients can't use
+// the app's Tailwind tokens/CSS variables. Redesigned 2026-09-07 to
+// actually carry the app's real brand identity (black chrome, gold accent
+// — see podhq-client's CLAUDE.md "Dashboard is the canonical reference")
+// instead of a generic black bar with no accent colour at all. The gold/
+// near-black pairing below (#c9a24b / #0a0a0b) is copied exactly from
+// globals.css's --accent/--accent-foreground tokens, not invented, so it's
+// provably the same accessible contrast already validated for the real
+// app's own buttons. Logo kept alongside the wordmark text, not instead of
+// it — many clients block remote images by default, so the text still
+// carries the brand identity even when the image never loads.
+const BRAND_GOLD = "#c9a24b";
+const BRAND_NEAR_BLACK = "#0a0a0b";
+
 function emailShell(bodyHtml: string): string {
   return `
-    <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; color: #111;">
-      <div style="background: #000; color: #fff; padding: 24px; text-align: center;">
-        <strong style="font-size: 18px;">My Fit Pod</strong>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; overflow: hidden; color: #18181b;">
+      <div style="background: ${BRAND_NEAR_BLACK}; padding: 28px 24px; text-align: center; border-bottom: 3px solid ${BRAND_GOLD};">
+        <img src="${appUrl()}/icons/icon-512.png" width="40" height="40" alt="" style="display: block; margin: 0 auto 10px; border-radius: 8px;" />
+        <strong style="font-size: 18px; color: #ffffff; letter-spacing: 0.3px;">My Fit Pod</strong>
       </div>
-      <div style="padding: 24px; line-height: 1.5;">
+      <div style="padding: 28px 24px; line-height: 1.6;">
         ${bodyHtml}
       </div>
-      <div style="padding: 16px 24px; color: #888; font-size: 12px;">
+      <div style="padding: 16px 24px; border-top: 1px solid #f0f0f0; color: #9a9ba3; font-size: 12px; text-align: center;">
         My Fit Pod &mdash; this is an automated message, please don't reply directly to this email.
       </div>
     </div>
   `;
+}
+
+/** Every CTA button uses this — matches the app's own bg-accent/text-accent-foreground button styling exactly (see e.g. dashboard's "Upgrade"/"Set up Pod Coach" buttons). */
+function ctaButton(url: string, label: string): string {
+  return `<p style="margin-top: 16px;"><a href="${url}" style="display: inline-block; background: ${BRAND_GOLD}; color: ${BRAND_NEAR_BLACK}; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">${label}</a></p>`;
 }
 
 interface EmailContent {
@@ -218,7 +239,7 @@ export function waitlistOfferedEmail(input: {
       <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>A spot for <strong>${formatSlot(input.slotStart)}</strong> at <strong>${input.gym}</strong> just opened up, and you're next on the waitlist.</p>
       <p><strong>You have 15 minutes to claim it</strong> before it's offered to the next person.</p>
-      <p><a href="${input.acceptUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Claim this spot</a></p>
+      ${ctaButton(input.acceptUrl, "Claim this spot")}
     `),
   };
 }
@@ -230,7 +251,7 @@ export function creditsLowEmail(input: { memberName: string; creditsRemaining: n
       <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>You've got <strong>${input.creditsRemaining} credit${input.creditsRemaining === 1 ? "" : "s"}</strong> left on your account.</p>
       <p>Top up now so you don't miss your next session.</p>
-      <p><a href="${input.buyCreditsUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Buy more credits</a></p>
+      ${ctaButton(input.buyCreditsUrl, "Buy more credits")}
     `),
   };
 }
@@ -241,7 +262,7 @@ export function winBackEmail(input: { memberName: string; gym: string; daysSince
     html: emailShell(`
       <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>It's been ${input.daysSinceLastVisit} days since your last session at <strong>${input.gym}</strong> &mdash; your pod's still waiting for you.</p>
-      <p><a href="${input.bookUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Book your next session</a></p>
+      ${ctaButton(input.bookUrl, "Book your next session")}
     `),
   };
 }
@@ -256,7 +277,7 @@ export function trainingNudgeEmail(input: { memberName: string; gym: string; day
     html: emailShell(`
       <p>Hi ${escapeHtml(input.memberName)},</p>
       <p>It's been ${input.daysSinceLastSession} days since your last session at <strong>${input.gym}</strong> &mdash; a bit longer than your usual pace.</p>
-      <p><a href="${input.bookUrl}" style="display:inline-block;background:#000;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">Book your next session</a></p>
+      ${ctaButton(input.bookUrl, "Book your next session")}
     `),
   };
 }
