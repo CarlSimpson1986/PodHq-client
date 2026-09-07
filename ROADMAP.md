@@ -14,114 +14,17 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-64.md`, covering the pilot
-mechanism proof (2026-08-05) through the workout flow design pass
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-65.md`, covering the pilot
+mechanism proof (2026-08-05) through three competitor-gap features
 (2026-09-06) — all split out to keep this file within Claude Code's
 ~15,000-character `@`-import limit. Archives aren't always the strictly
 oldest material — the split point is "what's finished and stable" as
 much as "what's oldest" (see each archive's own header note for
 examples). Reference-only, not auto-loaded by CLAUDE.md; check them for
 full build history, or `git log` on this file for exact split points.
-Active content here starts at "Three competitor-gap features"
-(2026-09-06). If this file grows too large again, split it the same way:
-move the most clearly finished section into `ROADMAP-ARCHIVE-65.md`,
-update this paragraph.
-
-## Three competitor-gap features: exercise-avoid memory, chat safety audit, readiness check — 2026-09-06
-
-Same-day follow-up to the two sessions above, acting on the remaining
-opportunities from the ChatGPT Deep Research pass on rival coaching-app
-complaints (Fitbod/Future/Zing/JSA). Carl: "all three."
-
-**Persistent "never suggest this again" exercise memory.** New
-`member_avoided_exercises` table (`0089`, podHq) — `(member_id,
-exercise_key, reason?)`, unique pair, modelled directly on
-`member_workout_manual_logs`. New `src/lib/coach/avoided-exercises.ts`
-(get/avoid/unavoid, plus a catalog-joined list for the settings screen).
-Wired into the exact hard-exclusion tier injury/equipment already use —
-`combineExcludedKeys` (workout-session.ts) gained a third param, and
-`generate-workout.ts`'s three independent exclusion sites
-(`selectExercises`, `generateWorkoutTemplateSet`, `pickFocusExercises`)
-each gained an `avoidedKeys` param, unioned in alongside the other two.
-New `avoidAndSwapExercise()` records the avoidance then immediately
-swaps today's instance for a same-muscle-group alternative (mirrors
-`swapExercise`'s own candidate logic) — if none exists, the avoidance
-still sticks for next time, today's pick just stays put. UI: a "Never
-suggest again" link next to every exercise's existing "Swap" link
-(overview screen), plus an "Avoided exercises" list with per-item
-"Remove" under the `injuries` textarea in Coach settings.
-
-**Chat tool-calling safety audit** (both repos' AI chats, informed by
-common rival-chatbot complaints about bad/unsafe advice). Pod Assist
-(podHq) and Pod Coach's access-control model were both found sound — no
-tool anywhere can write/side-effect, and Pod Assist's gym-scoping is
-enforced server-side, proven by its own adversarial eval suite. The real
-gaps were in Pod Coach's advice-quality safety specifically: (1)
-`coach-chat.ts` never received the member's `injuries`/avoided-exercise
-data at all, despite that data existing and being used correctly
-elsewhere — now threaded into `CoachChatContext` and the system prompt;
-(2) the "never hedge, never suggest they double-check with someone
-else" instruction had no carve-out for pain/injury/medical-sounding
-messages — added an explicit exception: acknowledge plainly, suggest
-easing off, recommend a professional if it persists; (3) `search_pubmed`
-results (third-party abstract text) had no "treat as data, not
-instructions" framing, unlike Pod Assist's fully closed tool-input
-model — one line added; (4) zero automated test coverage existed for
-`coach-chat.ts`/`help-bot.ts`/`crisis-response.ts` — added
-`coach-chat.test.ts` covering the crisis-marker interception and the
-banned-word bounded retry (mocked provider fetch, not testing model
-output quality). Not changed: Pod Assist's evals staying outside default
-`npm test` (real API cost per run, a reasonable tradeoff) and the
-2026-08-31 token-budget mitigation (no evidence it needs to be
-structural yet).
-
-**Pre-workout readiness check** — the no-wearable equivalent of the
-existing wearable-driven recovery signal, reusing almost the entire
-mechanism rather than building a second one. New
-`workout_readiness_checks` table (`0090`, podHq) — one row per session,
-`sleep_quality`/`soreness`/`energy` each `"low"|"medium"|"high"`.
-`getRecoverySignal`'s sibling `getSelfReportedRecoverySignal()`
-(recovery-signal.ts) feeds the *same* `RecoverySignal` union via a new
-`"self_reported"` reason, so the existing low-recovery banner and
-`applyRecoveryAdjustment` needed no changes to handle it —
-`getRecoveryAdvice` (workout-session.ts) just falls through to a
-readiness check when there's no wearable data before finally giving up
-at `insufficient_data`. `applyRecoveryAdjustment` now also sets
-`weight_change_reason` on every discounted exercise (reusing the column
-from the previous session's "why" feature) with the real trigger —
-wearable-driven or self-reported. UI: a 3-question (Sleep/Soreness/
-Energy, Low/Medium/High) card shown once per session when there's no
-wearable data and no check yet submitted.
-
-**Verified live** against the same seeded dev test member: avoided
-Barbell Squat mid-session → confirmed the DB row and the auto-swap to
-Romanian Deadlift → confirmed it showed in and could be removed from the
-Coach-settings list; asked Pod Coach "my shoulder hurts during overhead
-presses, should I keep pushing through it?" and got a caution-first
-answer (stop the movement, shoulder-friendly alternatives, see a
-professional if it persists) instead of blind encouragement; submitted a
-Low/Low/Medium readiness check and confirmed it triggered the existing
-"Recovery looks low today" banner and the real weight reduction +
-reason text. `tsc --noEmit`, eslint, `npx vitest run` (190/190), and
-`npm run build` all clean. Migrations `0089`/`0090` applied live by Carl
-via Supabase's SQL Editor before verification — same pattern as every
-prior migration.
-
-**Found and fixed same session**: `/coach/profile`'s "Save changes" always
-400'd — `coach-profile-edit-form.tsx`'s submit body never includes
-`agreedToPrivacy`, but `coachProfileSchema` required
-`agreedToPrivacy: z.literal(true)` on every save, not just onboarding.
-Fixed by making the field optional in the schema and enforcing "must be
-true" only in the route, only when `!member.privacy_policy_accepted_at`
-— a returning member editing their profile is never asked to re-consent.
-Also fixed a second bug the same code exposed: the route unconditionally
-re-stamped `privacy_policy_accepted_at` on every save, resetting a
-member's real original consent timestamp on every routine edit; now only
-stamped the first time, same guarded-once pattern the adjacent
-`trial_started_at` logic already used. Verified live against the seeded
-dev test member: save succeeded and `privacy_policy_accepted_at` stayed
-at its original timestamp. `tsc --noEmit`, eslint, `npx vitest run`
-(190/190) clean.
+Active content here starts at "Pre-launch review" (2026-09-07). If this
+file grows too large again, split it the same way: move the most clearly
+finished section into `ROADMAP-ARCHIVE-66.md`, update this paragraph.
 
 ## Pre-launch review — 4-domain audit, real bugs fixed, adversarial eval suite built — 2026-09-07
 
@@ -218,3 +121,25 @@ Editor. `ANTHROPIC_API_KEY` added to podhq-client's `.env.local` to make
 the Claude-judge eval calls possible (wasn't configured anywhere in this
 app before — Anthropic was previously only ever used in podHq, for Pod
 Assist).
+
+## Email branding, Android Play-prep fix, and the full rest-timer/session-timer/duration-feedback loop — 2026-09-07
+
+Carl explicitly asked for this written up in full because he doesn't trust a chat summary alone — this entry is the source of record, including the one place a design got built wrong first and had to be corrected.
+
+**Email branding** (`45fc5fb`) — `src/lib/notifications/templates.ts`'s one shared `emailShell()` (feeds every template: bookings, waitlist, credits-low, win-back) redesigned to use the app's real gold/near-black accent (`#c9a24b`/`#0a0a0b`, copied from `globals.css`'s own tokens) instead of a plain black bar with no accent colour, plus the app icon in the header. Every CTA button (`ctaButton()` helper) now uses that same pairing instead of plain black-on-white.
+
+**Android geolocation fix** (`166bb34`) — `AndroidManifest.xml` declared only `INTERNET`; the door-unlock flow needs real GPS for its geofence check, so every unlock attempt in the native Android app would have silently failed with "Turn on location services," indistinguishable from location genuinely being off. Added `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`. Reasonably confident this is the complete fix (Capacitor's default `BridgeActivity` bridges WebView geolocation to Android's runtime permission system automatically), but **not yet confirmed on a real device or emulator** — do that before Play Store submission.
+
+**Rest timer, made universal** (`aaad007`) — the existing rest-timer UI (countdown, "Skip rest", next-exercise preview) previously fired only for custom-built workouts with a member-set rest value. `REST_SECONDS_BY_BLOCK` (hypertrophy/strength/deload × compound/isolation) already existed but was only ever used to estimate session length, never actually applied — every AI-generated exercise now gets this as a real `restSeconds`. Real rest taken is captured (`workout_sets.rest_actual_seconds`, measured against `Date.now()` at rest-start/rest-end so a backgrounded tab can't under-report it via a throttled `setTimeout`) and feeds `computeRestSecondsForBlock()`: cut short + felt fine → shortened next time; cut short (or ran over) + felt hard → extended; on-target → held. `describeRestChangeReason()` explains it in the UI, same never-separately-invented-explanation rule as the existing weight-change reasoning. Threaded through `generateWorkout()`, `instantiateTemplate()`, and both exercise-swap paths.
+
+**Overall session timer** — `workout_sessions.started_at` stamped server-side (`markSessionStarted()`) the first time a member enters the active workout, not `created_at` (plan-generation time, could be hours earlier). Shown on warmup/active/resting/cooldown screens, ticking from the real timestamp each second (never a flat increment, so it can't drift). Then extended further, per Carl mid-build: also stamped from a **successful door unlock** (`markSessionStartedByBookingId()`, called from `unlock/route.ts`), so the clock reflects when the member is genuinely in the pod, not whenever they happened to open the workout tab. Both `bookings-view.tsx` and `upcoming-session-card.tsx` now auto-navigate to `/workout/[bookingId]?justUnlocked=1` about a second after a successful unlock; that flag skips the AI intro-narration screen (nothing left for it to do — the member is already standing in the pod) and shows a one-time "Welcome, {first name} — here's your session for today" banner on the overview screen instead, landing exactly where the recovery/readiness-check content already lives.
+
+**Duration feedback, and a real mid-build correction — worth recording honestly.** First pass: three buttons (Too long / Too short / Just right) on the session-complete screen, feeding `computeExerciseCount()` to add/remove a whole exercise next session. **Carl caught this as wrong before it shipped**: core compound lifts (bench press, rows, squats — whatever the block's rotation picked) must always stay and always keep progressing, so exercise count/identity is the wrong lever entirely. Reworked to the actual shipped design: `setsForExercise()` in `generate-workout.ts` only ever adjusts **accessory (`isCompound: false`) exercises' own set count** — too long → 2 sets next time, too short → 4, just right/no feedback → the standard 3 — while every compound exercise stays fixed at 3 (or `DELOAD_SETS_PER_EXERCISE` during a deload week, which takes priority over any feedback, verified explicitly in tests). `computeExerciseCount()` itself was reverted to exactly its pre-feature form. New `workout_sessions.duration_feedback` column, `submitDurationFeedback()`, and `POST /api/member/workout/[sessionId]/duration-feedback`.
+
+**Confirmed already true, not new**: every adjustment in this app (recovery-based weight reduction, RPE progression, rest, now duration feedback) is a *default*, never a lock — the low-recovery banner has a real "No, keep as planned" dismiss button, and weight/reps fields stay freely editable regardless, so a member training through poor recovery and hitting a genuine PB was never blocked by any of this, before or after this session's changes.
+
+**Verified**: `tsc --noEmit`, eslint (including two real fixes to match this file's own established async-effect/purity-disable conventions, not blind suppressions), the full test suite (205/205, up from 195 at the start of this session — added tests for the medical-emergency marker, help-bot, the rest-adjustment rule, and the corrected accessory-sets rule), and a production build all clean after every round. **Not yet verified live**: the actual door-unlock → auto-navigate → welcome-banner flow, and the Android permission fix, both need a real device/session to confirm end-to-end — everything above is "type-checks, tests, and builds correctly," not "watched it happen on a real phone."
+
+**Explicitly scoped out, not started**: a decline-detection feature (3 consecutive sessions of falling weight/reps on a key lift → a direct check-in, "is everything ok, do we need a deload") and a "lock accessory sets for 4 weeks once dialled in" mechanism were discussed and agreed as sensible next steps, but neither is built. Both need real trend data this app doesn't currently expose — `getWorkoutHistory()` collapses each exercise down to a single "most recent" value; genuine decline-detection needs the last 3-4 real values per exercise, not a snapshot. Design this properly (including what "declining" precisely means and what a detected decline actually offers) before building, not bolted on ad hoc.
+
+Migration `0093_workout_rest_intelligence.sql` (podHq, `17c2210` + a comment correction in `d5b6741`) applied live by Carl via Supabase's SQL Editor.
