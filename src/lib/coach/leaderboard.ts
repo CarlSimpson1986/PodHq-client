@@ -10,6 +10,32 @@ export interface LeaderboardEntry {
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Supabase/PostgREST caps a single request at 1000 rows and truncates
+// silently past that (documented, hit-in-production bug class — see
+// podHq's ROADMAP.md "Data pipeline" section). These three leaderboard
+// queries are bounded by opt-in membership and a date window, so they're
+// low-risk today, but nothing here actually enforced that — found in the
+// 2026-09-07 pre-launch review. Pages through .range() until a partial
+// page comes back, same pattern podHq's dashboard.ts/revenue.ts already
+// use for Revenue/attendance.
+const PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(
+  buildPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await buildPage(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return rows;
+}
 // How far back the streak calculation looks before giving up — a streak
 // genuinely broken more than 3 months ago isn't worth walking further
 // back for.
@@ -67,16 +93,18 @@ export async function getMonthlySessionsLeaderboard(callerMemberId: number): Pro
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 
-  const { data, error } = await admin
-    .from("pod_access_events")
-    .select("member_id, booking_id, attempted_at")
-    .eq("success", true)
-    .in("member_id", [...optedIn.keys()])
-    .gte("attempted_at", monthStart);
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<{ member_id: number; booking_id: number; attempted_at: string }>((from, to) =>
+    admin
+      .from("pod_access_events")
+      .select("member_id, booking_id, attempted_at")
+      .eq("success", true)
+      .in("member_id", [...optedIn.keys()])
+      .gte("attempted_at", monthStart)
+      .range(from, to)
+  );
 
   const bookingsByMember = new Map<number, Set<number>>();
-  for (const row of data ?? []) {
+  for (const row of data) {
     const set = bookingsByMember.get(row.member_id) ?? new Set<number>();
     set.add(row.booking_id);
     bookingsByMember.set(row.member_id, set);
@@ -107,15 +135,17 @@ export async function getWeeklyStepsLeaderboard(callerMemberId: number): Promise
   const weekStart = new Date(londonMidnight(new Date()).getTime() - 6 * MS_PER_DAY);
   const weekStartIso = londonDateString(weekStart);
 
-  const { data, error } = await admin
-    .from("member_wearable_data")
-    .select("member_id, steps, recorded_date")
-    .in("member_id", [...optedIn.keys()])
-    .gte("recorded_date", weekStartIso);
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<{ member_id: number; steps: number | null; recorded_date: string }>((from, to) =>
+    admin
+      .from("member_wearable_data")
+      .select("member_id, steps, recorded_date")
+      .in("member_id", [...optedIn.keys()])
+      .gte("recorded_date", weekStartIso)
+      .range(from, to)
+  );
 
   const stepsByMember = new Map<number, number>();
-  for (const row of data ?? []) {
+  for (const row of data) {
     if (row.steps === null) continue;
     stepsByMember.set(row.member_id, (stepsByMember.get(row.member_id) ?? 0) + row.steps);
   }
@@ -154,16 +184,18 @@ export async function getStreakLeaderboard(callerMemberId: number): Promise<Lead
   const admin = createAdminClient();
   const since = new Date(Date.now() - (STREAK_WEEKS_WINDOW + 1) * 7 * MS_PER_DAY);
 
-  const [eventsResult, profilesResult] = await Promise.all([
-    admin
-      .from("pod_access_events")
-      .select("member_id, booking_id, attempted_at")
-      .eq("success", true)
-      .in("member_id", [...optedIn.keys()])
-      .gte("attempted_at", since.toISOString()),
+  const [events, profilesResult] = await Promise.all([
+    fetchAllRows<{ member_id: number; booking_id: number; attempted_at: string }>((from, to) =>
+      admin
+        .from("pod_access_events")
+        .select("member_id, booking_id, attempted_at")
+        .eq("success", true)
+        .in("member_id", [...optedIn.keys()])
+        .gte("attempted_at", since.toISOString())
+        .range(from, to)
+    ),
     admin.from("coach_profiles").select("member_id, sessions_per_week").in("member_id", [...optedIn.keys()]),
   ]);
-  if (eventsResult.error) throw new Error(eventsResult.error.message);
   if (profilesResult.error) throw new Error(profilesResult.error.message);
 
   const targetByMember = new Map<number, number>((profilesResult.data ?? []).map((p) => [p.member_id, p.sessions_per_week]));
@@ -172,7 +204,7 @@ export async function getStreakLeaderboard(callerMemberId: number): Promise<Lead
   const weeklyByMember = new Map<number, Map<number, Set<number>>>();
   const nowMidnight = londonMidnight(new Date()).getTime();
 
-  for (const row of eventsResult.data ?? []) {
+  for (const row of events) {
     const eventMidnight = londonMidnight(new Date(row.attempted_at)).getTime();
     const daysAgo = Math.round((nowMidnight - eventMidnight) / MS_PER_DAY);
     const weeksAgo = Math.floor(daysAgo / 7);

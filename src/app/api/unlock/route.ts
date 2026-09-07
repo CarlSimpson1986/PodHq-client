@@ -33,7 +33,12 @@ export async function POST(request: NextRequest) {
   }
   const { bookingId, latitude, longitude } = parsed.data;
 
-  const rateLimit = await checkRateLimit(user.id, "/api/unlock");
+  // Tighter than the default 100/min (checkRateLimit's fallback) — this
+  // endpoint triggers a real physical door and calls Kisi's API on every
+  // request. 100/min was needless headroom for a real member unlocking a
+  // real door; 10/min still comfortably covers retries after a genuine
+  // failure. Found in the 2026-09-07 pre-launch review.
+  const rateLimit = await checkRateLimit(user.id, "/api/unlock", 10);
   if (!rateLimit.allowed) {
     return NextResponse.json({ status: "error", message: "Too many requests. Slow down." }, { status: 429 });
   }
@@ -194,11 +199,17 @@ export async function POST(request: NextRequest) {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
+      // Found in the 2026-09-07 pre-launch review: no timeout meant a
+      // hanging Kisi API left a member standing at the door waiting on a
+      // request that might never resolve, instead of failing fast so they
+      // can retry. 10s comfortably covers a normal round trip.
+      signal: AbortSignal.timeout(10000),
     });
     success = res.ok;
     kisiResponse = success ? "200 OK" : `${res.status} ${res.statusText}: ${await res.text()}`;
   } catch (err) {
-    kisiResponse = `request failed: ${err instanceof Error ? err.message : String(err)}`;
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
+    kisiResponse = timedOut ? "request timed out after 10s" : `request failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 
   await admin.from("pod_access_events").insert({

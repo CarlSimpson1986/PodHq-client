@@ -101,9 +101,13 @@ function buildCsp(nonce: string) {
   ].join("; ");
 }
 
-// Pilot-scope simplification vs. podHq's proxy.ts: no MFA, no lockout, no
-// forced-password-change gate — a single throwaway test account, not real
-// member onboarding. Revisit before this handles real members.
+// Stale as of the 2026-09-07 pre-launch review — this used to say "pilot-
+// scope, no lockout, a single throwaway test account, not real member
+// onboarding." That's no longer true: login/signup/password-reset all go
+// through checkLoginLockout/checkAuthActionRateLimit (src/lib/auth/
+// lockout.ts), and real members with real Stripe payments exist
+// (Hove/Berryfields). No forced-password-change gate or MFA still exist
+// here vs. podHq's proxy.ts — that part of the comparison still holds.
 // Named `proxy` (not `middleware`) per Next 16's renamed convention —
 // `middleware.ts` still works but is deprecated as of this version.
 export async function proxy(request: NextRequest) {
