@@ -10,7 +10,10 @@ const config: CapacitorConfig = {
   appName: 'My Fit Pod',
   webDir: 'public',
   server: {
-    url: 'https://podhq-client.vercel.app',
+    // Switched from podhq-client.vercel.app 2026-09-08, once
+    // myfitpod.app was registered and confirmed working (real login,
+    // real Hove data) via Vercel Domains.
+    url: 'https://myfitpod.app',
     androidScheme: 'https',
     cleartext: false,
   },
