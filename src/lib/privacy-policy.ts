@@ -26,6 +26,14 @@ import type { WaiverBlock } from "@/lib/waiver-terms";
 // were being collected already (hypertrophy/custom-format training) but
 // were never actually listed as their own category, not something new
 // this session added.
+//
+// Updated 2026-09-08, Play Store submission prep: added a Location data
+// bullet to Section 1 -- /api/unlock/route.ts has always captured and
+// stored the device's real GPS coordinates against every unlock attempt
+// (pod_access_events.reported_latitude/longitude), but this was never
+// disclosed anywhere in the policy. A real, pre-existing gap, not new
+// behaviour -- found while checking what Play Store's Data Safety form
+// would need to declare accurately.
 export const PRIVACY_POLICY: WaiverBlock[] = [
   { type: "heading", text: "Privacy Policy" },
   {
@@ -52,6 +60,10 @@ export const PRIVACY_POLICY: WaiverBlock[] = [
       {
         title: "Booking and usage data",
         body: "which gym, which sessions, credits/membership status, and door-access events (when you unlock a facility via Kisi).",
+      },
+      {
+        title: "Location data (at the moment you unlock a door)",
+        body: "your device's GPS coordinates, captured only when you attempt to unlock a facility, to confirm you're actually at the gym before we open a real physical door. We don't track your location at any other time. This is stored against that specific unlock attempt as part of our access-security audit trail.",
       },
       {
         title: "Health and fitness data (optional)",
