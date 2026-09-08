@@ -178,11 +178,18 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     requiredEquipment: "cable_machine",
   },
   {
+    // Needs the dual-pulley cable machine specifically (a handle per side,
+    // pulled together) — Hove's own actual seated row setup, per Carl
+    // (2026-09-08). Not a separate EquipmentType/requiredEquipment value —
+    // per the 2026-08-24 call in types.ts, "cable_machine" deliberately
+    // stays one category covering both dual- and single-pulley setups, and
+    // a pulley-count requirement belongs in the exercise's own name/copy,
+    // same convention as lat_pulldown_v_grip/lat_pulldown_double_handle.
     key: "seated_row",
-    name: "Seated Row",
+    name: "Dual-Pulley Seated Row",
     muscleGroup: "back",
     avoidIfInjury: ["back", "elbow"],
-    safetyTip: "Keep your back straight and squeeze your shoulder blades together. Don't round forward at the start.",
+    safetyTip: "Using a handle in each hand, keep your back straight and squeeze your shoulder blades together. Don't round forward at the start.",
     isCompound: true,
     isConditioning: false,
     requiredEquipment: "cable_machine",
