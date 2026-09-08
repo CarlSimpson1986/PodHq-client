@@ -120,6 +120,31 @@ export interface RecentSessionSummary {
   muscleGroups: string[];
 }
 
+// Decline-detection (2026-09-08) — one real logged appearance of an
+// exercise, i.e. one session where it was actually done with a real
+// weight+reps completed set. repsActual/weightActualKg are always present
+// (an appearance is only ever recorded when both exist — see
+// getWorkoutHistory's second trend-building pass below); rpe stays
+// nullable, same "no signal, don't guess" treatment as everywhere else in
+// this file.
+export interface ExerciseAppearance {
+  sessionId: number;
+  weightActualKg: number;
+  repsActual: number;
+  rpe: number | null;
+}
+
+// Newest-first, capped at DECLINE_TREND_MAX_APPEARANCES appearances — see
+// decline-detection.ts's detectDecline for what actually gets read from
+// this (the last 3 are all it needs; one extra of headroom here costs
+// nothing and avoids an off-by-one against that constant changing later).
+export interface ExerciseTrend {
+  exerciseKey: string;
+  appearances: ExerciseAppearance[];
+}
+
+const DECLINE_TREND_MAX_APPEARANCES = 4;
+
 // Self-reported once at session completion (2026-09-07, Carl: "how was
 // your workout — too long, too short, just right — then it auto
 // adjusts"). Plain TS union, not a DB CHECK constraint — same "burned
@@ -136,7 +161,12 @@ export type DurationFeedback = "too_long" | "too_short" | "just_right";
 export async function getWorkoutHistory(
   memberId: number,
   limit = 6
-): Promise<{ history: ExerciseHistoryEntry[]; lastSession: RecentSessionSummary | null; lastDurationFeedback: DurationFeedback | null }> {
+): Promise<{
+  history: ExerciseHistoryEntry[];
+  lastSession: RecentSessionSummary | null;
+  lastDurationFeedback: DurationFeedback | null;
+  trends: ExerciseTrend[];
+}> {
   const admin = createAdminClient();
 
   const { data: sessions, error: sessionsError } = await admin
@@ -147,7 +177,7 @@ export async function getWorkoutHistory(
     .limit(limit);
 
   if (sessionsError) throw new Error(sessionsError.message);
-  if (!sessions || sessions.length === 0) return { history: [], lastSession: null, lastDurationFeedback: null };
+  if (!sessions || sessions.length === 0) return { history: [], lastSession: null, lastDurationFeedback: null, trends: [] };
 
   // The most recent session's own feedback, regardless of whether it (or
   // any session) has exercises to build the rest of this function's
@@ -162,12 +192,12 @@ export async function getWorkoutHistory(
     .in("session_id", sessionIds);
 
   if (exercisesError) throw new Error(exercisesError.message);
-  if (!exercises || exercises.length === 0) return { history: [], lastSession: null, lastDurationFeedback };
+  if (!exercises || exercises.length === 0) return { history: [], lastSession: null, lastDurationFeedback, trends: [] };
 
   const exerciseIds = exercises.map((e) => e.id);
   const { data: sets, error: setsError } = await admin
     .from("workout_sets")
-    .select("exercise_id, set_number, weight_actual_kg, rpe, rest_actual_seconds, completed_at")
+    .select("exercise_id, set_number, weight_actual_kg, reps_actual, rpe, rest_actual_seconds, completed_at")
     .in("exercise_id", exerciseIds)
     .not("completed_at", "is", null);
 
@@ -255,10 +285,45 @@ export async function getWorkoutHistory(
     ...new Set(exercises.filter((e) => e.session_id === mostRecentSessionId).map((e) => e.muscle_group)),
   ];
 
+  // Third pass, for decline-detection: one "appearance" per session an
+  // exercise key actually ran in, newest-first (sessions is already
+  // ordered that way), capped per key once enough real appearances are
+  // found. Reuses the same "highest set_number wins" tie-break as the
+  // lastWeightKg/lastRpe pass above (RPE is only ever recorded on an
+  // exercise's last set) — but per session per key, not globally, since a
+  // trend needs one data point per appearance, not just the single latest.
+  // A session's exercise instance with no completed set carrying BOTH a
+  // real weight and real reps (e.g. a duration-based hold, or an
+  // incomplete set) contributes no appearance at all — it's silently
+  // skipped rather than counted as a data point with a guessed value,
+  // same "no signal, don't fabricate one" posture as everywhere else here.
+  const trendAppearancesByKey = new Map<string, ExerciseAppearance[]>();
+  for (const session of sessions) {
+    for (const exercise of exercises.filter((e) => e.session_id === session.id)) {
+      const existing = trendAppearancesByKey.get(exercise.exercise_key) ?? [];
+      if (existing.length >= DECLINE_TREND_MAX_APPEARANCES) continue;
+
+      let winner: { weight_actual_kg: number; reps_actual: number; rpe: number | null; set_number: number } | null = null;
+      for (const set of sets ?? []) {
+        if (set.exercise_id !== exercise.id) continue;
+        if (set.weight_actual_kg === null || set.reps_actual === null) continue;
+        if (!winner || set.set_number > winner.set_number) {
+          winner = { weight_actual_kg: set.weight_actual_kg, reps_actual: set.reps_actual, rpe: set.rpe, set_number: set.set_number };
+        }
+      }
+      if (!winner) continue;
+
+      existing.push({ sessionId: session.id, weightActualKg: winner.weight_actual_kg, repsActual: winner.reps_actual, rpe: winner.rpe });
+      trendAppearancesByKey.set(exercise.exercise_key, existing);
+    }
+  }
+  const trends: ExerciseTrend[] = [...trendAppearancesByKey.entries()].map(([exerciseKey, appearances]) => ({ exerciseKey, appearances }));
+
   return {
     history: [...latestByKey.values()],
     lastSession: lastSessionMuscleGroups.length > 0 ? { muscleGroups: lastSessionMuscleGroups } : null,
     lastDurationFeedback,
+    trends,
   };
 }
 

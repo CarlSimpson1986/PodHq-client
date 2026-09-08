@@ -137,6 +137,11 @@ interface WorkoutSessionDetail {
   // Overall session timer (2026-09-07) — when the member actually entered
   // the active workout, null until markSessionStarted stamps it.
   startedAt: string | null;
+  // Decline-detection (2026-09-08) — a compound lift's catalog key, flagged
+  // once at generation time when its e1RM has been non-increasing across
+  // its last 3 real appearances without RPE easing off. Null for the
+  // overwhelming majority of sessions.
+  declineAlertExerciseKey: string | null;
   exercises: WorkoutExercise[];
   excludedExerciseKeys: string[];
   recoveryAdvice: RecoveryAdvice;
@@ -490,6 +495,7 @@ export function WorkoutView({
   const [avoidingExerciseId, setAvoidingExerciseId] = useState<number | null>(null);
   const [avoidMessage, setAvoidMessage] = useState<{ exerciseId: number; text: string } | null>(null);
   const [recoveryDismissed, setRecoveryDismissed] = useState(false);
+  const [declineAlertDismissed, setDeclineAlertDismissed] = useState(false);
   const [applyingRecovery, setApplyingRecovery] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   // Pre-workout readiness check (2026-09-06) — answers build up locally as
@@ -2094,6 +2100,23 @@ export function WorkoutView({
                 No, keep as planned
               </button>
             </div>
+          </div>
+        )}
+
+        {!hasProgress && !declineAlertDismissed && detail.declineAlertExerciseKey && (
+          <div className="rounded-lg border border-card-light-border bg-card-light-foreground/5 p-4">
+            <p className="text-sm font-semibold">Worth a check-in</p>
+            <p className="mt-1 text-sm text-card-light-muted">
+              Your {detail.exercises.find((e) => e.key === detail.declineAlertExerciseKey)?.name ?? "lift"} has dropped the last 3 times you did it —
+              everything ok? Might be worth a deload week.
+            </p>
+            <button
+              type="button"
+              onClick={() => setDeclineAlertDismissed(true)}
+              className="mt-3 rounded-lg border border-card-light-border px-4 py-2 text-sm font-medium"
+            >
+              Got it
+            </button>
           </div>
         )}
 

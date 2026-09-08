@@ -22,7 +22,8 @@ import { EXERCISE_CATALOG, type MuscleGroup } from "@/lib/coach/exercise-catalog
 import { narrateSessionIntro, narratePostSession } from "@/lib/coach-bot";
 import { getBlockHistory } from "@/lib/coach/training-blocks";
 import { getActiveBlock } from "@/lib/coach/training-block-state";
-import { DELOAD_WEIGHT_MULTIPLIER, type BlockType, type EquipmentType } from "@/lib/coach/types";
+import { DELOAD_WEIGHT_MULTIPLIER, DECLINE_CHECK_HISTORY_LOOKBACK_SESSIONS, type BlockType, type EquipmentType } from "@/lib/coach/types";
+import { findDeclineAlertExerciseKey } from "@/lib/coach/decline-detection";
 import { getWearableConnection, getLatestWearableSnapshot, getRecentWearableSnapshots } from "@/lib/data/wearables";
 import { getRecoverySignal, getSelfReportedRecoverySignal, type RecoverySignal } from "@/lib/coach/recovery-signal";
 import { getReadinessCheck, logReadinessCheck, type ReadinessCheckAnswers } from "@/lib/coach/readiness-check";
@@ -133,6 +134,11 @@ interface SessionExerciseDetail {
   // (plan-generation time, which can be well before the member actually
   // starts — a session generated at booking time, opened hours later).
   startedAt: string | null;
+  // Decline-detection (2026-09-08) — the catalog key of a compound lift
+  // flagged as declining over its last 3 real appearances, computed once at
+  // generation time (see findDeclineAlertExerciseKey). Null for the
+  // overwhelming majority of sessions.
+  declineAlertExerciseKey: string | null;
   exercises: WorkoutExercise[];
 }
 
@@ -560,7 +566,13 @@ async function generateAndPersistSession(
     throw new Error("coach_profile_missing");
   }
 
-  const { history, lastSession, lastDurationFeedback } = await getWorkoutHistory(memberId);
+  // Decline-detection (2026-09-08) needs the last 3 real appearances of a
+  // compound lift, and under an A/B/C rotation a given lift only appears in
+  // roughly 1 of every 3 sessions — DECLINE_CHECK_HISTORY_LOOKBACK_SESSIONS
+  // (15) replaces the default 6 here specifically so `trends` below has a
+  // real chance of holding enough data. Every other getWorkoutHistory call
+  // site (swapExercise, the post-session change preview) keeps the default.
+  const { history, lastSession, lastDurationFeedback, trends } = await getWorkoutHistory(memberId, DECLINE_CHECK_HISTORY_LOOKBACK_SESSIONS);
   const activeBlock = await resolveActiveBlock(memberId, profile);
   const avoidedKeys = await getAvoidedExerciseKeys(memberId);
 
@@ -604,6 +616,12 @@ async function generateAndPersistSession(
     templateId = templated?.templateId ?? null;
   }
 
+  // Computed once, at generation time, from the same plan/trend data
+  // already in hand — never a live query on every page load. Null for the
+  // overwhelming majority of sessions (no qualifying decline). See
+  // decline-detection.ts.
+  const declineAlertExerciseKey = findDeclineAlertExerciseKey(plan, trends);
+
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
     .insert({
@@ -612,6 +630,7 @@ async function generateAndPersistSession(
       resource_id: resourceId,
       status: "generated",
       template_id: templateId,
+      decline_alert_exercise_key: declineAlertExerciseKey,
     })
     .select("id")
     .single();
@@ -965,7 +984,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
   const { data: session, error: sessionError } = await admin
     .from("workout_sessions")
     .select(
-      "id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps, target_rounds, elapsed_seconds, work_seconds, rest_seconds, rest_between_rounds_seconds, started_at"
+      "id, status, format, time_cap_seconds, rounds_completed, partial_round_exercise_index, partial_round_reps, target_rounds, elapsed_seconds, work_seconds, rest_seconds, rest_between_rounds_seconds, started_at, decline_alert_exercise_key"
     )
     .eq("id", sessionId)
     .single();
@@ -999,6 +1018,7 @@ export async function loadSessionDetail(sessionId: number): Promise<SessionExerc
     restSeconds: session.rest_seconds,
     restBetweenRoundsSeconds: session.rest_between_rounds_seconds,
     startedAt: session.started_at,
+    declineAlertExerciseKey: session.decline_alert_exercise_key,
     exercises: (exercises ?? []).map((e) => ({
       id: e.id,
       key: e.exercise_key,

@@ -266,6 +266,17 @@ export const BLOCK_HIGH_RPE_THRESHOLD = 0.5;
 // recommendation either way.
 export const BLOCK_MIN_RPE_SAMPLE = 3;
 
+// Decline-detection (2026-09-08) — how many recent workout_sessions
+// getWorkoutHistory pulls when building the per-exercise trend data
+// detectDecline needs. Deliberately larger than the default 6 sessions
+// every other getWorkoutHistory caller uses (that's plenty for a single
+// most-recent weight/RPE value, but a lift only appears in roughly 1 of
+// every 3 sessions under an A/B/C rotation, so 6 sessions risks catching
+// fewer than the 3 real appearances the rule needs) — only the session-
+// generation call site in workout-session.ts uses this; swapExercise and
+// the post-session preview keep the default.
+export const DECLINE_CHECK_HISTORY_LOOKBACK_SESSIONS = 15;
+
 // Recovery signal (Health Centre) — same category as the block-change
 // thresholds above: deliberately invented, defensible heuristics for a
 // member-confirmed suggestion, not literature-cited numbers and never
