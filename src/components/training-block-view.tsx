@@ -40,6 +40,8 @@ const buttonClass =
 const secondaryButtonClass =
   "w-full rounded-lg border border-card-light-border px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50";
 
+const LOAD_TIMEOUT_MS = 8000;
+
 export function TrainingBlockView() {
   const [state, setState] = useState<TrainingBlockState | null>(null);
   const [phase, setPhase] = useState<BlockPhase | null>(null);
@@ -48,9 +50,18 @@ export function TrainingBlockView() {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState<BlockType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A stuck-forever spinner with no fallback, found live 2026-09-08 (root
+  // cause was an automated test tab being throttled, not a real network
+  // hang — but a genuinely slow/dropped request on a real member's device
+  // would hit this same dead end with no way out except a manual refresh).
+  // After LOAD_TIMEOUT_MS with no response, offer an explicit retry rather
+  // than spin indefinitely.
+  const [timedOut, setTimedOut] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setTimedOut(false);
+    const timeoutId = setTimeout(() => setTimedOut(true), LOAD_TIMEOUT_MS);
     try {
       const res = await fetch("/api/member/training-block");
       const body = await res.json();
@@ -61,6 +72,7 @@ export function TrainingBlockView() {
         setAllowedBlockTypes(body.allowedBlockTypes ?? []);
       }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, []);
@@ -90,6 +102,16 @@ export function TrainingBlockView() {
   }
 
   if (loading) {
+    if (timedOut) {
+      return (
+        <div className="text-center">
+          <p className="text-sm text-card-light-muted">This is taking longer than expected.</p>
+          <button type="button" onClick={load} className="mt-2 text-sm font-semibold underline">
+            Retry
+          </button>
+        </div>
+      );
+    }
     return <p className="text-center text-sm text-card-light-muted">Loading...</p>;
   }
 

@@ -18,6 +18,18 @@ import {
   TrophyIcon,
 } from "@/components/icons";
 
+// Defensive display only — GENDER_OPTIONS (lib/validation/access.ts) is
+// already clean, human-readable text ("Prefer not to say", not
+// "prefer_not_to_say"), so a real signup through /access/contact never
+// produces a raw enum value here. Found live 2026-09-08 on a dev/test
+// account whose gender value predates that clean format; this stops any
+// future stray value (bad seed data, a manual DB edit, a schema-era
+// mismatch) from ever surfacing as raw snake_case to a real member.
+function formatGender(value: string): string {
+  if (!/^[a-z0-9_]+$/.test(value)) return value;
+  return value.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 // timeZone pinned — see bookings-view.tsx's formatSlot for why (same
 // hydration-mismatch bug, found live 2026-08-17).
 function formatDate(iso: string) {
@@ -250,7 +262,7 @@ export function ProfileView({
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-card-light-muted">Gender</span>
-                <span className="text-right font-medium">{gender ?? "Not provided"}</span>
+                <span className="text-right font-medium">{gender ? formatGender(gender) : "Not provided"}</span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-card-light-muted">Address</span>

@@ -315,7 +315,9 @@ export function BookingGrid({
         </div>
         <div className="mx-auto mt-6 flex w-full max-w-md items-center justify-between rounded-xl border border-card-border px-4 py-3">
           <div>
-            <p className="text-2xl font-semibold tabular-nums text-foreground">{credits}</p>
+            {/* Floored at 0 for display only, same reasoning as the home
+                screen's credits count — see src/app/page.tsx. */}
+            <p className="text-2xl font-semibold tabular-nums text-foreground">{Math.max(credits, 0)}</p>
             <p className="text-xs text-muted-foreground">credits available</p>
           </div>
           <Link

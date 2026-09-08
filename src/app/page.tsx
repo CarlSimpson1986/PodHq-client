@@ -143,7 +143,14 @@ export default async function HomePage() {
             <p className="mt-1 text-sm text-card-light-muted">Browse personal trainers at your gym and get in touch.</p>
           </Link>
 
-          <p id="tour-credits" className="text-center text-sm text-muted-foreground">{credits} credits available</p>
+          {/* Floored at 0 for display only — the real (possibly negative)
+              balance still gates booking server-side. A genuinely negative
+              balance is a known, legitimate state (e.g. a refund clawing
+              back a purchase whose credit was already spent), but showing
+              a bare negative number to a member with no explanation reads
+              as broken rather than "you have none left." Found live
+              2026-09-08. */}
+          <p id="tour-credits" className="text-center text-sm text-muted-foreground">{Math.max(credits, 0)} credits available</p>
         </div>
       </div>
       <OnboardingTour tourCompletedAt={member.tour_completed_at} memberName={member.name} gym={member.gym} />

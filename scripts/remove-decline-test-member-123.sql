@@ -35,6 +35,15 @@ delete from workout_sessions where id = 94;
 -- scripts/grant-test-credit-member-151.sql) and the booking_used (-1) it
 -- was spent on. Deleting only one would leave the ledger net -1 or +1
 -- instead of back to zero.
+--
+-- FIX (2026-09-08): the first run of this script left booking 180 behind
+-- -- pod_access_events.booking_id has a foreign key to bookings(id)
+-- (0009_pod_booking.sql) that this script never accounted for, so the
+-- `delete from bookings` silently failed on a FK violation while every
+-- other statement in the script succeeded. Clearing pod_access_events
+-- first (harmless no-op if no unlock attempt was ever logged for this
+-- booking, which is the expected case here) fixes it for real this time.
+delete from pod_access_events where booking_id = 180;
 delete from bookings where id = 180 and member_id = 151;
 delete from credits where member_id = 151 and (
   (reason = 'manual_grant' and amount = 1) or booking_id = 180
