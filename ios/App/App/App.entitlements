@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- com.apple.developer.healthkit.access (Clinical Health Records
+	     scopes) deliberately omitted — this app only ever reads basic
+	     fitness/vitals data (steps, sleep, resting heart rate, HRV), never
+	     clinical records, so that key doesn't apply here. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+</dict>
+</plist>

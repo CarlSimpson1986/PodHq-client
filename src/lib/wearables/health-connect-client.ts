@@ -3,12 +3,29 @@
 import { Capacitor } from "@capacitor/core";
 import { Health, type HealthSample, type HealthDataType } from "@capgo/capacitor-health";
 
-// Health Connect only exists as a native Android API — there's no web/PWA
-// fallback (unlike Fitbit, which is a plain OAuth flow that works in any
-// browser). Gate every entry point on this so the option only ever
-// appears inside the native Android app, never the PWA or iOS.
-export function isHealthConnectSupported(): boolean {
-  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+// On-device health data (Health Connect on Android, HealthKit on iOS)
+// only exists as a native API — there's no web/PWA fallback (unlike
+// Fitbit, which is a plain OAuth flow that works in any browser). Gate
+// every entry point on this so the option only ever appears inside a
+// native app, never the PWA. iOS support added 2026-09-09 — untested on
+// a real device/simulator (no Mac available this session), verified only
+// via @capgo/capacitor-health's own iOS Swift source supporting the same
+// HealthDataType identifiers this file already reads.
+export function isOnDeviceHealthSupported(): boolean {
+  if (!Capacitor.isNativePlatform()) return false;
+  const platform = Capacitor.getPlatform();
+  return platform === "android" || platform === "ios";
+}
+
+// Which on-device provider this platform actually is — threaded through
+// to the connect route so a member's connection row (and the label shown
+// to them) reflects their own OS's health app, not a generic one.
+export function onDeviceHealthProvider(): "health_connect" | "healthkit" | null {
+  if (!Capacitor.isNativePlatform()) return null;
+  const platform = Capacitor.getPlatform();
+  if (platform === "android") return "health_connect";
+  if (platform === "ios") return "healthkit";
+  return null;
 }
 
 const READ_TYPES: HealthDataType[] = ["steps", "sleep", "restingHeartRate", "heartRateVariability"];
@@ -133,6 +150,11 @@ async function postSnapshots(snapshots: DailySnapshot[]): Promise<void> {
 // immediate backfilled sync so the member sees real data on the Health
 // tab right away rather than an empty "calibrating" state.
 export async function connectHealthConnect(): Promise<{ connected: boolean; reason?: string }> {
+  const provider = onDeviceHealthProvider();
+  if (!provider) {
+    return { connected: false, reason: "Not supported on this platform." };
+  }
+
   const availability = await Health.isAvailable();
   if (!availability.available) {
     return { connected: false, reason: availability.reason ?? "Health Connect isn't available on this device." };
@@ -143,7 +165,11 @@ export async function connectHealthConnect(): Promise<{ connected: boolean; reas
     return { connected: false, reason: "Permission was declined." };
   }
 
-  const connectRes = await fetch("/api/wearables/health-connect/connect", { method: "POST" });
+  const connectRes = await fetch("/api/wearables/health-connect/connect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider }),
+  });
   if (!connectRes.ok) {
     return { connected: false, reason: "Couldn't save the connection. Try again." };
   }

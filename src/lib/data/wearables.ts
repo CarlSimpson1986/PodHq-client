@@ -2,17 +2,24 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/secret-encryption";
 
-export type WearableProvider = "fitbit" | "health_connect";
+// healthkit added 2026-09-09 alongside iOS support — same on-device,
+// no-token shape as health_connect (Android), just Apple's platform
+// instead of Google's. Kept as a separate provider value rather than
+// reusing "health_connect" for both, since a member should see which of
+// their own OS's health app they actually connected, not a generic label.
+export type WearableProvider = "fitbit" | "health_connect" | "healthkit";
 
 // Discriminated on provider, not a flat refreshToken: string | null — so
 // `connection.provider === "fitbit"` actually narrows refreshToken to
 // string at every call site (e.g. fitbit/refresh/route.ts), instead of
 // every caller needing its own null check/assertion on a field that's
-// only ever null for the other branch. health_connect has no token: the
-// OS holds the permission grant, this app has nothing to encrypt.
+// only ever null for the other branches. health_connect/healthkit have no
+// token: the OS holds the permission grant, this app has nothing to
+// encrypt.
 export type WearableConnection =
   | { memberId: number; provider: "fitbit"; refreshToken: string }
-  | { memberId: number; provider: "health_connect"; refreshToken: null };
+  | { memberId: number; provider: "health_connect"; refreshToken: null }
+  | { memberId: number; provider: "healthkit"; refreshToken: null };
 
 export interface WearableSnapshot {
   recordedDate: string;
@@ -33,8 +40,8 @@ export async function getWearableConnection(memberId: number): Promise<WearableC
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  if (data.provider === "health_connect") {
-    return { memberId: data.member_id, provider: "health_connect", refreshToken: null };
+  if (data.provider === "health_connect" || data.provider === "healthkit") {
+    return { memberId: data.member_id, provider: data.provider, refreshToken: null };
   }
   return { memberId: data.member_id, provider: "fitbit", refreshToken: decryptSecret(data.refresh_token_encrypted) };
 }
@@ -85,16 +92,20 @@ export async function saveWearableConnection(memberId: number, refreshToken: str
 }
 
 // Same upsert-on-member_id shape as saveWearableConnection, but no token
-// — Health Connect's permission grant lives with the OS, not this app.
-// The row's existence is what getWearableConnection/getRecoveryStatus
-// key off of; readings themselves arrive separately via the native app
-// calling saveWearableSnapshot after each on-device read.
-export async function saveHealthConnectConnection(memberId: number): Promise<void> {
+// — the OS (Health Connect on Android, HealthKit on iOS) holds the
+// permission grant, not this app. The row's existence is what
+// getWearableConnection/getRecoveryStatus key off of; readings themselves
+// arrive separately via the native app calling saveWearableSnapshot after
+// each on-device read. Takes the actual provider rather than hardcoding
+// "health_connect" — added 2026-09-09 alongside iOS support, same
+// function serves both on-device platforms since the only difference is
+// which OS granted the permission, not how the row itself is shaped.
+export async function saveOnDeviceHealthConnection(memberId: number, provider: "health_connect" | "healthkit"): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin.from("member_wearable_connections").upsert(
     {
       member_id: memberId,
-      provider: "health_connect",
+      provider,
       refresh_token_encrypted: null,
       updated_at: new Date().toISOString(),
     },

@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { connectHealthConnect, isHealthConnectSupported, syncHealthConnect } from "@/lib/wearables/health-connect-client";
+import {
+  connectHealthConnect,
+  isOnDeviceHealthSupported,
+  onDeviceHealthProvider,
+  syncHealthConnect,
+} from "@/lib/wearables/health-connect-client";
 import type { WearableProvider } from "@/lib/data/wearables";
 
 const NOOP_SUBSCRIBE = () => () => {};
@@ -17,6 +22,7 @@ const dangerButtonClass =
 const PROVIDER_LABEL: Record<WearableProvider, string> = {
   fitbit: "Fitbit (Google Health)",
   health_connect: "Health Connect",
+  healthkit: "Apple Health",
 };
 
 // Redesigned 2026-08-28: per-metric current-value+trend now lives in its
@@ -26,12 +32,13 @@ const PROVIDER_LABEL: Record<WearableProvider, string> = {
 // do better. This card is connection status only now: connect/refresh/
 // disconnect, plus when it last synced.
 //
-// Health Connect added 2026-09-01 as a second option alongside Fitbit —
-// only offered inside the native Android app (isHealthConnectSupported),
-// since it's a device-local API with no PWA/web equivalent. "Refresh" for
-// it re-reads on-device data and re-POSTs rather than hitting the Fitbit
-// refresh route (see health-connect-client.ts for why there's no
-// server-side cron possible for this source).
+// On-device health (Health Connect on Android, HealthKit on iOS added
+// 2026-09-09) added 2026-09-01 as a second option alongside Fitbit — only
+// offered inside a native app (isOnDeviceHealthSupported), since it's a
+// device-local API with no PWA/web equivalent. "Refresh" for it re-reads
+// on-device data and re-POSTs rather than hitting the Fitbit refresh
+// route (see health-connect-client.ts for why there's no server-side cron
+// possible for this source).
 export function WearableConnectionCard({
   connected,
   provider,
@@ -47,13 +54,14 @@ export function WearableConnectionCard({
   const [refreshing, setRefreshing] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // useSyncExternalStore, not a useState+useEffect pair — isHealthConnectSupported()
+  // useSyncExternalStore, not a useState+useEffect pair — isOnDeviceHealthSupported()
   // reads Capacitor's browser-only globals, so the client's first render would
   // compute a real value against the server's stubbed `false`, a genuine
   // hydration mismatch (React error #418), not just the react-hooks/set-state-in-effect
   // lint's cascading-render concern. Same fix already proven for use-install-prompt.ts's
   // standalone/ios detection.
-  const healthConnectAvailable = useSyncExternalStore(NOOP_SUBSCRIBE, isHealthConnectSupported, () => false);
+  const onDeviceHealthAvailable = useSyncExternalStore(NOOP_SUBSCRIBE, isOnDeviceHealthSupported, () => false);
+  const onDeviceProvider = useSyncExternalStore(NOOP_SUBSCRIBE, onDeviceHealthProvider, () => null);
 
   // Opportunistic sync on mount — the "app foreground" trigger mentioned
   // in health-connect-client.ts, since there's no background cron for
@@ -61,7 +69,7 @@ export function WearableConnectionCard({
   // day stale until the next open, not worth surfacing as an error the
   // member has to dismiss on every single page load.
   useEffect(() => {
-    if (connected && provider === "health_connect" && isHealthConnectSupported()) {
+    if (connected && (provider === "health_connect" || provider === "healthkit") && isOnDeviceHealthSupported()) {
       syncHealthConnect()
         .then(() => router.refresh())
         .catch(() => {});
@@ -93,7 +101,7 @@ export function WearableConnectionCard({
     setError(null);
     setRefreshing(true);
     try {
-      if (provider === "health_connect") {
+      if (provider === "health_connect" || provider === "healthkit") {
         await syncHealthConnect();
       } else {
         const res = await fetch("/api/wearables/fitbit/refresh", { method: "POST" });
@@ -146,9 +154,9 @@ export function WearableConnectionCard({
           <a href="/api/wearables/fitbit/connect" className={`${buttonClass} mt-4 block`}>
             Connect Fitbit
           </a>
-          {healthConnectAvailable && (
+          {onDeviceHealthAvailable && (
             <button type="button" onClick={handleConnectHealthConnect} disabled={connecting} className={`${secondaryButtonClass} mt-2`}>
-              {connecting ? "Connecting..." : "Connect Health Connect"}
+              {connecting ? "Connecting..." : `Connect ${onDeviceProvider ? PROVIDER_LABEL[onDeviceProvider] : "Health"}`}
             </button>
           )}
         </>

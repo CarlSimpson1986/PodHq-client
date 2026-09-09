@@ -34,10 +34,12 @@ export async function POST(request: Request) {
 
   // Guards against a stale client still POSTing after the member
   // disconnected (e.g. a background sync that started before disconnect
-  // completed) — without a live health_connect connection row there's
-  // nothing to attribute this sync to.
+  // completed) — without a live on-device connection row there's nothing
+  // to attribute this sync to. Accepts healthkit too since 2026-09-09 —
+  // same route serves both Health Connect (Android) and HealthKit (iOS),
+  // the sync payload shape is identical either way.
   const connection = await getWearableConnection(member.id);
-  if (!connection || connection.provider !== "health_connect") {
+  if (!connection || (connection.provider !== "health_connect" && connection.provider !== "healthkit")) {
     return NextResponse.json({ status: "error", message: "Health Connect isn't connected." }, { status: 403 });
   }
 

@@ -24,6 +24,25 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Found 2026-09-09, same audit that added Android's ACCESS_FINE_LOCATION:
+	     the door-unlock geofence check (src/app/api/unlock/route.ts) calls
+	     plain navigator.geolocation.getCurrentPosition() in the WebView —
+	     without this key, iOS denies it outright with no prompt shown, same
+	     failure mode as the Android gap (a silent "Turn on location
+	     services" error indistinguishable from location genuinely being
+	     off). "When in use" only — this app never needs location in the
+	     background. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>My Fit Pod uses your location to confirm you're at the gym before unlocking the door.</string>
+	<!-- Found 2026-09-09 while scoping HealthKit: only read access is ever
+	     requested (health-connect-client.ts's requestAuthorization call
+	     passes read: READ_TYPES with no write key at all — this app never
+	     writes to HealthKit), so only the share/read usage string is
+	     needed, not NSHealthUpdateUsageDescription. Matches the same
+	     "declare only what's actually used" principle applied to Android's
+	     over-declared Health Connect permissions in the same session. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>My Fit Pod reads your steps, sleep, and heart rate data to calculate a daily readiness score and adjust your training recommendations.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
