@@ -10,7 +10,10 @@ import { NextResponse, type NextRequest } from "next/server";
 // own permission sheet links out to it (see android's strings.xml
 // health_connect_privacy_policy_url), and a privacy policy that requires
 // logging in to read defeats the point.
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/offline", "/privacy"];
+// /delete-account is the same story — Google Play requires a working
+// account-deletion path even for someone who's uninstalled the app or
+// can't sign in (2026-09-09, Play Store submission).
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/offline", "/privacy", "/delete-account"];
 // /api/webhooks/ is called by Stripe's servers, not a member's browser —
 // there's no session cookie to check, so the auth gate below must not
 // redirect it to /login (the route authenticates via Stripe's own
@@ -43,6 +46,7 @@ const PUBLIC_API_EXACT_PATHS = [
   "/api/notifications/training-nudge",
   "/api/health",
   "/api/wearables/sync",
+  "/api/account/delete-request",
 ];
 
 function isPublicPath(pathname: string) {

@@ -13,4 +13,5 @@ export type NotificationEventType =
   | "win_back"
   | "training_nudge"
   | "unanswered_chat_question"
-  | "professional_inquiry";
+  | "professional_inquiry"
+  | "account_deletion_requested";

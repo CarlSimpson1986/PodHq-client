@@ -179,6 +179,27 @@ export function staffNewSignupEmail(input: { memberName: string; gym: string }):
   };
 }
 
+// Manual handling by design (2026-09-09, Play Store account-deletion
+// requirement) -- not self-service, so a real person confirms what's being
+// removed (Stripe subscription status, booking history, etc.) before
+// anything is deleted. memberName/gym are null when the submitted email
+// doesn't match any member row (e.g. a typo, or someone who never actually
+// signed up) -- still forwarded rather than silently dropped, since it's
+// a real submitted request either way.
+export function staffAccountDeletionRequestEmail(input: { email: string; memberName: string | null; gym: string | null }): EmailContent {
+  return {
+    subject: `Account deletion request: ${input.email}`,
+    html: emailShell(`
+      <p><strong>${escapeHtml(input.email)}</strong> has requested their account and data be deleted.</p>
+      ${
+        input.memberName
+          ? `<p>Matched member: <strong>${escapeHtml(input.memberName)}</strong> at <strong>${input.gym}</strong>.</p>`
+          : `<p>No matching member account was found for this email — may be a typo, or an account that was never completed.</p>`
+      }
+    `),
+  };
+}
+
 export function unansweredChatQuestionEmail(input: { memberName: string; gym: string; question: string }): EmailContent {
   return {
     subject: `POD chat couldn't answer: ${input.memberName}`,
