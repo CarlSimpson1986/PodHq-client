@@ -54,4 +54,12 @@
          explicitly asked for. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Found 2026-09-09: neither @capacitor/push-notifications nor
+         firebase-messaging declares this for you. On Android 13+ (this app
+         targets SDK 36), without it the OS won't even show a notifications
+         toggle for this app in system Settings, and
+         PushNotifications.requestPermissions() can't show the runtime
+         prompt at all -- indistinguishable from "denied" with no error. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
