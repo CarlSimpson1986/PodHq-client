@@ -18,7 +18,7 @@
     "@capacitor/push-notifications": "^8.1.2",
     "@capgo/capacitor-health": "^8.10.4",
     "@supabase/ssr": "^0.12.3",
-    "@supabase/supabase-js": "^2.110.8",
+    "@supabase/supabase-js": "^2.115.0",
     "driver.js": "^1.8.0",
     "firebase-admin": "^14.3.0",
     "google-auth-library": "^11.0.2",
