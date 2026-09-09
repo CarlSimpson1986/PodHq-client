@@ -274,9 +274,16 @@ export function BookingGrid({
             <h1 className="text-2xl font-semibold text-foreground">{gym}</h1>
             <p className="mt-1 text-sm text-muted-foreground">Hi {memberName}</p>
           </div>
+          {/* self-start + mt-12 (2026-09-09): pushes this below
+              PodAssistBubble's own top-4/right-4 footprint (~84px tall
+              including its label pill) instead of sitting under it —
+              this is the only page PodAssistBubble shares a corner with a
+              real nav link (every other page it's mounted on relies on a
+              bottom nav for /profile instead, so nothing else was there to
+              collide with). */}
           <Link
             href="/profile"
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-card-border text-foreground hover:bg-card-border"
+            className="flex h-14 w-14 shrink-0 items-center justify-center self-start rounded-full border border-card-border text-foreground hover:bg-card-border mt-12"
           >
             <UserIcon className="h-7 w-7" />
           </Link>
