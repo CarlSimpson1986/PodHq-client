@@ -10,10 +10,15 @@ const config: CapacitorConfig = {
   appName: 'My Fit Pod',
   webDir: 'public',
   server: {
-    // Switched from podhq-client.vercel.app 2026-09-08, once
-    // myfitpod.app was registered and confirmed working (real login,
-    // real Hove data) via Vercel Domains.
-    url: 'https://myfitpod.app',
+    // Found 2026-09-09: myfitpod.app (apex) 308-redirects to
+    // www.myfitpod.app at the Vercel level. Capacitor's native bridge only
+    // injects into pages matching this exact configured authority -- once
+    // the WebView follows that redirect, it lands on a domain Capacitor
+    // doesn't recognise as its own app, so window.Capacitor (and every
+    // plugin bridge -- push, Health Connect, everything) never existed at
+    // all, on every single page load. Pointing directly at the real
+    // canonical domain skips the redirect hop entirely.
+    url: 'https://www.myfitpod.app',
     androidScheme: 'https',
     cleartext: false,
   },
