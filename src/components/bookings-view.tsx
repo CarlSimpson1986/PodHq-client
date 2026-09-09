@@ -293,14 +293,6 @@ export function BookingsView({
       {notifError && (
         <p className="text-xs text-danger">Push notifications couldn&apos;t be set up: {notifError}</p>
       )}
-      {/* TEMPORARY diagnostic (2026-09-09) -- remove once the native push
-          registration gap is found. Visible on the live app immediately
-          on refresh, no rebuild needed, so it doesn't depend on USB/ADB
-          access to Carl's device. */}
-      <p className="text-xs text-card-light-muted">
-        [debug] isNative={String(isNative)} nativePermission={nativePermission} notifPermission=
-        {String(notifPermission)}
-      </p>
       <div className="flex rounded-lg border border-card-light-border p-1">
         {(["upcoming", "past"] as const).map((option) => (
           <button
