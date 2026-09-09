@@ -7,6 +7,8 @@ import type { Booking, PodResource } from "@/lib/data/member";
 import { formatDateParam } from "@/lib/booking-dates";
 import { LockIcon } from "@/components/icons";
 import { subscribeToPush } from "@/lib/push/subscribe";
+import { isNativePushSupported, subscribeToNativePush } from "@/lib/push/native-subscribe";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 
 const STATUS_LABELS: Record<Booking["status"], string> = {
@@ -110,6 +112,26 @@ export function BookingsView({
   const [subscribing, setSubscribing] = useState(false);
   const [notifError, setNotifError] = useState<string | null>(null);
 
+  // The native Android app runs in a system WebView, not Chrome — its own
+  // window.Notification.permission is unreliable there (see
+  // native-subscribe.ts), so it's tracked separately via Capacitor's own
+  // permission check rather than folded into notifPermission above.
+  // Same server/client snapshot split as notifPermission, for the same
+  // hydration reason.
+  const isNative = useSyncExternalStore(NOOP_SUBSCRIBE, () => isNativePushSupported(), () => false);
+  const [nativePermission, setNativePermission] = useState<"unknown" | "granted" | "denied" | "prompt">("unknown");
+
+  useEffect(() => {
+    if (!isNative) return;
+    let cancelled = false;
+    PushNotifications.checkPermissions().then((status) => {
+      if (!cancelled) setNativePermission(status.receive === "prompt-with-rationale" ? "prompt" : status.receive);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNative]);
+
   // Browser permission and "we actually have a saved subscription" can
   // drift apart — e.g. VAPID keys missing server-side once meant every
   // subscribe attempt silently failed after the permission prompt already
@@ -117,16 +139,18 @@ export function BookingsView({
   // "granted" forever once decided) for anyone who'd hit that. If
   // permission is already granted, confirm a subscription actually exists
   // server-side and silently (re)subscribe if not — no prompt needed,
-  // requestPermission() resolves immediately once already decided.
+  // requestPermission()/PushNotifications.register() resolve immediately
+  // once already decided.
   useEffect(() => {
-    if (notifPermission !== "granted") return;
+    const alreadyGranted = isNative ? nativePermission === "granted" : notifPermission === "granted";
+    if (!alreadyGranted) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch("/api/push/subscription-status");
         const body = await res.json();
         if (cancelled || body.status !== "ok" || body.subscribed) return;
-        const result = await subscribeToPush();
+        const result = isNative ? await subscribeToNativePush() : await subscribeToPush();
         if (!cancelled && !result.ok) setNotifError(result.reason);
       } catch (err) {
         // Best-effort — next page load just retries.
@@ -136,15 +160,19 @@ export function BookingsView({
     return () => {
       cancelled = true;
     };
-  }, [notifPermission]);
+  }, [isNative, nativePermission, notifPermission]);
 
   async function enableNotifications() {
     setSubscribing(true);
     setNotifError(null);
-    const result = await subscribeToPush();
-    // No manual permission re-read needed — setSubscribing below triggers a
-    // re-render, and useSyncExternalStore picks up the now-current
-    // Notification.permission value on its own.
+    const result = isNative ? await subscribeToNativePush() : await subscribeToPush();
+    if (isNative) {
+      const status = await PushNotifications.checkPermissions();
+      setNativePermission(status.receive === "prompt-with-rationale" ? "prompt" : status.receive);
+    }
+    // No manual permission re-read needed for the web path — setSubscribing
+    // below triggers a re-render, and useSyncExternalStore picks up the
+    // now-current Notification.permission value on its own.
     setSubscribing(false);
     if (!result.ok) setNotifError(result.reason);
   }
@@ -249,7 +277,7 @@ export function BookingsView({
 
   return (
     <div className="space-y-4">
-      {notifPermission === "default" && (
+      {(isNative ? nativePermission === "prompt" : notifPermission === "default") && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-card-light-border p-3">
           <p className="text-xs text-card-light-muted">Get notified the moment a waitlisted spot opens up.</p>
           <button

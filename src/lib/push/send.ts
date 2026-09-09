@@ -1,5 +1,7 @@
 import "server-only";
 import webpush from "web-push";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 interface SendPushInput {
@@ -29,47 +31,55 @@ function ensureConfigured(): boolean {
   return true;
 }
 
-/**
- * Sends a push notification to every device a member has subscribed on
- * (push_subscriptions can hold more than one per member). Never throws —
- * same shape as src/lib/notifications/resend.ts, so callers can always log
- * the real outcome via notifyFireAndForget rather than an unhandled
- * rejection silently skipping it. A member with zero subscriptions (never
- * granted permission) is not an error — sentCount is just 0.
- *
- * A dead/expired subscription (Resend equivalent: a hard bounce) returns
- * 404/410 from the push service — those rows are deleted here so they
- * don't keep getting retried forever.
- */
-export async function sendPush({ memberId, title, body, url }: SendPushInput): Promise<SendPushResult> {
-  if (!ensureConfigured()) {
-    return { ok: false, sentCount: 0, errorDetail: "VAPID keys not configured" };
-  }
+// The native Android app (Capacitor server.url mode, plain system WebView —
+// see native-subscribe.ts) doesn't reliably receive background browser Web
+// Push, so it registers a real FCM token instead of a push_subscriptions
+// row. Sent to separately here via the Firebase Admin SDK, alongside (not
+// instead of) the web-push loop below, since real browser/PWA visitors
+// still use push_subscriptions. FIREBASE_SERVICE_ACCOUNT_JSON is the
+// service account key JSON (Firebase console → Project settings → Service
+// accounts → Generate new private key), stored as a raw JSON string env
+// var — never committed, same convention as every other secret here.
+let firebaseConfigured = false;
 
-  const admin = createAdminClient();
+function ensureFirebaseConfigured(): boolean {
+  if (firebaseConfigured) return true;
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!serviceAccountJson) return false;
+
+  if (getApps().length === 0) {
+    initializeApp({ credential: cert(JSON.parse(serviceAccountJson)) });
+  }
+  firebaseConfigured = true;
+  return true;
+}
+
+interface SendLegResult {
+  sentCount: number;
+  attemptedCount: number;
+  lastError?: string;
+}
+
+async function sendWebPush(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: number,
+  payload: string
+): Promise<SendLegResult> {
+  if (!ensureConfigured()) return { sentCount: 0, attemptedCount: 0, lastError: "VAPID keys not configured" };
+
   const { data: subscriptions, error } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("member_id", memberId);
+  if (error) return { sentCount: 0, attemptedCount: 0, lastError: error.message };
+  if (!subscriptions || subscriptions.length === 0) return { sentCount: 0, attemptedCount: 0 };
 
-  if (error) {
-    return { ok: false, sentCount: 0, errorDetail: error.message };
-  }
-  if (!subscriptions || subscriptions.length === 0) {
-    return { ok: true, sentCount: 0 };
-  }
-
-  const payload = JSON.stringify({ title, body, url });
   let sentCount = 0;
   let lastError: string | undefined;
-
   for (const sub of subscriptions) {
     try {
       await webpush.sendNotification(
-        {
-          endpoint: sub.endpoint as string,
-          keys: { p256dh: sub.p256dh as string, auth: sub.auth as string },
-        },
+        { endpoint: sub.endpoint as string, keys: { p256dh: sub.p256dh as string, auth: sub.auth as string } },
         payload
       );
       sentCount += 1;
@@ -79,10 +89,74 @@ export async function sendPush({ memberId, title, body, url }: SendPushInput): P
         await admin.from("push_subscriptions").delete().eq("id", sub.id);
       } else {
         lastError = err instanceof Error ? err.message : "Unknown push error";
-        console.error("[push] failed to send", { memberId, subscriptionId: sub.id, error: lastError });
+        console.error("[push] failed to send (web)", { memberId, subscriptionId: sub.id, error: lastError });
       }
     }
   }
+  return { sentCount, attemptedCount: subscriptions.length, lastError };
+}
 
-  return { ok: sentCount > 0 || subscriptions.length === 0, sentCount, errorDetail: lastError };
+async function sendNativePush(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: number,
+  title: string,
+  body: string,
+  url: string
+): Promise<SendLegResult> {
+  if (!ensureFirebaseConfigured()) return { sentCount: 0, attemptedCount: 0, lastError: "Firebase not configured" };
+
+  const { data: tokens, error } = await admin
+    .from("push_device_tokens")
+    .select("id, fcm_token")
+    .eq("member_id", memberId);
+  if (error) return { sentCount: 0, attemptedCount: 0, lastError: error.message };
+  if (!tokens || tokens.length === 0) return { sentCount: 0, attemptedCount: 0 };
+
+  let sentCount = 0;
+  let lastError: string | undefined;
+  for (const device of tokens) {
+    try {
+      await getMessaging().send({
+        token: device.fcm_token as string,
+        notification: { title, body },
+        data: { url },
+      });
+      sentCount += 1;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      // Same "dead endpoint, stop retrying" cleanup as the 404/410 web-push
+      // branch above, FCM's equivalent error codes.
+      if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") {
+        await admin.from("push_device_tokens").delete().eq("id", device.id);
+      } else {
+        lastError = err instanceof Error ? err.message : "Unknown FCM error";
+        console.error("[push] failed to send (native)", { memberId, deviceId: device.id, error: lastError });
+      }
+    }
+  }
+  return { sentCount, attemptedCount: tokens.length, lastError };
+}
+
+/**
+ * Sends a push notification to every device a member has subscribed on —
+ * browser Web Push (push_subscriptions) and native FCM (push_device_tokens)
+ * alike, a member can hold rows in both. Never throws — same shape as
+ * src/lib/notifications/resend.ts, so callers can always log the real
+ * outcome via notifyFireAndForget rather than an unhandled rejection
+ * silently skipping it. A member with zero subscriptions/tokens (never
+ * granted permission) is not an error — sentCount is just 0.
+ */
+export async function sendPush({ memberId, title, body, url }: SendPushInput): Promise<SendPushResult> {
+  const admin = createAdminClient();
+  const payload = JSON.stringify({ title, body, url });
+
+  const [web, native] = await Promise.all([
+    sendWebPush(admin, memberId, payload),
+    sendNativePush(admin, memberId, title, body, url),
+  ]);
+
+  const sentCount = web.sentCount + native.sentCount;
+  const attemptedCount = web.attemptedCount + native.attemptedCount;
+  const errorDetail = [web.lastError, native.lastError].filter(Boolean).join("; ") || undefined;
+  return { ok: sentCount > 0 || attemptedCount === 0, sentCount, errorDetail };
 }

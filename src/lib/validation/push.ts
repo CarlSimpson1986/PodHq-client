@@ -7,3 +7,10 @@ export const pushSubscribeSchema = z
     auth: z.string().min(1),
   })
   .strict();
+
+export const pushRegisterDeviceSchema = z
+  .object({
+    fcmToken: z.string().min(1),
+    platform: z.enum(["android", "ios"]),
+  })
+  .strict();

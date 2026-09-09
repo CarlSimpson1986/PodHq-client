@@ -24,14 +24,14 @@ export async function GET() {
   }
 
   const admin = createAdminClient();
-  const { count, error } = await admin
-    .from("push_subscriptions")
-    .select("id", { count: "exact", head: true })
-    .eq("member_id", member.id);
+  const [webPush, nativePush] = await Promise.all([
+    admin.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("member_id", member.id),
+    admin.from("push_device_tokens").select("id", { count: "exact", head: true }).eq("member_id", member.id),
+  ]);
 
-  if (error) {
+  if (webPush.error || nativePush.error) {
     return NextResponse.json({ status: "error", message: "Could not check subscription." }, { status: 500 });
   }
 
-  return NextResponse.json({ status: "ok", subscribed: (count ?? 0) > 0 });
+  return NextResponse.json({ status: "ok", subscribed: (webPush.count ?? 0) > 0 || (nativePush.count ?? 0) > 0 });
 }
