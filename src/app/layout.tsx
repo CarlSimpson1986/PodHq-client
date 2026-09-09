@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { RegisterServiceWorker } from "@/components/register-service-worker";
+import { NativePushListener } from "@/components/native-push-listener";
 import "./globals.css";
 
 const inter = Inter({
@@ -44,6 +45,7 @@ export default function RootLayout({
     <html lang="en-GB" className={`${inter.variable} h-full antialiased dark`}>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <RegisterServiceWorker />
+        <NativePushListener />
         {children}
       </body>
     </html>
