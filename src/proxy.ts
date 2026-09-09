@@ -61,10 +61,36 @@ const isDev = process.env.NODE_ENV === "development";
 // here — no Turnstile/captcha widget, and this app makes no client-side
 // Supabase calls (CLAUDE.md: all Supabase access goes through API routes),
 // so there's no need for extra script-src/connect-src/frame-src allowances.
-function buildCsp(nonce: string) {
+// Capacitor's native Android bridge (Bridge.java's WebViewLocalServer)
+// injects its own <script> tag directly into the HTML response as it
+// proxies it through to the WebView -- with no CSP nonce, since it has no
+// way to know this app's per-request nonce. Under the strict nonce-based
+// policy below, that unnoced inline script is silently blocked (no console
+// warning without devtools attached) -- meaning window.Capacitor, and every
+// Capacitor plugin bridge (push, Health Connect, etc.), never actually
+// existed in the native app at all. Found 2026-09-09 chasing a push-
+// notification registration that silently never fired.
+//
+// Android WebView's own default User-Agent always includes "; wv)" --
+// added by the OS specifically so servers can tell an app's embedded
+// WebView apart from the real Chrome browser app (which omits it). Not
+// spoof-proof, but this isn't an auth boundary -- myfitpod.app's content
+// isn't secret, this only decides whether to relax script execution for
+// requests that already look like our own native shell.
+function isCapacitorWebView(request: NextRequest) {
+  return request.headers.get("user-agent")?.includes("; wv)") ?? false;
+}
+
+function buildCsp(nonce: string, relaxScriptSrc: boolean) {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    // 'unsafe-inline' is normally ignored by any browser that also honours
+    // a nonce/hash source in the same directive -- dropping the nonce
+    // entirely for WebView requests is what actually lets it take effect,
+    // not just adding it alongside the nonce.
+    relaxScriptSrc
+      ? `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`
+      : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self' data:",
@@ -164,7 +190,7 @@ export async function proxy(request: NextRequest) {
     response = supabaseResponse;
   }
 
-  response.headers.set("Content-Security-Policy", buildCsp(nonce));
+  response.headers.set("Content-Security-Policy", buildCsp(nonce, isCapacitorWebView(request)));
   return response;
 }
 
