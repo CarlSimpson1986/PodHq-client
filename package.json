@@ -17,7 +17,7 @@
     "@capacitor/ios": "^8.5.1",
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/push-notifications": "^8.1.2",
-    "@capgo/capacitor-health": "^8.10.4",
+    "@capgo/capacitor-health": "^8.10.5",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
     "driver.js": "^1.8.0",
