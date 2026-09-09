@@ -34,6 +34,13 @@
 	     background. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>My Fit Pod uses your location to confirm you're at the gym before unlocking the door.</string>
+	<!-- Found 2026-09-09, same audit as the Android camera gap: the
+	     Nutrition tab's barcode scanner (html5-qrcode) calls
+	     navigator.mediaDevices.getUserMedia({video: ...}) — WKWebView
+	     silently denies camera access with no usage string declared, same
+	     failure mode as every other missing-permission bug tonight. -->
+	<key>NSCameraUsageDescription</key>
+	<string>My Fit Pod uses your camera to scan food barcodes when logging meals.</string>
 	<!-- Found 2026-09-09 while scoping HealthKit: only read access is ever
 	     requested (health-connect-client.ts's requestAuthorization call
 	     passes read: READ_TYPES with no write key at all — this app never

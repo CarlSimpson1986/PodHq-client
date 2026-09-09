@@ -75,6 +75,18 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Found 2026-09-09: the Nutrition tab's barcode scanner (html5-qrcode,
+         src/components/nutrition-view.tsx's ScanTab) calls
+         navigator.mediaDevices.getUserMedia({video: ...}) — same failure
+         mode as every other missing-permission bug tonight, WebView
+         silently denies camera access with no manifest permission
+         declared. required="false" on the feature so devices without a
+         camera at all aren't excluded from the Play Store listing over an
+         optional feature (users can still log food by search). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
     <!-- Found 2026-09-09: neither @capacitor/push-notifications nor
          firebase-messaging declares this for you. On Android 13+ (this app
          targets SDK 36), without it the OS won't even show a notifications
