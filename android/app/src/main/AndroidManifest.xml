@@ -33,6 +33,25 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Found 2026-09-09, same audit as POST_NOTIFICATIONS above:
+             without this, Firebase's own SDK auto-builds a system tray
+             notification for a backgrounded app using a small-icon
+             resource id that resolves to 0 with no meta-data declared --
+             a known FCM crash on receipt, not just a cosmetic gap.
+             Points at the existing launcher icon rather than a dedicated
+             monochrome status-bar icon (which doesn't exist yet) -- not
+             ideal visually, but eliminates the crash; a proper single-
+             colour icon is a follow-up, not a blocker. No
+             default_notification_channel_id override -- nothing in this
+             app calls createNotificationChannel(), so pointing at a
+             channel id that doesn't exist would make Android silently
+             drop every notification (Android 8+ requirement); leaving
+             this unset lets Firebase's SDK auto-create its own fallback
+             channel instead, which needs no app code. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
     </application>
 
     <!-- Permissions -->
