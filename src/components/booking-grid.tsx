@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Booking, ActiveReservation, MemberWaitlistSlot, PodResource } from "@/lib/data/member";
-import { UserIcon } from "@/components/icons";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { londonDateParts, londonHour, londonHourOf } from "@/lib/london-time";
 import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
@@ -269,24 +268,11 @@ export function BookingGrid({
   return (
     <>
       <div className="bg-card px-6 pb-8 pt-12 sm:pt-16">
-        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4">
+        <div className="mx-auto flex w-full max-w-md items-center gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{gym}</h1>
             <p className="mt-1 text-sm text-muted-foreground">Hi {memberName}</p>
           </div>
-          {/* self-start + mt-12 (2026-09-09): pushes this below
-              PodAssistBubble's own top-4/right-4 footprint (~84px tall
-              including its label pill) instead of sitting under it —
-              this is the only page PodAssistBubble shares a corner with a
-              real nav link (every other page it's mounted on relies on a
-              bottom nav for /profile instead, so nothing else was there to
-              collide with). */}
-          <Link
-            href="/profile"
-            className="flex h-14 w-14 shrink-0 items-center justify-center self-start rounded-full border border-card-border text-foreground hover:bg-card-border mt-12"
-          >
-            <UserIcon className="h-7 w-7" />
-          </Link>
         </div>
         {/* Shown to every member (2026-08-26) — a membership member can now
             book away from home too, just only by spending a separate
