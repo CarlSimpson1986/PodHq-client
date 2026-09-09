@@ -149,7 +149,8 @@ export function BookingsView({
       try {
         const res = await fetch("/api/push/subscription-status");
         const body = await res.json();
-        if (cancelled || body.status !== "ok" || body.subscribed) return;
+        const alreadySubscribed = isNative ? body.nativeSubscribed : body.webSubscribed;
+        if (cancelled || body.status !== "ok" || alreadySubscribed) return;
         const result = isNative ? await subscribeToNativePush() : await subscribeToPush();
         if (!cancelled && !result.ok) setNotifError(result.reason);
       } catch (err) {

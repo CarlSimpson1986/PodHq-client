@@ -33,5 +33,15 @@ export async function GET() {
     return NextResponse.json({ status: "error", message: "Could not check subscription." }, { status: 500 });
   }
 
-  return NextResponse.json({ status: "ok", subscribed: (webPush.count ?? 0) > 0 || (nativePush.count ?? 0) > 0 });
+  // Split rather than a single combined "subscribed" flag (found
+  // 2026-09-09): a member testing both the browser and the native app
+  // legitimately ends up with rows in both tables, and a combined OR meant
+  // an old web-push row from a browser test silently skipped native
+  // registration forever, with no error — the auto-resubscribe effect
+  // thought there was nothing left to do.
+  return NextResponse.json({
+    status: "ok",
+    webSubscribed: (webPush.count ?? 0) > 0,
+    nativeSubscribed: (nativePush.count ?? 0) > 0,
+  });
 }
