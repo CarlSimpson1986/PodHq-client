@@ -1,3 +1,14 @@
+// Added 2026-09-09: @capacitor/local-notifications' own build.gradle pins
+// jvmToolchain(21) — without this, Gradle demands a locally-installed JDK
+// 21 and fails outright ("Cannot find a Java installation... Toolchain
+// download repositories have not been configured") rather than fetching
+// one itself. This plugin lets Gradle auto-download whatever toolchain a
+// module asks for instead of requiring it pre-installed on every machine
+// that builds this project.
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 include ':app'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
