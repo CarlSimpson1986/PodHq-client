@@ -1,0 +1,6 @@
+Hi David,
+
+Thanks for checking. S&D Group's dealer account is used exclusively for our own gyms (My Fit Pod) -- there are no other, unrelated customers on it. So please go ahead and set the API client permission at the dealer level, so any new gym system we add going forward is automatically accessible without needing it granted individually each time.
+
+Thanks,
+Carl

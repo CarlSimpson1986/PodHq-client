@@ -1,0 +1,3 @@
+Signed-in account has 5 booking credits pre-loaded -- go to Book to try booking a session, no setup needed.
+
+Door-unlock uses real GPS to confirm the member is physically at the gym before unlocking a real door (a safety feature). It will correctly show a "not close enough" error for remote review, since you cannot be physically present at a UK gym. This is expected, not a bug.
