@@ -25,7 +25,7 @@ workflows:
       - name: Set build number from Codemagic build counter
         script: |
           cd ios/App
-          agvtool new-version -all $CM_BUILD_NUMBER
+          agvtool new-version -all $BUILD_NUMBER
       - name: Build ipa for distribution
         script: |
           xcode-project build-ipa \
