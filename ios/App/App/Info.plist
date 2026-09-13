@@ -41,15 +41,22 @@
 	     failure mode as every other missing-permission bug tonight. -->
 	<key>NSCameraUsageDescription</key>
 	<string>My Fit Pod uses your camera to scan food barcodes when logging meals.</string>
-	<!-- Found 2026-09-09 while scoping HealthKit: only read access is ever
-	     requested (health-connect-client.ts's requestAuthorization call
-	     passes read: READ_TYPES with no write key at all — this app never
-	     writes to HealthKit), so only the share/read usage string is
-	     needed, not NSHealthUpdateUsageDescription. Matches the same
-	     "declare only what's actually used" principle applied to Android's
-	     over-declared Health Connect permissions in the same session. -->
+	<!-- Found 2026-09-09 while scoping HealthKit, corrected 2026-09-13 after
+	     a real TestFlight upload was rejected: this app's own code only ever
+	     requests read access (health-connect-client.ts's requestAuthorization
+	     call passes read: READ_TYPES, no write key), but Apple's App Store
+	     Connect binary scan (error 90683) flags NSHealthUpdateUsageDescription
+	     as required anyway, because @capgo/capacitor-health's compiled Swift
+	     plugin code references HealthKit's write-authorization API internally
+	     regardless of whether this app's JS ever calls it. The "declare only
+	     what's used" principle (still correct for Android's Health Connect
+	     permissions, trimmed the same session) doesn't hold here — Apple's
+	     scanner checks the binary's API references, not actual runtime
+	     behaviour. -->
 	<key>NSHealthShareUsageDescription</key>
 	<string>My Fit Pod reads your steps, sleep, and heart rate data to calculate a daily readiness score and adjust your training recommendations.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>My Fit Pod does not write or modify any data in the Health app.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
