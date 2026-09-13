@@ -24,6 +24,13 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- This app only uses standard HTTPS/TLS (Supabase, Kisi, Stripe API
+	     calls) — no custom or proprietary encryption — so it qualifies for
+	     the standard exemption. Declaring this here means Codemagic's
+	     automated TestFlight submission doesn't stall on Apple's export
+	     compliance question on every build. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Found 2026-09-09, same audit that added Android's ACCESS_FINE_LOCATION:
 	     the door-unlock geofence check (src/app/api/unlock/route.ts) calls
 	     plain navigator.geolocation.getCurrentPosition() in the WebView —
