@@ -32,6 +32,8 @@ export default async function ProfilePage() {
       addressLine2={member.address_line2}
       addressCity={member.address_city}
       addressPostcode={member.address_postcode}
+      emergencyContactName={member.emergency_contact_name}
+      emergencyContactPhone={member.emergency_contact_phone}
       waiverSignedAt={member.waiver_signed_at}
       membership={membership}
       accessComplete={isAccessComplete(member)}

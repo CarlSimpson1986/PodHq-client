@@ -13,6 +13,8 @@ export interface Member {
   address_line2: string | null;
   address_city: string | null;
   address_postcode: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
   waiver_signed_name: string | null;
   waiver_signed_at: string | null;
   // Non-null timestamp is "accepted", same shape as waiver_signed_at.

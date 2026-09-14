@@ -96,6 +96,8 @@ export function ProfileView({
   addressLine2,
   addressCity,
   addressPostcode,
+  emergencyContactName,
+  emergencyContactPhone,
   waiverSignedAt,
   membership,
   accessComplete,
@@ -109,6 +111,8 @@ export function ProfileView({
   addressLine2: string | null;
   addressCity: string | null;
   addressPostcode: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
   waiverSignedAt: string | null;
   membership: Membership | null;
   accessComplete: boolean;
@@ -117,6 +121,35 @@ export function ProfileView({
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const [contactName, setContactName] = useState(emergencyContactName ?? "");
+  const [contactPhone, setContactPhone] = useState(emergencyContactPhone ?? "");
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [contactSaved, setContactSaved] = useState(false);
+
+  async function saveEmergencyContact() {
+    setSavingContact(true);
+    setContactError(null);
+    setContactSaved(false);
+    try {
+      const res = await fetch("/api/member/emergency-contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: contactName, phone: contactPhone }),
+      });
+      const body = await res.json();
+      if (body.status !== "ok") {
+        setContactError(body.message ?? "Could not save emergency contact.");
+        return;
+      }
+      setContactSaved(true);
+    } catch {
+      setContactError("Something went wrong. Try again.");
+    } finally {
+      setSavingContact(false);
+    }
+  }
 
   async function cancelMembership() {
     setCancelling(true);
@@ -274,6 +307,46 @@ export function ProfileView({
                 <span className="text-card-light-muted">Waiver signed</span>
                 <span className="text-right font-medium">{waiverSignedAt ? formatDate(waiverSignedAt) : "Not signed"}</span>
               </div>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Emergency contact
+            </h2>
+            <div className="card-light space-y-3 p-4">
+              <p className="text-sm text-card-light-muted">
+                Optional — who we should try to reach if you&apos;re unable to call for help yourself.
+              </p>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-card-light-muted">Name</label>
+                <input
+                  type="text"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="Not provided"
+                  className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-card-light-muted">Phone number</label>
+                <input
+                  type="tel"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="Not provided"
+                  className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm"
+                />
+              </div>
+              {contactError && <p className="text-sm text-danger">{contactError}</p>}
+              {contactSaved && !contactError && <p className="text-sm text-card-light-muted">Saved.</p>}
+              <button
+                onClick={saveEmergencyContact}
+                disabled={savingContact}
+                className="w-full rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {savingContact ? "Saving..." : "Save"}
+              </button>
             </div>
           </section>
 
