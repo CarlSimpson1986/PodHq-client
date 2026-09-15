@@ -9,6 +9,7 @@ import { notifyFireAndForget } from "@/lib/notifications/core";
 import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
 import { staffNewSignupEmail } from "@/lib/notifications/templates";
 import { recordSignupLead } from "@/lib/leads/record-signup-lead";
+import { getCanonicalOrigin } from "@/lib/canonical-origin";
 
 // Never reveals whether the email was already registered — same
 // no-enumeration principle as podHq's magic-link GENERIC_MESSAGE. Wording
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createSessionClient();
-  const origin = request.nextUrl.origin;
+  const origin = getCanonicalOrigin(request);
   const admin = createAdminClient();
 
   // Check for a pre-existing auth user BEFORE calling signUp() — signUp()'s

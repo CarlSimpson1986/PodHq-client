@@ -4,6 +4,7 @@ import { requestPasswordResetSchema } from "@/lib/validation/auth";
 import { logAuthEvent } from "@/lib/audit";
 import { checkAuthActionRateLimit } from "@/lib/auth/lockout";
 import { getRequestIp } from "@/lib/request-ip";
+import { getCanonicalOrigin } from "@/lib/canonical-origin";
 
 // Always the same response, whether or not the email matches an account —
 // this endpoint must not be usable to enumerate registered members.
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createSessionClient();
-  const origin = request.nextUrl.origin;
+  const origin = getCanonicalOrigin(request);
   // type=recovery has to be embedded in redirectTo itself — Supabase only
   // forwards `code` onto our redirect URL, not the `type` it used
   // internally for its own /verify step, so without this the callback
