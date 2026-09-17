@@ -6,8 +6,6 @@
     <string name="custom_url_scheme">uk.co.myfitpod.app</string>
     <!-- Shown when a member taps "Privacy policy" in the Health Connect
          permission sheet (@capgo/capacitor-health's Privacy Policy Setup).
-         /privacy doesn't exist yet — this is placeholder wiring only, not
-         something Health Connect submission can actually pass until a
-         real page covering health-data handling exists at this URL. -->
+         /privacy now exists and covers health-data handling (src/lib/privacy-policy.ts). -->
     <string name="health_connect_privacy_policy_url">https://podhq-client.vercel.app/privacy</string>
 </resources>
