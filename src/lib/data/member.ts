@@ -42,6 +42,12 @@ export interface Member {
   // name/attendance/steps never appear to anyone else until they turn
   // this on themselves. See src/lib/coach/leaderboard.ts.
   leaderboard_opt_in: boolean;
+  // Links this member to their PDK (ProdataKey) holder record — only set
+  // for members at PDK-provider gyms. Populated manually today (see
+  // podHq's 0100_pdk_unlock_test_setup.sql); the booking-triggered
+  // group-membership automation that would set this for real members
+  // going forward isn't built yet.
+  pdk_holder_id: string | null;
 }
 
 // Gate for the physical door Unlock only (not booking/credits) — a member

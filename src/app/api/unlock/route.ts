@@ -150,67 +150,113 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // PDK (ProdataKey) resources — Brighton, confirmed live 2026-08-17 — are
-  // deliberately not integrated yet: PDK's real API shape is unconfirmed
-  // anywhere in this repo, and guessing at it against a physical door lock
-  // isn't acceptable. Fails closed with a clear message rather than a
-  // fabricated API call. See podHq's ROADMAP "PDK integration" note.
-  if (resource.access_provider === "pdk") {
-    await admin.from("pod_access_events").insert({
-      booking_id: active.id,
-      member_id: member.id,
-      success: false,
-      kisi_response: "blocked: PDK integration not yet built",
-      reported_latitude: latitude ?? null,
-      reported_longitude: longitude ?? null,
-      distance_meters: distanceToGym ?? null,
-    });
-    return NextResponse.json({ status: "error", message: "This door isn't set up yet — contact staff." }, { status: 500 });
-  }
-
-  if (!resource.kisi_lock_id) {
-    await admin.from("pod_access_events").insert({
-      booking_id: active.id,
-      member_id: member.id,
-      success: false,
-      kisi_response: "blocked: no Kisi lock configured for this resource",
-      reported_latitude: latitude ?? null,
-      reported_longitude: longitude ?? null,
-      distance_meters: distanceToGym ?? null,
-    });
-    return NextResponse.json({ status: "error", message: "This door isn't set up yet — contact staff." }, { status: 500 });
-  }
-
-  const kisiKey = process.env.KISI_API_KEY;
-  if (!kisiKey) {
-    throw new Error("KISI_API_KEY is not configured");
-  }
-
-  // Wrapped: a thrown error here (network failure, DNS, timeout) used to
-  // skip the pod_access_events insert below entirely, leaving a failed
-  // unlock attempt with zero audit trail — found live when an attempt
-  // failed and the log had nothing to show for it.
+  // PDK (ProdataKey) resources — Brighton and Fairford Leys. First real
+  // integration built and live-tested 2026-09-18: podhq-client never
+  // holds PDK's client_id/secret itself (those live only in podHQ — see
+  // that session's own design note on centralizing third-party
+  // credentials), so this proxies the actual PDK call through podHQ's
+  // internal /api/pdk/unlock endpoint instead of calling PDK directly.
   let success = false;
   let kisiResponse: string;
-  try {
-    const res = await fetch(`https://api.kisi.io/locks/${resource.kisi_lock_id}/unlock`, {
-      method: "POST",
-      headers: {
-        Authorization: `KISI-LOGIN ${kisiKey}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      // Found in the 2026-09-07 pre-launch review: no timeout meant a
-      // hanging Kisi API left a member standing at the door waiting on a
-      // request that might never resolve, instead of failing fast so they
-      // can retry. 10s comfortably covers a normal round trip.
-      signal: AbortSignal.timeout(10000),
-    });
-    success = res.ok;
-    kisiResponse = success ? "200 OK" : `${res.status} ${res.statusText}: ${await res.text()}`;
-  } catch (err) {
-    const timedOut = err instanceof Error && err.name === "TimeoutError";
-    kisiResponse = timedOut ? "request timed out after 10s" : `request failed: ${err instanceof Error ? err.message : String(err)}`;
+
+  if (resource.access_provider === "pdk") {
+    if (!resource.provider_config?.systemId || !resource.provider_config?.cloudNodeId || !resource.provider_config?.deviceId) {
+      await admin.from("pod_access_events").insert({
+        booking_id: active.id,
+        member_id: member.id,
+        success: false,
+        kisi_response: "blocked: resource missing PDK provider_config",
+        reported_latitude: latitude ?? null,
+        reported_longitude: longitude ?? null,
+        distance_meters: distanceToGym ?? null,
+      });
+      return NextResponse.json({ status: "error", message: "This door isn't set up yet — contact staff." }, { status: 500 });
+    }
+    if (!member.pdk_holder_id) {
+      await admin.from("pod_access_events").insert({
+        booking_id: active.id,
+        member_id: member.id,
+        success: false,
+        kisi_response: "blocked: member has no pdk_holder_id",
+        reported_latitude: latitude ?? null,
+        reported_longitude: longitude ?? null,
+        distance_meters: distanceToGym ?? null,
+      });
+      return NextResponse.json({ status: "error", message: "Your access isn't set up yet — contact staff." }, { status: 500 });
+    }
+
+    const podhqBaseUrl = process.env.PODHQ_BASE_URL;
+    const proxySecret = process.env.PDK_PROXY_SECRET;
+    if (!podhqBaseUrl || !proxySecret) {
+      throw new Error("PODHQ_BASE_URL / PDK_PROXY_SECRET is not configured");
+    }
+
+    try {
+      const res = await fetch(`${podhqBaseUrl.replace(/\/$/, "")}/api/pdk/unlock`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${proxySecret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          systemId: resource.provider_config.systemId,
+          cloudNodeId: resource.provider_config.cloudNodeId,
+          deviceId: resource.provider_config.deviceId,
+          holderId: member.pdk_holder_id,
+        }),
+        // Same reasoning as Kisi's own timeout below — a hanging proxy
+        // call shouldn't leave a member waiting indefinitely at the door.
+        signal: AbortSignal.timeout(10000),
+      });
+      success = res.ok;
+      kisiResponse = success ? "200 OK (via podHQ/PDK)" : `${res.status}: ${await res.text()}`;
+    } catch (err) {
+      const timedOut = err instanceof Error && err.name === "TimeoutError";
+      kisiResponse = timedOut ? "podHQ proxy request timed out after 10s" : `podHQ proxy request failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  } else {
+    if (!resource.kisi_lock_id) {
+      await admin.from("pod_access_events").insert({
+        booking_id: active.id,
+        member_id: member.id,
+        success: false,
+        kisi_response: "blocked: no Kisi lock configured for this resource",
+        reported_latitude: latitude ?? null,
+        reported_longitude: longitude ?? null,
+        distance_meters: distanceToGym ?? null,
+      });
+      return NextResponse.json({ status: "error", message: "This door isn't set up yet — contact staff." }, { status: 500 });
+    }
+
+    const kisiKey = process.env.KISI_API_KEY;
+    if (!kisiKey) {
+      throw new Error("KISI_API_KEY is not configured");
+    }
+
+    // Wrapped: a thrown error here (network failure, DNS, timeout) used to
+    // skip the pod_access_events insert below entirely, leaving a failed
+    // unlock attempt with zero audit trail — found live when an attempt
+    // failed and the log had nothing to show for it.
+    try {
+      const res = await fetch(`https://api.kisi.io/locks/${resource.kisi_lock_id}/unlock`, {
+        method: "POST",
+        headers: {
+          Authorization: `KISI-LOGIN ${kisiKey}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        // Found in the 2026-09-07 pre-launch review: no timeout meant a
+        // hanging Kisi API left a member standing at the door waiting on a
+        // request that might never resolve, instead of failing fast so they
+        // can retry. 10s comfortably covers a normal round trip.
+        signal: AbortSignal.timeout(10000),
+      });
+      success = res.ok;
+      kisiResponse = success ? "200 OK" : `${res.status} ${res.statusText}: ${await res.text()}`;
+    } catch (err) {
+      const timedOut = err instanceof Error && err.name === "TimeoutError";
+      kisiResponse = timedOut ? "request timed out after 10s" : `request failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
   }
 
   await admin.from("pod_access_events").insert({
