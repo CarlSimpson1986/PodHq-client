@@ -140,7 +140,7 @@ export function CoachChatView({
         {messages.map((m, i) => (
           <div
             key={i}
-            className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm ${
+            className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-4 py-2.5 text-sm ${
               m.role === "user" ? "ml-auto bg-accent text-accent-foreground" : "card-glass text-foreground"
             }`}
           >
