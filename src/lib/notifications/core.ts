@@ -2,9 +2,16 @@ import "server-only";
 import { sendEmail } from "./resend";
 import { logNotification } from "./log";
 import type { NotificationEventType } from "./types";
+import { PRODUCTION_ORIGIN } from "@/lib/canonical-origin";
 
 /** Shared by every notification that links back into the app — moved here from waitlist/offer-next.ts once a second and third call site needed it. */
 export function appUrl(): string {
+  // Production always uses the real custom domain, never APP_URL — the
+  // email logo (and so potentially every email link) was found 2026-09-23
+  // not loading, consistent with APP_URL still pointing at the retired
+  // podhq-client.vercel.app alias (404s). Same fix as getCanonicalOrigin
+  // for confirmation/reset links; previews/dev still use APP_URL.
+  if (process.env.VERCEL_ENV === "production") return PRODUCTION_ORIGIN;
   if (process.env.APP_URL) return process.env.APP_URL;
   if (process.env.NODE_ENV !== "development") {
     throw new Error("APP_URL is not set — required outside local development so notification emails don't link to localhost.");

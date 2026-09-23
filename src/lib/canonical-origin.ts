@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-const PRODUCTION_ORIGIN = "https://www.myfitpod.app";
+export const PRODUCTION_ORIGIN = "https://www.myfitpod.app";
 
 /**
  * Origin to embed in long-lived links (email confirmation, password reset).
