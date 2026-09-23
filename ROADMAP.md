@@ -53,6 +53,8 @@ Also shipped: **emergency contact info** — nullable `emergency_contact_name`/`
 
 **Follow-up, same session**: Carl's first live test hit "Turn on location services" — both Unlock buttons (`upcoming-session-card.tsx`, `bookings-view.tsx`) hard-stopped client-side whenever geolocation failed, even at Fairford Leys, whose resource has no coordinates so the server would never check. Location is now sent when available and omitted otherwise; the server remains the only gate (it still blocks a missing location at resources with coordinates).
 
+**Speed follow-up**: Carl found the first live unlock slow. The Unlock buttons now only request geolocation when the resource has coordinates (`PodResource.requiresLocation`; unknown resources default to asking) and accept a fix up to 60s old — up to 10s of location lookup was dead time at Fairford Leys. podHQ caches its PDK token too (its `ROADMAP_HISTORY.md` #66).
+
 **Booking emails showed slot times an hour early** — `formatSlot` in `notifications/templates.ts` had no `timeZone`, and Vercel runs UTC; now `Europe/London`.
 
 **Not a bug**: a Brighton "AAL2 session is required to update email or password when MFA is enabled" reset error was the shared Hove podHQ staff login (2FA-enabled) being entered in the member app. Staff logins reset via podHQ; members should use their own email.

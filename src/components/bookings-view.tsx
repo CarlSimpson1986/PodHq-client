@@ -26,6 +26,13 @@ function slotDurationFor(resources: PodResource[], resourceId: number): number {
   return resources.find((r) => r.id === resourceId)?.slotDurationMinutes ?? 60;
 }
 
+// Unknown resource (e.g. another gym's, not in this list) defaults to
+// asking — the safe side, since the server rejects a missing location
+// wherever the resource has coordinates.
+function requiresLocationFor(resources: PodResource[], resourceId: number): boolean {
+  return resources.find((r) => r.id === resourceId)?.requiresLocation ?? true;
+}
+
 // Cancellation policy: cancel more than 3 hours before slot_start and the
 // credit is refunded; inside that window it's forfeited. Mirrors the
 // server-side cutoff in cancel_booking() — this is just a hint shown
@@ -208,22 +215,24 @@ export function BookingsView({
     setUnlockMessages((prev) => ({ ...prev, [bookingId]: "" }));
     setUnlockingId(bookingId);
     try {
-      // Sent when available, not required here — the server enforces the
-      // location gate only for resources with coordinates set, and
-      // returns "Turn on location services" itself when one is missing.
-      // A client-side hard stop blocked gyms with no GPS gate at all
-      // (found live 2026-09-23 at Fairford Leys).
+      // Only asked for when this booking's resource actually has a GPS
+      // gate — a location fix can take up to 10s indoors, dead time at a
+      // resource the server never checks (found live 2026-09-23 at
+      // Fairford Leys). The server remains the real gate either way.
       let position: GeolocationPosition | null = null;
-      try {
-        position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          if (!navigator.geolocation) {
-            reject(new Error("Geolocation not supported"));
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
-        });
-      } catch {
-        position = null;
+      const booking = bookings.find((b) => b.id === bookingId);
+      if (!booking || requiresLocationFor(resources, booking.resource_id)) {
+        try {
+          position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error("Geolocation not supported"));
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, maximumAge: 60000 });
+          });
+        } catch {
+          position = null;
+        }
       }
 
       const res = await fetch("/api/unlock", {

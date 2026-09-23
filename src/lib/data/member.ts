@@ -90,6 +90,10 @@ export interface PodResource {
   creditType: string;
   slotDurationMinutes: number;
   accessProvider: string;
+  // True when the resource has coordinates, i.e. unlock/route.ts will
+  // enforce its GPS gate — the Unlock buttons only ask the phone for a
+  // location fix (slow indoors, up to 10s) when this is true.
+  requiresLocation: boolean;
   podCapacity: number;
   openHour: number;
   closeHour: number;
@@ -342,7 +346,7 @@ export async function getPodResourcesForGym(gym: string): Promise<PodResource[]>
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("pod_resources")
-    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, pod_capacity, open_hour, close_hour")
+    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, latitude, longitude, pod_capacity, open_hour, close_hour")
     .eq("gym", gym)
     .order("resource_key");
 
@@ -356,6 +360,7 @@ export async function getPodResourcesForGym(gym: string): Promise<PodResource[]>
     creditType: row.credit_type,
     slotDurationMinutes: row.slot_duration_minutes,
     accessProvider: row.access_provider,
+    requiresLocation: row.latitude !== null && row.longitude !== null,
     podCapacity: row.pod_capacity,
     openHour: row.open_hour,
     closeHour: row.close_hour,
@@ -372,7 +377,7 @@ export async function getPodResourceById(resourceId: number): Promise<PodResourc
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("pod_resources")
-    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, pod_capacity, open_hour, close_hour")
+    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, latitude, longitude, pod_capacity, open_hour, close_hour")
     .eq("id", resourceId)
     .maybeSingle();
 
@@ -387,6 +392,7 @@ export async function getPodResourceById(resourceId: number): Promise<PodResourc
     creditType: data.credit_type,
     slotDurationMinutes: data.slot_duration_minutes,
     accessProvider: data.access_provider,
+    requiresLocation: data.latitude !== null && data.longitude !== null,
     podCapacity: data.pod_capacity,
     openHour: data.open_hour,
     closeHour: data.close_hour,

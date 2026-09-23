@@ -105,6 +105,7 @@ export default async function HomePage() {
                 booking={upcomingBooking}
                 accessComplete={isAccessComplete(member)}
                 slotDurationMinutes={resources.find((r) => r.id === upcomingBooking.resource_id)?.slotDurationMinutes ?? 60}
+                requiresLocation={resources.find((r) => r.id === upcomingBooking.resource_id)?.requiresLocation ?? true}
               />
             ) : (
               <div className="card-light flex flex-col items-center p-5 text-center">

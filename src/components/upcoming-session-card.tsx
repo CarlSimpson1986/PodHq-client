@@ -20,10 +20,12 @@ export function UpcomingSessionCard({
   booking,
   accessComplete,
   slotDurationMinutes,
+  requiresLocation,
 }: {
   booking: Booking;
   accessComplete: boolean;
   slotDurationMinutes: number;
+  requiresLocation: boolean;
 }) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -41,23 +43,24 @@ export function UpcomingSessionCard({
     setMessage("");
     setUnlocking(true);
     try {
-      // Location is sent when available but no longer required here —
-      // the server is the real gate: it demands coordinates only for
-      // resources that have their own set (unlock/route.ts), and returns
-      // the same "Turn on location services" message when it does. A
-      // client-side hard stop blocked unlocks at gyms with no GPS gate
-      // at all (found live 2026-09-23 at Fairford Leys).
+      // Only asked for when this resource actually has a GPS gate — a
+      // location fix can take up to 10s indoors, pure dead time at a
+      // resource the server never checks (found live 2026-09-23 at
+      // Fairford Leys). The server remains the real gate either way, and
+      // returns "Turn on location services" itself when it needs one.
       let position: GeolocationPosition | null = null;
-      try {
-        position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          if (!navigator.geolocation) {
-            reject(new Error("Geolocation not supported"));
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
-        });
-      } catch {
-        position = null;
+      if (requiresLocation) {
+        try {
+          position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error("Geolocation not supported"));
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, maximumAge: 60000 });
+          });
+        } catch {
+          position = null;
+        }
       }
 
       const res = await fetch("/api/unlock", {
