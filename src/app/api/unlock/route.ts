@@ -8,6 +8,20 @@ import { distanceMeters } from "@/lib/geo";
 import { isWithinUnlockWindow } from "@/lib/unlock-window";
 import { markSessionStartedByBookingId } from "@/lib/coach/workout-session";
 
+interface PdkProxyResponse {
+  status: "ok" | "error";
+  message?: string;
+  holderId?: string;
+}
+
+// PDK wants separate first/last names; members.name is one free-text
+// field. lastName falls back to "Member" for single-word names since PDK
+// may reject an empty one.
+function toNewHolder(name: string, email: string | undefined) {
+  const [firstName, ...rest] = name.trim().split(/\s+/);
+  return { firstName: firstName || "Member", lastName: rest.join(" ") || "Member", email: email ?? null };
+}
+
 // Matches GymFlow's own existing requirement for general door access —
 // GPS-based, hard gate (confirmed 2026-08-10, ROADMAP.md Stage 7). Not
 // tamper-proof (self-reported device location, same as GymFlow's), but
@@ -172,19 +186,6 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ status: "error", message: "This door isn't set up yet — contact staff." }, { status: 500 });
     }
-    if (!member.pdk_holder_id) {
-      await admin.from("pod_access_events").insert({
-        booking_id: active.id,
-        member_id: member.id,
-        success: false,
-        kisi_response: "blocked: member has no pdk_holder_id",
-        reported_latitude: latitude ?? null,
-        reported_longitude: longitude ?? null,
-        distance_meters: distanceToGym ?? null,
-      });
-      return NextResponse.json({ status: "error", message: "Your access isn't set up yet — contact staff." }, { status: 500 });
-    }
-
     const podhqBaseUrl = process.env.PODHQ_BASE_URL;
     const proxySecret = process.env.PDK_PROXY_SECRET;
     if (!podhqBaseUrl || !proxySecret) {
@@ -198,18 +199,29 @@ export async function POST(request: NextRequest) {
           Authorization: `Bearer ${proxySecret}`,
           "Content-Type": "application/json",
         },
+        // No pdk_holder_id yet (every member's first unlock at a PDK gym)
+        // — podHQ creates their PDK holder on the spot and returns its ID,
+        // saved below. Nobody has to be linked by hand in PDK's dashboard.
         body: JSON.stringify({
           systemId: resource.provider_config.systemId,
           cloudNodeId: resource.provider_config.cloudNodeId,
           deviceId: resource.provider_config.deviceId,
-          holderId: member.pdk_holder_id,
+          ...(member.pdk_holder_id ? { holderId: member.pdk_holder_id } : { newHolder: toNewHolder(member.name, user.email) }),
         }),
         // Same reasoning as Kisi's own timeout below — a hanging proxy
         // call shouldn't leave a member waiting indefinitely at the door.
-        signal: AbortSignal.timeout(10000),
+        // Longer than Kisi's 10s: a first unlock chains several PDK calls
+        // (token, holder lookup/create, group add) plus one 2s retry.
+        signal: AbortSignal.timeout(25000),
       });
+      const payload: PdkProxyResponse = await res.json().catch(() => ({ status: "error", message: `${res.status} (non-JSON response)` }));
+      // Saved even when the unlock itself failed — the holder may still
+      // have been created, and a retry must reuse it, not create another.
+      if (!member.pdk_holder_id && payload.holderId) {
+        await admin.from("members").update({ pdk_holder_id: payload.holderId }).eq("id", member.id);
+      }
       success = res.ok;
-      kisiResponse = success ? "200 OK (via podHQ/PDK)" : `${res.status}: ${await res.text()}`;
+      kisiResponse = success ? "200 OK (via podHQ/PDK)" : `${res.status}: ${payload.message ?? ""}`;
     } catch (err) {
       const timedOut = err instanceof Error && err.name === "TimeoutError";
       kisiResponse = timedOut ? "podHQ proxy request timed out after 10s" : `podHQ proxy request failed: ${err instanceof Error ? err.message : String(err)}`;

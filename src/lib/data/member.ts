@@ -43,10 +43,9 @@ export interface Member {
   // this on themselves. See src/lib/coach/leaderboard.ts.
   leaderboard_opt_in: boolean;
   // Links this member to their PDK (ProdataKey) holder record — only set
-  // for members at PDK-provider gyms. Populated manually today (see
-  // podHq's 0100_pdk_unlock_test_setup.sql); the booking-triggered
-  // group-membership automation that would set this for real members
-  // going forward isn't built yet.
+  // for members at PDK-provider gyms. Set automatically on the member's
+  // first unlock there (api/unlock/route.ts → podHQ's /api/pdk/unlock
+  // creates the holder and returns its ID).
   pdk_holder_id: string | null;
 }
 

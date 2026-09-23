@@ -19,8 +19,11 @@ function formatGBP(amount: number): string {
 function formatSlot(iso: string): string {
   if (!iso) return "your session";
   const d = new Date(iso);
-  const day = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  // Explicit Europe/London — this runs on Vercel's servers, which are
+  // UTC, so without it every slot time came out an hour early during BST
+  // (found live 2026-09-23 from a real Fairford Leys booking email).
+  const day = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
   return `${day} at ${time}`;
 }
 
