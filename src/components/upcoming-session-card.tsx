@@ -41,7 +41,13 @@ export function UpcomingSessionCard({
     setMessage("");
     setUnlocking(true);
     try {
-      let position: GeolocationPosition;
+      // Location is sent when available but no longer required here —
+      // the server is the real gate: it demands coordinates only for
+      // resources that have their own set (unlock/route.ts), and returns
+      // the same "Turn on location services" message when it does. A
+      // client-side hard stop blocked unlocks at gyms with no GPS gate
+      // at all (found live 2026-09-23 at Fairford Leys).
+      let position: GeolocationPosition | null = null;
       try {
         position = await new Promise<GeolocationPosition>((resolve, reject) => {
           if (!navigator.geolocation) {
@@ -51,8 +57,7 @@ export function UpcomingSessionCard({
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
         });
       } catch {
-        setMessage("Turn on location services to unlock the door.");
-        return;
+        position = null;
       }
 
       const res = await fetch("/api/unlock", {
@@ -60,8 +65,7 @@ export function UpcomingSessionCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookingId: booking.id,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          ...(position ? { latitude: position.coords.latitude, longitude: position.coords.longitude } : {}),
         }),
       });
       const body = await res.json();

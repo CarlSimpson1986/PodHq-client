@@ -208,10 +208,11 @@ export function BookingsView({
     setUnlockMessages((prev) => ({ ...prev, [bookingId]: "" }));
     setUnlockingId(bookingId);
     try {
-      // Matches GymFlow's own requirement for general door access — you
-      // must be at the gym, with location on, to unlock. Requested here
-      // (not skipped on failure) so the server sees a definite absence
-      // rather than us silently omitting it.
+      // Sent when available, not required here — the server enforces the
+      // location gate only for resources with coordinates set, and
+      // returns "Turn on location services" itself when one is missing.
+      // A client-side hard stop blocked gyms with no GPS gate at all
+      // (found live 2026-09-23 at Fairford Leys).
       let position: GeolocationPosition | null = null;
       try {
         position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -222,8 +223,7 @@ export function BookingsView({
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
         });
       } catch {
-        setUnlockMessages((prev) => ({ ...prev, [bookingId]: "Turn on location services to unlock the door." }));
-        return;
+        position = null;
       }
 
       const res = await fetch("/api/unlock", {
@@ -231,8 +231,7 @@ export function BookingsView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookingId,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          ...(position ? { latitude: position.coords.latitude, longitude: position.coords.longitude } : {}),
         }),
       });
       const body = await res.json();
