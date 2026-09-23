@@ -7,6 +7,9 @@ import { unlockSchema } from "@/lib/validation/unlock";
 import { distanceMeters } from "@/lib/geo";
 import { isWithinUnlockWindow } from "@/lib/unlock-window";
 import { markSessionStartedByBookingId } from "@/lib/coach/workout-session";
+import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
+import { notifyFireAndForget } from "@/lib/notifications/core";
+import { staffUnlockFailedEmail } from "@/lib/notifications/templates";
 
 interface PdkProxyResponse {
   status: "ok" | "error";
@@ -295,8 +298,52 @@ export async function POST(request: NextRequest) {
   }
 
   if (!success) {
+    await alertStaffOfDoorFailure(admin, {
+      bookingId: active.id,
+      slotStart: active.slot_start,
+      memberName: member.name,
+      mobile: member.mobile_number,
+      memberId: member.id,
+      gym: resource.gym,
+      doorLabel: resource.label,
+      detail: kisiResponse,
+    });
     return NextResponse.json({ status: "error", message: "Unlock failed. Try again." }, { status: 502 });
   }
 
   return NextResponse.json({ status: "ok" });
 }
+
+// Emails the gym's owner(s)/admins when the door system itself failed —
+// only on the booking's first such failure (the row just inserted above
+// is counted), so a member retrying at the door doesn't send one email
+// per tap. "blocked: ..." rows are this app's own refusals (no booking,
+// too far, etc.), not door faults, and never alert.
+async function alertStaffOfDoorFailure(
+  admin: ReturnType<typeof createAdminClient>,
+  input: {
+    bookingId: number;
+    slotStart: string;
+    memberName: string;
+    mobile: string | null;
+    memberId: number;
+    gym: string;
+    doorLabel: string;
+    detail: string;
+  }
+): Promise<void> {
+  const { count, error } = await admin
+    .from("pod_access_events")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", input.bookingId)
+    .eq("success", false)
+    .not("kisi_response", "like", "blocked:%");
+  if (error || count !== 1) return;
+
+  const staffEmails = await getStaffRecipients(input.gym);
+  const { subject, html } = staffUnlockFailedEmail(input);
+  for (const to of staffEmails) {
+    await notifyFireAndForget({ eventType: "staff_unlock_failed", to, subject, html, gym: input.gym, memberId: input.memberId });
+  }
+}
+

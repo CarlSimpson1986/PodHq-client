@@ -55,6 +55,8 @@ Also shipped: **emergency contact info** — nullable `emergency_contact_name`/`
 
 **Speed follow-up**: Carl found the first live unlock slow. The Unlock buttons now only request geolocation when the resource has coordinates (`PodResource.requiresLocation`; unknown resources default to asking) and accept a fix up to 60s old — up to 10s of location lookup was dead time at Fairford Leys. podHQ caches its PDK token too (its `ROADMAP_HISTORY.md` #66).
 
+**Location enforced at Fairford Leys + staff alert on door failure**: Carl set Fairford Leys' coordinates (51.820265, -0.836716, 100m radius — tighter than the 300m default, phone GPS indoors makes much below ~100m refuse genuine members). Only Aylesbury Berryfields had coordinates before (podHq `0013`); every other gym has no GPS gate, and PDK's API exposes no location (Kisi's does, per place/lock — an unbuilt option for backfilling Kisi gyms). New: when the door system itself fails (not this app's own "blocked:" refusals), the gym's owner(s) + admins get a `staff_unlock_failed` email (member name, mobile, door, slot, the door system's error) — once per booking, not per retry. Not yet seen fire live.
+
 **Booking emails showed slot times an hour early** — `formatSlot` in `notifications/templates.ts` had no `timeZone`, and Vercel runs UTC; now `Europe/London`.
 
 **Not a bug**: a Brighton "AAL2 session is required to update email or password when MFA is enabled" reset error was the shared Hove podHQ staff login (2FA-enabled) being entered in the member app. Staff logins reset via podHQ; members should use their own email.

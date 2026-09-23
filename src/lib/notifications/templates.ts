@@ -182,6 +182,30 @@ export function staffNewSignupEmail(input: { memberName: string; gym: string }):
   };
 }
 
+// The door system itself (PDK/Kisi) failed a member who passed every one
+// of this app's own checks — they may be stood outside a locked door.
+// Carl, 2026-09-23: the gym's owner/staff should hear about it so they
+// can let the member in or chase the fault. Mobile included so staff can
+// ring them straight away; detail is the door system's own error, for
+// diagnosing the fault.
+export function staffUnlockFailedEmail(input: {
+  memberName: string;
+  mobile: string | null;
+  gym: string;
+  doorLabel: string;
+  slotStart: string;
+  detail: string;
+}): EmailContent {
+  return {
+    subject: `Door didn't open for ${input.memberName} at ${input.gym}`,
+    html: emailShell(`
+      <p><strong>${escapeHtml(input.memberName)}</strong> tried to unlock <strong>${escapeHtml(input.doorLabel)}</strong> at <strong>${input.gym}</strong> for their ${formatSlot(input.slotStart)} booking, but the door system didn't open it.</p>
+      <p>They may be waiting outside.${input.mobile ? ` Their mobile: <strong>${escapeHtml(input.mobile)}</strong>.` : ""}</p>
+      <p style="color: #71717a; font-size: 13px;">Door system response: ${escapeHtml(input.detail)}</p>
+    `),
+  };
+}
+
 // Manual handling by design (2026-09-09, Play Store account-deletion
 // requirement) -- not self-service, so a real person confirms what's being
 // removed (Stripe subscription status, booking history, etc.) before
