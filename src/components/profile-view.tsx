@@ -358,6 +358,16 @@ export function ProfileView({
             <LogoutIcon className="h-4 w-4" />
             {loggingOut ? "Logging out..." : "Log Out"}
           </button>
+
+          {/* Apple Guideline 5.1.1(v) (2026-10-01) — deletion has to be
+              reachable from inside the app, not just via /delete-account's
+              public URL (which exists for Google Play's web requirement). */}
+          <Link
+            href="/delete-account"
+            className="block py-2 text-center text-xs font-medium text-muted-foreground underline hover:opacity-80"
+          >
+            Delete account
+          </Link>
         </div>
       </div>
       <PodAssistBubble />

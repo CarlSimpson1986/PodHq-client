@@ -14,24 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-72.md`, covering the pilot
-mechanism proof (2026-08-05) through the first working Codemagic iOS build (2026-09-13/14) —
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-73.md`, covering the pilot
+mechanism proof (2026-08-05) through build 11's App Store submission prep (2026-09-14) —
 all split out to keep this file within Claude Code's ~15,000-character
 `@`-import limit. Archives aren't always the strictly oldest material —
 the split point is "what's finished and stable" as much as "what's
 oldest" (see each archive's own header note for examples).
 Reference-only, not auto-loaded by CLAUDE.md; check them for full build
 history, or `git log` on this file for exact split points. Active
-content here starts at "App Store submission prep" (2026-09-14). If
+content here starts at "Apple 2.1 review reply prep" (2026-09-15). If
 this file grows too large again, split it the same way: move the most
-clearly finished section into `ROADMAP-ARCHIVE-73.md`, update this
+clearly finished section into `ROADMAP-ARCHIVE-74.md`, update this
 paragraph.
-
-## App Store submission prep + emergency contact info — 2026-09-14, same-day follow-up
-
-Walked Carl through App Store Connect's submission checklist for build 11 (Content Rights, Age Ratings, App Privacy, Keywords, Pricing, Category, Build selection) — Apple's own "Unable to Add for Review" list is the authoritative source of what's outstanding, not this file. One mistake mid-session: told Carl the app collects no phone number, missed `mobile_number` (labelled "Mobile" in `profile-view.tsx`, collected via `/access/contact`) — corrected once found.
-
-Also shipped: **emergency contact info** — nullable `emergency_contact_name`/`emergency_contact_phone` on `members` (`podHq/supabase/migrations/0096_member_emergency_contact.sql`, not yet run — apply manually via Supabase's SQL editor), a new editable card on `/profile`, and `/api/member/emergency-contact`. Carl's call, prompted by the app's only emergency mechanism today being the member dialling 999 themselves or pressing the facility's own Emergency Button — neither helps if they can't act. Pure web/DB change, no native rebuild (native shell just loads the live Vercel deployment).
 
 ## Apple 2.1 review reply prep + dead confirmation-link fix — 2026-09-15, same session
 
@@ -71,3 +65,7 @@ Also shipped: **emergency contact info** — nullable `emergency_contact_name`/`
 **Facebook ads — parked.** Replace campaign CSV downloads with Meta's Marketing API (free). Franchisees run their own ad accounts, so the agreed design is a "Connect Facebook" button on podHQ `/setup` (Facebook Login for Business, non-expiring token), not pasted keys. Needs Meta business verification + App Review on Carl's side first.
 
 **Also this session (podHQ, see its `ROADMAP_HISTORY.md` #68):** Kisi + PDK door entries cached monthly into `door_entries` (backfilled to each site's install date, Aylesbury Jan 2023), `/door-traffic` page, and an anon-callable `delete_member_cascade` locked down (`0104`). Step 2 there is turning door entries into `attendance` rows to replace GymFlow's CSV for door-connected gyms.
+
+## In-app account deletion link for Apple review — 2026-10-01
+
+Apple re-rejected build 11 under 2.1 with only a generic "resubmit once adjustments are made" message, after Carl had already replied to the 2026-09-15 information request and resubmitted. Most likely cause (unconfirmed — Carl has asked Apple for specifics): their checklist requires the recording to show **account deletion**, and the app had no in-app path to it — `/delete-account` existed only as a public URL for Google Play. Added a "Delete account" link under Log Out on `/profile`, plus a "Back to profile" link on `/delete-account` (native shell has no browser back). Web-only, no native rebuild. Verified in local dev (Profile → Delete account → back); the request form itself wasn't submitted. **Outstanding:** wait for Apple's reply; then a fresh recording on the latest iOS (launch → sign up → login → paid flow → delete account), reply + Notes pointing at Profile → Delete account (and that PDK unlock is now live), resubmit.

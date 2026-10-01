@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DeleteAccountForm } from "@/components/delete-account-form";
 import { PageHero } from "@/components/page-hero";
 
@@ -16,6 +17,15 @@ export default function DeleteAccountPage() {
           </p>
           <DeleteAccountForm />
         </div>
+        {/* The native app has no browser back button, so a member who
+            arrives here from Profile needs a way out. Signed-out visitors
+            just get bounced to /login by /profile's own redirect. */}
+        <Link
+          href="/profile"
+          className="mx-auto mt-4 block w-full max-w-md text-center text-sm font-medium text-muted-foreground underline hover:opacity-80"
+        >
+          Back to profile
+        </Link>
       </div>
     </main>
   );
