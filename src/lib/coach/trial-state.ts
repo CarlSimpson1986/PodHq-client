@@ -1,5 +1,10 @@
 import type { Member, Membership } from "@/lib/data/member";
 
+// Premium trial length — 7 days until 2026-10-03, now 10 (Carl's call).
+// Only affects trials that start after the change; members already
+// mid-trial keep the trial_expires_at they were given.
+export const TRIAL_LENGTH_DAYS = 10;
+
 // Presentation-only derivation of the home screen's AI Coach state — no DB
 // access here, just the member/membership rows the home page already
 // fetches. Five states, not the brief's four: "trial_pending" (tapped

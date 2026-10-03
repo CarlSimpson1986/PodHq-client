@@ -5,6 +5,7 @@ import { getMemberByAuthUserId } from "@/lib/data/member";
 import { createCoachProfile } from "@/lib/coach/coach-profile";
 import { coachProfileSchema } from "@/lib/validation/coach-profile";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { TRIAL_LENGTH_DAYS } from "@/lib/coach/trial-state";
 
 export async function POST(request: Request) {
   const session = await createSessionClient();
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
   }
   if (member.trial_activated_at && !member.trial_started_at) {
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + TRIAL_LENGTH_DAYS * 24 * 60 * 60 * 1000);
     memberUpdate.trial_started_at = now.toISOString();
     memberUpdate.trial_expires_at = expiresAt.toISOString();
   }

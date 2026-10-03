@@ -24,7 +24,7 @@ const OUTCOMES = [
 // that positioning and swapped the bullets for outcome-level selling
 // points (personalisation, accountability, results, wearable sync)
 // rather than feature-level ones. The trial genuinely runs the full
-// premium feature set for 7 days, not a limited demo —
+// premium feature set for the full trial, not a limited demo —
 // getCoachHomeState treats trial_active identically to subscriber
 // everywhere else in the app — so this framing is accurate, not just
 // persuasive; no pricing is shown, this component has no access to it.
@@ -69,7 +69,7 @@ export function TrialBanner() {
         className="w-full rounded-xl bg-accent p-4 text-left text-accent-foreground shadow-md"
       >
         <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Limited offer · Free</p>
-        <p className="mt-1 text-base font-semibold">7 Day Premium Trial</p>
+        <p className="mt-1 text-base font-semibold">10 Day Premium Trial</p>
         <p className="mt-0.5 text-sm opacity-90">Full Premium — coaching, nutrition & training that adapts as you go</p>
       </button>
 
@@ -79,11 +79,11 @@ export function TrialBanner() {
             {step === "preview" && (
               <>
                 <p className="text-xs font-semibold uppercase tracking-wide text-card-light-muted">
-                  7 days · Free · No card needed
+                  10 days · Free · No card needed
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">Free upgrade to Premium</h2>
                 <p className="mt-1 text-sm text-card-light-muted">
-                  Everything Premium members get — including Pod Coach — free for a week.
+                  Everything Premium members get — including Pod Coach — free for 10 days.
                 </p>
                 <ul className="mt-4 space-y-3">
                   {OUTCOMES.map((outcome, i) => (
@@ -117,7 +117,7 @@ export function TrialBanner() {
                   Not now
                 </button>
                 <p className="mt-3 text-center text-xs text-card-light-muted">
-                  No card required. Your 7-day clock starts as soon as you finish setup.
+                  No card required. Your 10-day clock starts as soon as you finish setup.
                 </p>
               </>
             )}

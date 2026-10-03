@@ -7,6 +7,7 @@ import { getStrengthFocusLabel } from "@/lib/coach/generate-workout";
 import type { StoredTemplate } from "@/lib/coach/workout-templates";
 import type { BlockType } from "@/lib/coach/types";
 import { ChevronRightIcon } from "@/components/icons";
+import { ExerciseVideo, ExerciseYoutubeEmbed } from "@/components/exercise-video";
 
 // Tap-to-expand technique video per exercise (2026-08-29, Carl's call) —
 // no thumbnail image: img-src is locked to 'self' data: (see proxy.ts's
@@ -37,22 +38,13 @@ function ExerciseRow({ ex }: { ex: StoredTemplate["exercises"][number] }) {
           </button>
         )}
       </div>
-      {playing && ownVideoUrl && (
-        <div className="mt-2 aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-          {/* Own uploaded clip — no YouTube branding, no iframe. */}
-          <video src={ownVideoUrl} controls playsInline className="h-full w-full" />
-        </div>
-      )}
+      {playing && ownVideoUrl && <ExerciseVideo src={ownVideoUrl} className="mt-2" />}
       {playing && !ownVideoUrl && videoId && (
-        <div className="mt-2 aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`}
-            title={`${ex.name} technique demonstration`}
-            className="h-full w-full"
-            allow="encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
+        <ExerciseYoutubeEmbed
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`}
+          title={`${ex.name} technique demonstration`}
+          className="mt-2"
+        />
       )}
     </li>
   );
@@ -78,11 +70,15 @@ function WorkoutCard({
   return (
     <div className="card-light overflow-hidden">
       <button type="button" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded} className="flex w-full items-center justify-between gap-3 p-4 text-left">
-        <span className="flex items-center gap-2 text-sm font-semibold">
+        <span className="min-w-0 text-sm font-semibold">
           {focusLabel ?? `Workout ${template.letter}`} · {template.exercises.length} exercises · {repsTarget} reps
-          {isNext && <span className="rounded-full bg-card-light-foreground px-2 py-0.5 text-xs font-semibold text-white">Today&apos;s pick</span>}
         </span>
-        <ChevronRightIcon className={`h-4 w-4 flex-none text-card-light-muted transition-transform ${expanded ? "rotate-90" : ""}`} />
+        {/* Right-aligned next to the chevron (2026-10-03) — inline after the
+            title it wrapped onto its own line flush left on phones. */}
+        <span className="flex flex-none items-center gap-2">
+          {isNext && <span className="whitespace-nowrap rounded-full bg-card-light-foreground px-2 py-0.5 text-xs font-semibold text-white">Today&apos;s pick</span>}
+          <ChevronRightIcon className={`h-4 w-4 flex-none text-card-light-muted transition-transform ${expanded ? "rotate-90" : ""}`} />
+        </span>
       </button>
       {expanded && (
         <ul className="space-y-2 border-t border-card-light-border p-4 pt-3">

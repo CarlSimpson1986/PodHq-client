@@ -78,7 +78,7 @@ export default async function DashboardPage() {
   // on the full dashboard (2026-09-02, Carl: "as soon as i hit start your
   // free trial it should be into the onboarding questions...then Pod
   // coach takes you around" — onboarding finishes in `trial_pending`,
-  // before the 7-day clock even starts on the first booking, so gating
+  // before the trial clock even starts on the first booking, so gating
   // this to `trial_active` only meant the welcome never fired at the
   // exact moment it was supposed to). Gated on an empty conversation, not
   // a dedicated flag column: an empty coach_conversations row already
@@ -95,8 +95,8 @@ export default async function DashboardPage() {
       const firstName = member.name.split(" ")[0] || member.name;
       const trialLine =
         state.kind === "trial_pending"
-          ? "Your 7-day trial will start as soon as your profile's saved"
-          : "You're on your 7-day free trial";
+          ? "Your 10-day trial will start as soon as your profile's saved"
+          : "You're on your 10-day free trial";
       const welcome = `Hi ${firstName}! I'm Pod Coach. I'll build your sessions, track your recovery, and answer questions about your plan for ${GOAL_COPY[coachProfile.goal]} along the way. ${trialLine} — ask me anything here, or check today's session on the Home tab.`;
       const seeded = await seedCoachWelcomeMessage(member.id, welcome);
       conversation = seeded.map((m) => ({ role: m.role, content: m.content }));
@@ -150,7 +150,7 @@ export default async function DashboardPage() {
           {state.kind === "trial_pending" && (
             <div className="card-light p-5">
               <p className="text-sm font-semibold">Finish setting up Pod Coach</p>
-              <p className="mt-1 text-sm text-card-light-muted">A few quick questions and your 7-day Premium trial starts right away.</p>
+              <p className="mt-1 text-sm text-card-light-muted">A few quick questions and your 10-day Premium trial starts right away.</p>
               <Link href="/coach-onboarding" prefetch={false} className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">
                 Set up Pod Coach
               </Link>

@@ -9,6 +9,11 @@ const config: CapacitorConfig = {
   appId: 'uk.co.myfitpod.app',
   appName: 'My Fit Pod',
   webDir: 'public',
+  // Black WebView background (2026-10-03) — the native splash is black, and
+  // without this the WebView showed plain white between the splash
+  // disappearing and the live site's first paint (seen on a cold emulator
+  // launch: splash → several seconds of white → sign-in page).
+  backgroundColor: '#000000',
   server: {
     // Found 2026-09-09: myfitpod.app (apex) 308-redirects to
     // www.myfitpod.app at the Vercel level. Capacitor's native bridge only

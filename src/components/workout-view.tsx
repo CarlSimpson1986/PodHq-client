@@ -16,6 +16,7 @@ import {
 import { WARMUP_ITEMS, COOLDOWN_ITEMS } from "@/lib/coach/warmup-cooldown";
 import { useExerciseVideoOverrides } from "@/lib/hooks/use-exercise-video-overrides";
 import { ArrowLeftIcon } from "@/components/icons";
+import { ExerciseVideo, ExerciseYoutubeEmbed, PreloadExerciseVideo } from "@/components/exercise-video";
 
 // How long each frame shows before auto-switching — reads as motion
 // without needing a real animated asset (the source images are two
@@ -2342,11 +2343,14 @@ export function WorkoutView({
           <p className="mt-1 text-lg font-semibold">{item.name}</p>
           <p className="text-sm text-card-light-muted">{item.instruction}</p>
         </div>
-        {exerciseVideoOverrides[item.key] && (
-          <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-            <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
-          </div>
-        )}
+        {exerciseVideoOverrides[item.key] && <ExerciseVideo src={exerciseVideoOverrides[item.key]} />}
+        <PreloadExerciseVideo
+          src={
+            exerciseVideoOverrides[
+              (isLastWarmupItem ? detail.exercises[0]?.key : WARMUP_ITEMS[warmupItemIndex + 1]?.key) ?? ""
+            ]
+          }
+        />
         <button
           type="button"
           className={buttonClass}
@@ -2520,11 +2524,8 @@ export function WorkoutView({
           <p className="mt-1 text-lg font-semibold">{item.name}</p>
           <p className="text-sm text-card-light-muted">{item.instruction}</p>
         </div>
-        {exerciseVideoOverrides[item.key] && (
-          <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-            <video src={exerciseVideoOverrides[item.key]} controls playsInline className="h-full w-full" />
-          </div>
-        )}
+        {exerciseVideoOverrides[item.key] && <ExerciseVideo src={exerciseVideoOverrides[item.key]} />}
+        <PreloadExerciseVideo src={exerciseVideoOverrides[COOLDOWN_ITEMS[cooldownItemIndex + 1]?.key ?? ""]} />
         <button
           type="button"
           className={buttonClass}
@@ -2735,20 +2736,12 @@ export function WorkoutView({
       </div>
 
       {ownVideoUrl ? (
-        <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-          {/* Own uploaded clip (see podHq's exercise-videos admin page) — no YouTube branding, no iframe. */}
-          <video src={ownVideoUrl} controls playsInline className="h-full w-full" />
-        </div>
+        <ExerciseVideo src={ownVideoUrl} />
       ) : youtubeVideoId ? (
-        <div className="aspect-video w-full overflow-hidden rounded-lg border border-card-light-border">
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?${youtubeEmbedParams.toString()}`}
-            title={`${exercise.name} technique demonstration`}
-            className="h-full w-full"
-            allow="encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
+        <ExerciseYoutubeEmbed
+          src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?${youtubeEmbedParams.toString()}`}
+          title={`${exercise.name} technique demonstration`}
+        />
       ) : imageMissing ? (
         // A handful of exercises added 2026-08-27 for the A/B/C rotation
         // don't have real position photos sourced yet (see
@@ -2774,6 +2767,7 @@ export function WorkoutView({
         </button>
       )}
 
+      <PreloadExerciseVideo src={exerciseVideoOverrides[detail.exercises[exerciseIndex + 1]?.key ?? ""]} />
       {safetyTip && <p className="text-sm text-card-light-muted">⚠ {safetyTip}</p>}
 
       <div className="grid grid-cols-2 gap-4">

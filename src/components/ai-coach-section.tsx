@@ -25,7 +25,7 @@ export function AICoachSection({ state }: { state: CoachHomeState }) {
             Finish setting up Pod Coach
           </p>
           <p className="mt-1 text-sm text-card-light-muted">
-            A few quick questions and your 7-day Premium trial starts right away.
+            A few quick questions and your 10-day Premium trial starts right away.
           </p>
         </Link>
       );

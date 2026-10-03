@@ -18,7 +18,7 @@ const NAV_ITEMS = [
 // Home since there was nothing to link a whole tab to yet. Labelled
 // "Premium" not "Coach" as of 2026-08-27 — Carl: it's the entry point to
 // the whole premium tier/trial, not just the AI Coach chat feature, and
-// "Premium" matches the existing "7 Day Premium Trial" copy in
+// "Premium" matches the existing "10 Day Premium Trial" copy in
 // trial-banner.tsx). Not shown on
 // the auth pages (login/signup/forgot-password), the buy-credits/
 // buy-membership/gift-voucher sub-pages reached *through* Shop (those keep

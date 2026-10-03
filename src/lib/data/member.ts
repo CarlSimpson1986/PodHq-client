@@ -29,7 +29,7 @@ export interface Member {
   // null means "never seen it", so it auto-launches once per member
   // regardless of device, then stays off. See 0045_member_tour.sql.
   tour_completed_at: string | null;
-  // 7-day free AI Coach trial (Hove beta) — see 0047_member_trial.sql for
+  // 10-day (was 7) free AI Coach trial (Hove beta) — see 0047_member_trial.sql for
   // what each of the three stamps means. trial_activated_at alone means
   // "tapped Start my free trial but hasn't finished onboarding yet";
   // trial_started_at/trial_expires_at are only set once, when Pod Coach
