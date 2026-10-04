@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Booking, PodResource } from "@/lib/data/member";
 import { formatDateParam } from "@/lib/booking-dates";
 import { LockIcon } from "@/components/icons";
+import { DoorUnlockButtons } from "@/components/door-unlock-buttons";
 import { subscribeToPush } from "@/lib/push/subscribe";
 import { isNativePushSupported, subscribeToNativePush } from "@/lib/push/native-subscribe";
 import { PushNotifications } from "@capacitor/push-notifications";
@@ -31,6 +32,11 @@ function slotDurationFor(resources: PodResource[], resourceId: number): number {
 // wherever the resource has coordinates.
 function requiresLocationFor(resources: PodResource[], resourceId: number): boolean {
   return resources.find((r) => r.id === resourceId)?.requiresLocation ?? true;
+}
+
+function entranceResourceFor(resources: PodResource[], resourceId: number): PodResource | null {
+  const resource = resources.find((r) => r.id === resourceId);
+  return resource?.hasEntranceDoor ? resource : null;
 }
 
 // Cancellation policy: cancel more than 3 hours before slot_start and the
@@ -329,6 +335,7 @@ export function BookingsView({
               now >= start - UNLOCK_WINDOW_BEFORE_MS &&
               now <= start + unlockWindowAfterMs(slotDurationFor(resources, booking.resource_id));
             const message = unlockMessages[booking.id];
+            const entranceResource = entranceResourceFor(resources, booking.resource_id);
 
             return (
               <div key={booking.id} className="rounded-xl border border-card-light-border p-4">
@@ -343,6 +350,7 @@ export function BookingsView({
                     </span>
                   )}
                   {inUnlockWindow &&
+                    !(accessComplete && entranceResource) &&
                     (accessComplete ? (
                       <button
                         onClick={() => unlock(booking.id)}
@@ -362,6 +370,14 @@ export function BookingsView({
                       </Link>
                     ))}
                 </div>
+                {inUnlockWindow && accessComplete && entranceResource && (
+                  <DoorUnlockButtons
+                    bookingId={booking.id}
+                    roomLabel={entranceResource.label}
+                    requiresLocation={entranceResource.requiresLocation}
+                    onRoomUnlocked={() => router.push(`/workout/${booking.id}?justUnlocked=1`)}
+                  />
+                )}
                 {inUnlockWindow && message && <p className="mt-2 text-xs text-card-light-muted">{message}</p>}
                 {view === "upcoming" && !inUnlockWindow && (
                   <p className="mt-2 text-xs text-card-light-muted">Unlock opens 5 minutes before your session.</p>

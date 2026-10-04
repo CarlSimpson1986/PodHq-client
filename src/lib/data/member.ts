@@ -94,6 +94,10 @@ export interface PodResource {
   // enforce its GPS gate — the Unlock buttons only ask the phone for a
   // location fix (slow indoors, up to 10s) when this is true.
   requiresLocation: boolean;
+  // True when the resource sits behind a shared main door the member also
+  // opens through the app (Hove, podHq 0105) — the booking then shows a
+  // separate "Open main door" button above the room's own.
+  hasEntranceDoor: boolean;
   podCapacity: number;
   openHour: number;
   closeHour: number;
@@ -338,21 +342,27 @@ export async function getBookingsForDate(gym: string, date: Date): Promise<Booki
   return data ?? [];
 }
 
-// Every bookable resource at this gym (podHq's admin "Pods" Calendar page
-// configures these) — a gym with exactly one behaves exactly as before
-// this feature existed; more than one means the booking grid shows a
-// resource selector.
-export async function getPodResourcesForGym(gym: string): Promise<PodResource[]> {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("pod_resources")
-    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, latitude, longitude, pod_capacity, open_hour, close_hour")
-    .eq("gym", gym)
-    .order("resource_key");
+const POD_RESOURCE_COLUMNS =
+  "id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, provider_config, latitude, longitude, pod_capacity, open_hour, close_hour";
 
-  if (error) throw new Error(error.message);
+interface PodResourceRow {
+  id: number;
+  gym: string;
+  resource_key: string;
+  label: string;
+  credit_type: string;
+  slot_duration_minutes: number;
+  access_provider: string;
+  provider_config: { entranceDeviceId?: string } | null;
+  latitude: number | null;
+  longitude: number | null;
+  pod_capacity: number;
+  open_hour: number;
+  close_hour: number;
+}
 
-  return (data ?? []).map((row) => ({
+function toPodResource(row: PodResourceRow): PodResource {
+  return {
     id: row.id,
     gym: row.gym,
     resourceKey: row.resource_key,
@@ -361,10 +371,28 @@ export async function getPodResourcesForGym(gym: string): Promise<PodResource[]>
     slotDurationMinutes: row.slot_duration_minutes,
     accessProvider: row.access_provider,
     requiresLocation: row.latitude !== null && row.longitude !== null,
+    hasEntranceDoor: row.access_provider === "pdk" && !!row.provider_config?.entranceDeviceId,
     podCapacity: row.pod_capacity,
     openHour: row.open_hour,
     closeHour: row.close_hour,
-  }));
+  };
+}
+
+// Every bookable resource at this gym (podHq's admin "Pods" Calendar page
+// configures these) — a gym with exactly one behaves exactly as before
+// this feature existed; more than one means the booking grid shows a
+// resource selector.
+export async function getPodResourcesForGym(gym: string): Promise<PodResource[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("pod_resources")
+    .select(POD_RESOURCE_COLUMNS)
+    .eq("gym", gym)
+    .order("resource_key");
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map(toPodResource);
 }
 
 // Not gym-scoped, unlike getPodResourcesForGym above — needed for the
@@ -377,24 +405,24 @@ export async function getPodResourceById(resourceId: number): Promise<PodResourc
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("pod_resources")
-    .select("id, gym, resource_key, label, credit_type, slot_duration_minutes, access_provider, latitude, longitude, pod_capacity, open_hour, close_hour")
+    .select(POD_RESOURCE_COLUMNS)
     .eq("id", resourceId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  return {
-    id: data.id,
-    gym: data.gym,
-    resourceKey: data.resource_key,
-    label: data.label,
-    creditType: data.credit_type,
-    slotDurationMinutes: data.slot_duration_minutes,
-    accessProvider: data.access_provider,
-    requiresLocation: data.latitude !== null && data.longitude !== null,
-    podCapacity: data.pod_capacity,
-    openHour: data.open_hour,
-    closeHour: data.close_hour,
-  };
+  return toPodResource(data);
+}
+
+// The resources behind a member's own bookings, wherever they are — the
+// home gym's list alone misses a cross-gym booking's door (and its slot
+// length), so callers merge these in for any booking it doesn't cover.
+export async function getPodResourcesByIds(resourceIds: number[]): Promise<PodResource[]> {
+  if (resourceIds.length === 0) return [];
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("pod_resources").select(POD_RESOURCE_COLUMNS).in("id", resourceIds);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(toPodResource);
 }

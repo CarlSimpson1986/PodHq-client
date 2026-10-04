@@ -7,6 +7,7 @@ import {
   getActiveMembership,
   getNextUpcomingBooking,
   getPodResourcesForGym,
+  getPodResourceById,
   isAccessComplete,
 } from "@/lib/data/member";
 import { NoMemberProfile } from "@/components/no-member-profile";
@@ -45,6 +46,12 @@ export default async function HomePage() {
     getNextUpcomingBooking(member.id),
     getPodResourcesForGym(member.gym),
   ]);
+
+  // A cross-gym booking's resource isn't in the home gym's list — looked
+  // up directly so its own door setup (e.g. Hove's main door) still shows.
+  const upcomingResource = upcomingBooking
+    ? (resources.find((r) => r.id === upcomingBooking.resource_id) ?? (await getPodResourceById(upcomingBooking.resource_id)))
+    : null;
 
   const coachState = getCoachHomeState(member, membership);
   const showTodaysMission = coachState.kind === "trial_active" || coachState.kind === "subscriber";
@@ -104,8 +111,9 @@ export default async function HomePage() {
               <UpcomingSessionCard
                 booking={upcomingBooking}
                 accessComplete={isAccessComplete(member)}
-                slotDurationMinutes={resources.find((r) => r.id === upcomingBooking.resource_id)?.slotDurationMinutes ?? 60}
-                requiresLocation={resources.find((r) => r.id === upcomingBooking.resource_id)?.requiresLocation ?? true}
+                slotDurationMinutes={upcomingResource?.slotDurationMinutes ?? 60}
+                requiresLocation={upcomingResource?.requiresLocation ?? true}
+                entranceRoomLabel={upcomingResource?.hasEntranceDoor ? upcomingResource.label : null}
               />
             ) : (
               <div className="card-light flex flex-col items-center p-5 text-center">

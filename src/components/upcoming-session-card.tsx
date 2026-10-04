@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Booking } from "@/lib/data/member";
 import { LockIcon } from "@/components/icons";
+import { DoorUnlockButtons } from "@/components/door-unlock-buttons";
 import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
 
 function formatSlot(iso: string) {
@@ -21,11 +22,15 @@ export function UpcomingSessionCard({
   accessComplete,
   slotDurationMinutes,
   requiresLocation,
+  entranceRoomLabel,
 }: {
   booking: Booking;
   accessComplete: boolean;
   slotDurationMinutes: number;
   requiresLocation: boolean;
+  // Set (to the room's own label) when this booking sits behind a shared
+  // main door — the card then shows both doors' buttons instead of one.
+  entranceRoomLabel: string | null;
 }) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -99,6 +104,13 @@ export function UpcomingSessionCard({
           <LockIcon className="h-4 w-4" />
           Complete Access
         </Link>
+      ) : inUnlockWindow && entranceRoomLabel ? (
+        <DoorUnlockButtons
+          bookingId={booking.id}
+          roomLabel={entranceRoomLabel}
+          requiresLocation={requiresLocation}
+          onRoomUnlocked={() => router.push(`/workout/${booking.id}?justUnlocked=1`)}
+        />
       ) : inUnlockWindow ? (
         <button
           onClick={unlock}

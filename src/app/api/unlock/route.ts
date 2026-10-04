@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ status: "error", message: "Invalid request." }, { status: 400 });
   }
-  const { bookingId, latitude, longitude } = parsed.data;
+  const { bookingId, latitude, longitude, door } = parsed.data;
 
   // Tighter than the default 100/min (checkRateLimit's fallback) — this
   // endpoint triggers a real physical door and calls Kisi's API on every
@@ -176,6 +176,14 @@ export async function POST(request: NextRequest) {
   let success = false;
   let kisiResponse: string;
 
+  // The main entrance only exists for a PDK resource that declares one
+  // (Hove, 0105) — anywhere else "entrance" is a client bug, not a door to
+  // fall back on.
+  if (door === "entrance" && (resource.access_provider !== "pdk" || !resource.provider_config?.entranceDeviceId)) {
+    return NextResponse.json({ status: "error", message: "This booking has no main door to open." }, { status: 400 });
+  }
+  const doorLabel = door === "entrance" ? "Main door" : resource.label;
+
   if (resource.access_provider === "pdk") {
     if (!resource.provider_config?.systemId || !resource.provider_config?.cloudNodeId || !resource.provider_config?.deviceId) {
       await admin.from("pod_access_events").insert({
@@ -208,7 +216,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           systemId: resource.provider_config.systemId,
           cloudNodeId: resource.provider_config.cloudNodeId,
-          deviceId: resource.provider_config.deviceId,
+          deviceId: door === "entrance" ? resource.provider_config.entranceDeviceId : resource.provider_config.deviceId,
           ...(member.pdk_holder_id ? { holderId: member.pdk_holder_id } : { newHolder: toNewHolder(member.name, user.email) }),
         }),
         // Same reasoning as Kisi's own timeout below — a hanging proxy
@@ -229,6 +237,9 @@ export async function POST(request: NextRequest) {
       const timedOut = err instanceof Error && err.name === "TimeoutError";
       kisiResponse = timedOut ? "podHQ proxy request timed out after 10s" : `podHQ proxy request failed: ${err instanceof Error ? err.message : String(err)}`;
     }
+    // Both doors log against the same booking — prefixed so the Access
+    // log can tell a main-door tap from a room-door one.
+    if (door === "entrance") kisiResponse = `main door: ${kisiResponse}`;
   } else {
     if (!resource.kisi_lock_id) {
       await admin.from("pod_access_events").insert({
@@ -288,8 +299,9 @@ export async function POST(request: NextRequest) {
   // in the pod, not whenever they happen to open the workout tab — see
   // markSessionStartedByBookingId's own comment. Best-effort: a failure
   // here must never turn a real, successful door unlock into an error
-  // response.
-  if (success) {
+  // response. The main door doesn't count — a member can be let into the
+  // building before their room's own door.
+  if (success && door === "room") {
     try {
       await markSessionStartedByBookingId(active.id);
     } catch (err) {
@@ -305,7 +317,7 @@ export async function POST(request: NextRequest) {
       mobile: member.mobile_number,
       memberId: member.id,
       gym: resource.gym,
-      doorLabel: resource.label,
+      doorLabel,
       detail: kisiResponse,
     });
     return NextResponse.json({ status: "error", message: "Unlock failed. Try again." }, { status: 502 });
