@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSessionClient } from "@/lib/supabase/server";
+import { syncConsentedLeadToBrevo } from "@/lib/leads/brevo-lead";
 
 /**
  * Finishes an auth flow started client-side (see /auth/callback). Accepts
@@ -30,6 +31,13 @@ export async function POST(request: NextRequest) {
 
   if (result.error || !result.data.user) {
     return NextResponse.json({ status: "error" }, { status: 400 });
+  }
+
+  // First confirmed sign-in of a member who ticked marketing consent →
+  // their gym's Brevo nurture list. A no-op every other time; best-effort.
+  const user = result.data.user;
+  if (user.email && user.email_confirmed_at) {
+    await syncConsentedLeadToBrevo(user.id, user.email);
   }
 
   return NextResponse.json({ status: "ok" });

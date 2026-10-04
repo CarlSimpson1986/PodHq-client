@@ -32,6 +32,7 @@ function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [gym, setGym] = useState<GymName | "">(initialGym);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,7 +50,7 @@ function SignupForm() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, gym }),
+        body: JSON.stringify({ name, email, password, gym, marketingConsent }),
       });
       const body = await res.json();
       if (body.status === "ok") {
@@ -132,6 +133,19 @@ function SignupForm() {
                 onChange={setPassword}
                 hint="At least 8 characters, with an uppercase letter, lowercase letter, and a number."
               />
+              {/* Unticked by default — marketing only. Booking confirmations,
+                  receipts and password emails are sent either way. */}
+              <label className="flex items-start gap-3 text-sm text-card-light-muted">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-card-light-foreground"
+                  checked={marketingConsent}
+                  onChange={(e) => setMarketingConsent(e.target.checked)}
+                />
+                <span>
+                  Email me tips and offers from {gym ? `My Fit Pod ${gym}` : "My Fit Pod"}. Unsubscribe any time.
+                </span>
+              </label>
               {error && <p className="text-sm text-danger">{error}</p>}
               <button type="submit" disabled={loading} className={buttonClass}>
                 {loading ? "Creating account..." : "Create account"}

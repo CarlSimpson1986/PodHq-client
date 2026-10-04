@@ -6,6 +6,7 @@ import { decryptSecret } from "@/lib/crypto/secret-encryption";
 import { getActiveMembership, networkCreditType } from "@/lib/data/member";
 import { getCreditPackageById } from "@/lib/data/catalog";
 import { recordStripeRevenue } from "@/lib/data/record-revenue";
+import { markFirstPurchase } from "@/lib/leads/brevo-lead";
 import { notifyFireAndForget } from "@/lib/notifications/core";
 import { resolveMemberContact } from "@/lib/notifications/resolve-member-contact";
 import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
@@ -152,6 +153,7 @@ export async function POST(request: NextRequest) {
       if (!error) {
         const purchaser = await resolveMemberContact(purchaserMemberId);
         if (purchaser) {
+          await markFirstPurchase(purchaserMemberId, purchaser.email);
           if (standaloneGym) {
             await recordStripeRevenue(
               standaloneGym,
@@ -234,6 +236,7 @@ export async function POST(request: NextRequest) {
     if (!error) {
       const contact = await resolveMemberContact(memberId);
       if (contact) {
+        await markFirstPurchase(memberId, contact.email);
         if (standaloneGym) {
           const packageId = checkoutSession.metadata?.packageId;
           const pkg = packageId ? await getCreditPackageById(standaloneGym, packageId) : null;
@@ -314,6 +317,7 @@ export async function POST(request: NextRequest) {
       if (!error) {
         const contact = await resolveMemberContact(memberId);
         if (contact) {
+          await markFirstPurchase(memberId, contact.email);
           if (standaloneGym) {
             const packageId = paymentIntent.metadata?.packageId;
             const pkg = packageId ? await getCreditPackageById(standaloneGym, packageId) : null;
@@ -520,6 +524,13 @@ export async function POST(request: NextRequest) {
       if (error && error.code !== "23505") {
         console.error("[stripe-webhook] failed to grant membership credits", { error: error.message });
         return NextResponse.json({ status: "error", message: "Could not grant credits." }, { status: 500 });
+      }
+
+      // A membership's first paid invoice ends lead nurture (no-op on
+      // renewals — first_purchase_at is only ever set once).
+      if (!error) {
+        const purchaser = await resolveMemberContact(memberId);
+        await markFirstPurchase(memberId, purchaser?.email);
       }
 
       // Unconditional on a fresh insert, same as the credit grant itself —

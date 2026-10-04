@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { email, password, name, gym } = parsed.data;
+  const { email, password, name, gym, marketingConsent } = parsed.data;
 
   const rateLimit = await checkAuthActionRateLimit("signup", email, ip);
   if (!rateLimit.allowed) {
@@ -107,7 +107,12 @@ export async function POST(request: NextRequest) {
 
   const { data: memberRows, error: memberError } = await admin
     .from("members")
-    .insert({ auth_user_id: data.user.id, gym, name })
+    .insert({
+      auth_user_id: data.user.id,
+      gym,
+      name,
+      marketing_consent_at: marketingConsent ? new Date().toISOString() : null,
+    })
     .select("id");
 
   // 23505 = auth_user_id already has a members row (repeat signup attempt

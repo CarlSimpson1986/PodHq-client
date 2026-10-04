@@ -24,6 +24,10 @@ export const signupSchema = z
     password: passwordSchema,
     name: z.string().trim().min(1).max(100),
     gym: z.enum(GYM_NAMES),
+    // The unticked-by-default "email me tips and offers" box (lead
+    // nurture, podHq 0106). Optional so an older cached client without
+    // the box still signs up — as no consent.
+    marketingConsent: z.boolean().optional(),
   })
   .strict();
 
