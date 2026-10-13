@@ -24,6 +24,11 @@ const config: CapacitorConfig = {
     // all, on every single page load. Pointing directly at the real
     // canonical domain skips the redirect hop entirely.
     url: 'https://www.myfitpod.app',
+    // Stripe Checkout loads inside the app (2026-10-13). Without this the
+    // WebView hands checkout.stripe.com to Safari/Chrome, and Checkout's
+    // back/cancel then lands on our site in that browser — which has no
+    // session, so the member sees the sign-in page as if logged out.
+    allowNavigation: ['checkout.stripe.com'],
     androidScheme: 'https',
     cleartext: false,
   },
