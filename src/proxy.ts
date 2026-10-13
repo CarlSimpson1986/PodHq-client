@@ -13,7 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // /delete-account is the same story — Google Play requires a working
 // account-deletion path even for someone who's uninstalled the app or
 // can't sign in (2026-09-09, Play Store submission).
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/offline", "/privacy", "/delete-account"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/auth/confirm", "/offline", "/privacy", "/delete-account"];
 // /api/webhooks/ is called by Stripe's servers, not a member's browser —
 // there's no session cookie to check, so the auth gate below must not
 // redirect it to /login (the route authenticates via Stripe's own
