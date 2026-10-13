@@ -125,7 +125,7 @@ export function WearableConnectionCard({
     try {
       const result = await connectHealthConnect();
       if (!result.connected) {
-        setError(result.reason ?? "Couldn't connect Health Connect.");
+        setError(result.reason ?? "Couldn't connect to your health data.");
         return;
       }
       router.refresh();

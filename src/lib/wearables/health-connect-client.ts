@@ -157,7 +157,7 @@ export async function connectHealthConnect(): Promise<{ connected: boolean; reas
 
   const availability = await Health.isAvailable();
   if (!availability.available) {
-    return { connected: false, reason: availability.reason ?? "Health Connect isn't available on this device." };
+    return { connected: false, reason: availability.reason ?? "Health data isn't available on this device." };
   }
 
   const status = await Health.requestAuthorization({ read: READ_TYPES });
