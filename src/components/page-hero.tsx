@@ -23,9 +23,9 @@ export function PageHero({
   subtitle?: string;
   icon?: ComponentType<{ className?: string }>;
   // Only pass this on pages behind auth — the icon becomes a link to
-  // /profile. Left unset on the auth pages (login/signup/forgot-password)
-  // that also use this component, since there's no profile to link to
-  // before signing in.
+  // /profile. Without it the icon isn't shown at all (2026-10-13): drawn
+  // in the same circle as the link, a decorative icon on login/signup
+  // looked like a button that did nothing.
   iconHref?: string;
   // Overrides the icon-link entirely with a custom element (e.g.
   // <MoreMenu />, 2026-08-25 redesign) — pass this instead of icon/
@@ -48,10 +48,6 @@ export function PageHero({
           <Link href={iconHref} className={`${iconCircleClass} hover:bg-card-border`}>
             <Icon className="h-7 w-7" />
           </Link>
-        ) : Icon ? (
-          <div className={iconCircleClass}>
-            <Icon className="h-7 w-7" />
-          </div>
         ) : null}
       </div>
     </div>
