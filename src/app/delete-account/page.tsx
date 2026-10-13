@@ -12,8 +12,8 @@ export default function DeleteAccountPage() {
         <div className="mx-auto w-full max-w-md card-light p-6">
           <p className="text-sm leading-relaxed text-card-light-muted">
             Enter the email address on your My Fit Pod account below to request that your account and associated data
-            be deleted. We&apos;ll action this manually and confirm by email — this isn&apos;t instant, since we
-            check things like an active membership or booking history first.
+            be deleted. We&apos;ll action this manually and confirm by email within 7 days — it isn&apos;t instant,
+            since we check things like an active membership or booking history first.
           </p>
           <DeleteAccountForm />
         </div>
