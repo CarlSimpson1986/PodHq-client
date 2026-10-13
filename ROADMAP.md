@@ -73,3 +73,7 @@ Hove's PDK went live with three readers: main entrance, gym, recovery room. A Ho
 ## Lead nurture: consent box + Brevo sync — 2026-10-04
 
 Signup has an unticked-by-default "Email me tips and offers from My Fit Pod <gym>" box → `members.marketing_consent_at` (podHq `0106`). On a confirmed email-link sign-in, `syncConsentedLeadToBrevo` (`src/lib/leads/brevo-lead.ts`) adds a consenting, never-purchased member to their gym's Brevo list via podHQ's internal `/api/brevo/lead` (Brevo keys stay in podHQ; same `PODHQ_BASE_URL`/`PDK_PROXY_SECRET` as the PDK proxy). The Stripe webhook's fresh-insert gates call `markFirstPurchase` — first real purchase (pack, membership, gift voucher; not staff comps) sets `first_purchase_at` and removes them from the list, which ends the Brevo workflow. Service emails unaffected. No backfill. Not yet verified live. Full write-up: podHq `ROADMAP_HISTORY.md` #70.
+
+## Hove unlock fix: booking-length PDK access — 2026-10-13
+
+Hove unlocks all failed on 8 Oct with `PDK group "Booking Access" not found`, because Hove's PDK system ("Brighton") had no such group. Carl created it. `api/unlock/route.ts` now sends `accessUntil` (the end of the unlock window) to podHQ, which at Hove removes the member from the group once that time passes (podHq `0107`, 5-minute cron). Fairford Leys is unchanged (GymFlow manages its group). Full detail in podHq's `ROADMAP_HISTORY.md` #71. **Outstanding:** a live test at Hove.

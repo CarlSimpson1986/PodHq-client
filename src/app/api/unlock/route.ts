@@ -5,7 +5,7 @@ import { getMemberByAuthUserId, isAccessComplete } from "@/lib/data/member";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { unlockSchema } from "@/lib/validation/unlock";
 import { distanceMeters } from "@/lib/geo";
-import { isWithinUnlockWindow } from "@/lib/unlock-window";
+import { isWithinUnlockWindow, unlockWindowAfterMs } from "@/lib/unlock-window";
 import { markSessionStartedByBookingId } from "@/lib/coach/workout-session";
 import { getStaffRecipients } from "@/lib/notifications/staff-recipients";
 import { notifyFireAndForget } from "@/lib/notifications/core";
@@ -218,6 +218,10 @@ export async function POST(request: NextRequest) {
           cloudNodeId: resource.provider_config.cloudNodeId,
           deviceId: door === "entrance" ? resource.provider_config.entranceDeviceId : resource.provider_config.deviceId,
           ...(member.pdk_holder_id ? { holderId: member.pdk_holder_id } : { newHolder: toNewHolder(member.name, user.email) }),
+          // When this booking's unlock window closes — at gyms where our
+          // app owns the PDK access group (Hove, podHq 0107), podHQ takes
+          // the member back out of it then.
+          accessUntil: new Date(start + unlockWindowAfterMs(resource.slot_duration_minutes)).toISOString(),
         }),
         // Same reasoning as Kisi's own timeout below — a hanging proxy
         // call shouldn't leave a member waiting indefinitely at the door.
