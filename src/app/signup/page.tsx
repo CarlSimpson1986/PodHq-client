@@ -36,6 +36,7 @@ function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [continuing, setContinuing] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -67,13 +68,50 @@ function SignupForm() {
     }
   }
 
+  // After tapping the email link (which opens in Gmail/Safari, not the
+  // app — see auth/callback), the member comes back here. Signs them in
+  // with what they just typed, so they don't have to find Sign in and
+  // re-enter it all. Until the email is confirmed this just fails with the
+  // login route's "confirm your email first" message.
+  async function handleContinue() {
+    setError(null);
+    setContinuing(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const body = await res.json();
+      if (body.status === "ok") {
+        // Full reload, same reason as login/page.tsx.
+        window.location.href = "/";
+        return;
+      }
+      setError(body.message ?? "Something went wrong. Try again.");
+    } catch {
+      setError("Something went wrong. Try again.");
+    } finally {
+      setContinuing(false);
+    }
+  }
+
   return (
     <main className="flex min-h-full flex-1 flex-col">
       <PageHero title="Create an account" subtitle="My Fit Pod" icon={UserPlusIcon} />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md card-light p-6">
           {message ? (
-            <p className="text-sm text-success">{message}</p>
+            <div className="space-y-5">
+              <p className="text-sm text-success">{message}</p>
+              <p className="text-sm text-card-light-muted">
+                Tap the link in the email, then come back here.
+              </p>
+              {error && <p className="text-sm text-danger">{error}</p>}
+              <button type="button" onClick={handleContinue} disabled={continuing} className={buttonClass}>
+                {continuing ? "Signing in..." : "I've confirmed my email — continue"}
+              </button>
+            </div>
           ) : (
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div>

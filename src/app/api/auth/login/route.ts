@@ -43,6 +43,15 @@ export async function POST(request: NextRequest) {
 
   if (error || !data.user) {
     await logAuthEvent({ email, eventType: "login_failure", ipAddress: ip, detail: error?.message });
+    // Supabase only reports this once the password has matched, so it says
+    // nothing to someone guessing — and a new member who hasn't tapped the
+    // confirmation link yet otherwise just sees "Invalid email or password".
+    if (error?.code === "email_not_confirmed") {
+      return NextResponse.json(
+        { status: "error", message: "Please confirm your email first — tap the link we sent you." },
+        { status: 401 }
+      );
+    }
     return NextResponse.json({ status: "error", message: GENERIC_ERROR }, { status: 401 });
   }
 
