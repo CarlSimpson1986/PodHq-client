@@ -15,6 +15,12 @@ function AuthCallbackInner() {
   const searchParams = useSearchParams();
   const ran = useRef(false);
   const [error, setError] = useState(false);
+  // Email confirmed, but the session couldn't be started here: a signup
+  // made in the iOS/Android app keeps its PKCE verifier in the app's
+  // WebView, and the email link opens in Gmail/Safari instead. Supabase has
+  // already confirmed the address before redirecting with ?code=, so the
+  // member just needs to sign in back in the app.
+  const [confirmedElsewhere, setConfirmedElsewhere] = useState(false);
 
   useEffect(() => {
     if (ran.current) return;
@@ -48,6 +54,10 @@ function AuthCallbackInner() {
         const body = await res.json();
 
         if (body.status !== "ok") {
+          if (code && !mode && type !== "recovery") {
+            setConfirmedElsewhere(true);
+            return;
+          }
           setError(true);
           return;
         }
@@ -84,6 +94,17 @@ function AuthCallbackInner() {
     run();
   }, [searchParams]);
 
+  if (confirmedElsewhere) {
+    return (
+      <CallbackCard title="Email confirmed">
+        Your email is confirmed. Go back to the My Fit Pod app and sign in.{" "}
+        <a href="/login" className="text-accent hover:underline">
+          Or sign in here
+        </a>
+      </CallbackCard>
+    );
+  }
+
   return (
     <CallbackCard error={error}>
       {error ? (
@@ -100,11 +121,11 @@ function AuthCallbackInner() {
   );
 }
 
-function CallbackCard({ error, children }: { error?: boolean; children: React.ReactNode }) {
+function CallbackCard({ error, title, children }: { error?: boolean; title?: string; children: React.ReactNode }) {
   return (
     <main className="flex min-h-full flex-1 items-center justify-center p-4">
       <div className="card-light w-full max-w-sm p-6">
-        <h1 className="mb-1 text-lg font-semibold">{error ? "Link expired" : "Signing you in..."}</h1>
+        <h1 className="mb-1 text-lg font-semibold">{title ?? (error ? "Link expired" : "Signing you in...")}</h1>
         <p className={`text-sm ${error ? "text-danger" : "text-card-light-muted"}`}>{children}</p>
       </div>
     </main>
