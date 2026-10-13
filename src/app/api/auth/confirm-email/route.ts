@@ -31,5 +31,10 @@ export async function POST(request: NextRequest) {
     await syncConsentedLeadToBrevo(data.user.id, data.user.email);
   }
 
+  // Confirm only — the member signs in on the page this sends them to.
+  // Left signed in here, the proxy would bounce /login straight to the
+  // home page in this browser.
+  await supabase.auth.signOut();
+
   return NextResponse.json({ status: "ok" });
 }

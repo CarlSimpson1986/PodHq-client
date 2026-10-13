@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PasswordInput } from "@/components/password-input";
 import { PageHero } from "@/components/page-hero";
@@ -12,6 +13,17 @@ const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+// useSearchParams needs a Suspense boundary — same split as signup/page.tsx.
+function LoginForm() {
+  // Arriving from the signup email's link (/auth/confirm).
+  const confirmed = useSearchParams().get("confirmed") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +63,9 @@ export default function LoginPage() {
       <PageHero title="Sign in" subtitle="My Fit Pod" icon={LockIcon} />
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md card-light p-6">
+          {confirmed && (
+            <p className="mb-5 text-sm text-success">Email confirmed. Sign in to get started.</p>
+          )}
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="mb-1.5 block text-sm text-card-light-muted">

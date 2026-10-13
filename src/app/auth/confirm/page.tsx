@@ -4,9 +4,8 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 // Landing page for the signup confirmation email's link. Confirms on load
-// (JS-only, so a mail scanner fetching the URL doesn't use up the token)
-// and tells the member to go back to the app, where the signup screen's
-// continue button signs them in.
+// (JS-only, so a mail scanner fetching the URL doesn't use up the token),
+// then goes straight to the sign-in page.
 export default function ConfirmEmailPage() {
   return (
     <Suspense fallback={<ConfirmCard title="Confirming your email...">One moment...</ConfirmCard>}>
@@ -18,7 +17,7 @@ export default function ConfirmEmailPage() {
 function ConfirmEmailInner() {
   const searchParams = useSearchParams();
   const ran = useRef(false);
-  const [state, setState] = useState<"working" | "ok" | "error">("working");
+  const [state, setState] = useState<"working" | "error">("working");
 
   useEffect(() => {
     if (ran.current) return;
@@ -37,7 +36,11 @@ function ConfirmEmailInner() {
           body: JSON.stringify({ tokenHash }),
         });
         const body = await res.json();
-        setState(body.status === "ok" ? "ok" : "error");
+        if (body.status === "ok") {
+          window.location.href = "/login?confirmed=1";
+          return;
+        }
+        setState("error");
       } catch {
         setState("error");
       }
@@ -46,23 +49,10 @@ function ConfirmEmailInner() {
     run();
   }, [searchParams]);
 
-  if (state === "ok") {
-    return (
-      <ConfirmCard title="Email confirmed">
-        You&apos;re all set. Go back to the My Fit Pod app and tap continue.{" "}
-        {/* Full reload, not <Link> — picks up the session just set here. */}
-        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a href="/" className="text-accent hover:underline">
-          Or continue here
-        </a>
-      </ConfirmCard>
-    );
-  }
   if (state === "error") {
     return (
       <ConfirmCard title="Link already used" error>
-        This link has already been used or has expired. If you&apos;ve already confirmed, go back to the My Fit Pod
-        app and tap continue, or{" "}
+        This link has already been used or has expired. If you&apos;ve already confirmed your email, just{" "}
         <a href="/login" className="text-accent hover:underline">
           sign in
         </a>
