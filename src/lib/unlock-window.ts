@@ -1,3 +1,5 @@
+import { londonHour } from "@/lib/london-time";
+
 // The window during which a booking's Unlock is actually available: from
 // 5 minutes before the slot starts, through the slot's own duration plus a
 // 5-minute grace period after. Previously hardcoded as a flat 65 minutes
@@ -17,6 +19,23 @@ export function unlockWindowAfterMs(slotDurationMinutes: number): number {
   return slotDurationMinutes * 60 * 1000 + GRACE_AFTER_MS;
 }
 
-export function isWithinUnlockWindow(now: number, slotStartMs: number, slotDurationMinutes: number): boolean {
-  return now >= slotStartMs - UNLOCK_WINDOW_BEFORE_MS && now <= slotStartMs + unlockWindowAfterMs(slotDurationMinutes);
+// Never before the gym's opening hour (Europe/London) on the slot's day.
+// Hove's PDK access rule only allows 06:00-22:00 (the gym can't operate
+// outside those hours), so a 6am booking tapping at 05:55 got through our
+// window and then PDK's "Outside of scheduled access" 403 — found
+// 2026-10-15. openHour omitted or 0 (open from midnight, e.g. a 24-hour
+// gym) = no clamp, so a midnight slot keeps its 23:55 early unlock.
+export function unlockWindowOpensAtMs(slotStartMs: number, openHour?: number): number {
+  const early = slotStartMs - UNLOCK_WINDOW_BEFORE_MS;
+  if (!openHour) return early;
+  return Math.max(early, londonHour(new Date(slotStartMs), openHour).getTime());
+}
+
+export function isWithinUnlockWindow(
+  now: number,
+  slotStartMs: number,
+  slotDurationMinutes: number,
+  openHour?: number
+): boolean {
+  return now >= unlockWindowOpensAtMs(slotStartMs, openHour) && now <= slotStartMs + unlockWindowAfterMs(slotDurationMinutes);
 }

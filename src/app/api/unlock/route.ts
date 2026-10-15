@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
 
   const now = Date.now();
   const start = new Date(active.slot_start).getTime();
-  if (!isWithinUnlockWindow(now, start, resource.slot_duration_minutes)) {
+  if (!isWithinUnlockWindow(now, start, resource.slot_duration_minutes, resource.open_hour)) {
     return NextResponse.json({ status: "error", message: "No active booking right now." }, { status: 403 });
   }
 

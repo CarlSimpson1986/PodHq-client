@@ -76,7 +76,7 @@ Signup has an unticked-by-default "Email me tips and offers from My Fit Pod <gym
 
 ## Hove unlock fix: booking-length PDK access — 2026-10-13
 
-Hove unlocks all failed on 8 Oct with `PDK group "Booking Access" not found`, because Hove's PDK system ("Brighton") had no such group. Carl created it. `api/unlock/route.ts` now sends `accessUntil` (the end of the unlock window) to podHQ, which at Hove removes the member from the group once that time passes (podHq `0107`, 5-minute cron). Fairford Leys is unchanged (GymFlow manages its group). Full detail in podHq's `ROADMAP_HISTORY.md` #71. **Outstanding:** a live test at Hove.
+Hove unlocks all failed on 8 Oct with `PDK group "Booking Access" not found`, because Hove's PDK system ("Brighton") had no such group. Carl created it. `api/unlock/route.ts` now sends `accessUntil` (the end of the unlock window) to podHQ, which at Hove removes the member from the group once that time passes (podHq `0107`, 5-minute cron). Fairford Leys is unchanged (GymFlow manages its group). Full detail in podHq's `ROADMAP_HISTORY.md` #71. 10-15: PDK rule added (06:00–22:00); unlock window now never opens before `open_hour` (`unlock-window.ts`, 226 tests). **Outstanding:** a live test at Hove.
 
 ## Apple resubmission: signup email link, Checkout in-app, iOS builds 12–13 — 2026-10-13
 

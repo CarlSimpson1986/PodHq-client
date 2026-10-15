@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { Booking, ActiveReservation, MemberWaitlistSlot, PodResource } from "@/lib/data/member";
 import { bookingWindowDates, formatDateParam } from "@/lib/booking-dates";
 import { londonDateParts, londonHour, londonHourOf } from "@/lib/london-time";
-import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
+import { isWithinUnlockWindow } from "@/lib/unlock-window";
 import { BottomNav } from "@/components/bottom-nav";
 import { PodAssistBubble } from "@/components/pod-assist-bubble";
 import { TourContinuation } from "@/components/tour-continuation";
@@ -421,8 +421,7 @@ export function BookingGrid({
             const inUnlockWindow =
               isMine &&
               !!resource &&
-              now >= slot.getTime() - UNLOCK_WINDOW_BEFORE_MS &&
-              now <= slot.getTime() + unlockWindowAfterMs(resource.slotDurationMinutes);
+              isWithinUnlockWindow(now, slot.getTime(), resource.slotDurationMinutes, resource.openHour);
             // A slot can have real physical space (not "full") but still be
             // off-limits to everyone except whoever it's currently offered
             // to on the waitlist — create_booking() enforces this server-side

@@ -10,7 +10,7 @@ import { DoorUnlockButtons } from "@/components/door-unlock-buttons";
 import { subscribeToPush } from "@/lib/push/subscribe";
 import { isNativePushSupported, subscribeToNativePush } from "@/lib/push/native-subscribe";
 import { PushNotifications } from "@capacitor/push-notifications";
-import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
+import { isWithinUnlockWindow, unlockWindowAfterMs } from "@/lib/unlock-window";
 
 const STATUS_LABELS: Record<Booking["status"], string> = {
   booked: "Booked",
@@ -332,8 +332,12 @@ export function BookingsView({
             const start = new Date(booking.slot_start).getTime();
             const inUnlockWindow =
               view === "upcoming" &&
-              now >= start - UNLOCK_WINDOW_BEFORE_MS &&
-              now <= start + unlockWindowAfterMs(slotDurationFor(resources, booking.resource_id));
+              isWithinUnlockWindow(
+                now,
+                start,
+                slotDurationFor(resources, booking.resource_id),
+                resources.find((r) => r.id === booking.resource_id)?.openHour
+              );
             const message = unlockMessages[booking.id];
             const entranceResource = entranceResourceFor(resources, booking.resource_id);
 

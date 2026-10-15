@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Booking } from "@/lib/data/member";
 import { LockIcon } from "@/components/icons";
 import { DoorUnlockButtons } from "@/components/door-unlock-buttons";
-import { UNLOCK_WINDOW_BEFORE_MS, unlockWindowAfterMs } from "@/lib/unlock-window";
+import { isWithinUnlockWindow } from "@/lib/unlock-window";
 
 function formatSlot(iso: string) {
   const d = new Date(iso);
@@ -21,12 +21,15 @@ export function UpcomingSessionCard({
   booking,
   accessComplete,
   slotDurationMinutes,
+  openHour,
   requiresLocation,
   entranceRoomLabel,
 }: {
   booking: Booking;
   accessComplete: boolean;
   slotDurationMinutes: number;
+  // Unlock never opens before this (Europe/London) — see unlock-window.ts.
+  openHour?: number;
   requiresLocation: boolean;
   // Set (to the room's own label) when this booking sits behind a shared
   // main door — the card then shows both doors' buttons instead of one.
@@ -42,7 +45,7 @@ export function UpcomingSessionCard({
   const [message, setMessage] = useState("");
 
   const start = new Date(booking.slot_start).getTime();
-  const inUnlockWindow = now >= start - UNLOCK_WINDOW_BEFORE_MS && now <= start + unlockWindowAfterMs(slotDurationMinutes);
+  const inUnlockWindow = isWithinUnlockWindow(now, start, slotDurationMinutes, openHour);
 
   async function unlock() {
     setMessage("");
