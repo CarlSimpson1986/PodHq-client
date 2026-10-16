@@ -14,35 +14,18 @@ deploy. Started as an Aylesbury Berryfields-only pilot (decided
 dropdown — see the archive below for the pilot-era stage detail.
 
 **Older history has been split into numbered archive files** —
-`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-74.md`, covering the pilot
-mechanism proof (2026-08-05) through the Apple 2.1 reply prep (2026-09-15) —
+`ROADMAP-ARCHIVE.md` through `ROADMAP-ARCHIVE-75.md`, covering the pilot
+mechanism proof (2026-08-05) through PDK auto-link (2026-09-23) —
 all split out to keep this file within Claude Code's ~15,000-character
 `@`-import limit. Archives aren't always the strictly oldest material —
 the split point is "what's finished and stable" as much as "what's
 oldest" (see each archive's own header note for examples).
 Reference-only, not auto-loaded by CLAUDE.md; check them for full build
 history, or `git log` on this file for exact split points. Active
-content here starts at "PDK auto-link on first unlock" (2026-09-23). If
+content here starts at "Planned (not built): Wellhub" (2026-09-25). If
 this file grows too large again, split it the same way: move the most
-clearly finished section into `ROADMAP-ARCHIVE-75.md`, update this
+clearly finished section into `ROADMAP-ARCHIVE-76.md`, update this
 paragraph.
-
-## PDK auto-link on first unlock, booking-email timezone fix — 2026-09-23
-
-**Steve (Fairford Leys owner) got "Your access isn't set up yet — contact staff" at the door.** `api/unlock/route.ts` required `members.pdk_holder_id`, which only Carl's test account (member 157) ever had, set by hand in podHq's `0100` — every other PDK-gym member was locked out. Now, with no holder ID, the route sends the member's name/email to podHQ's `/api/pdk/unlock`, which reuses their PDK holder by exact email match or creates one, adds it to "Booking Access", unlocks, and returns the ID, saved here even on a failed unlock so a retry doesn't duplicate it. Proxy timeout raised 10s → 25s (a first unlock chains several PDK calls plus one 2s retry). Details in podHq's `ROADMAP_HISTORY.md` #66. **Verified live 2026-09-23 14:49** (member 158, Fairford Leys "Entrance"): PDK's own audit log shows the holder created and added to Booking Access by "Integration Client", then "Access allowed" via API — no manual PDK step, first read succeeded without the retry. Still not built: `members.unlimited_access` (owner unlock without booking, schema only).
-
-**Follow-up, same session**: Carl's first live test hit "Turn on location services" — both Unlock buttons (`upcoming-session-card.tsx`, `bookings-view.tsx`) hard-stopped client-side whenever geolocation failed, even at Fairford Leys, whose resource has no coordinates so the server would never check. Location is now sent when available and omitted otherwise; the server remains the only gate (it still blocks a missing location at resources with coordinates).
-
-**Speed follow-up**: Carl found the first live unlock slow. The Unlock buttons now only request geolocation when the resource has coordinates (`PodResource.requiresLocation`; unknown resources default to asking) and accept a fix up to 60s old — up to 10s of location lookup was dead time at Fairford Leys. podHQ caches its PDK token too (its `ROADMAP_HISTORY.md` #66).
-
-**Location enforced at Fairford Leys + staff alert on door failure**: Carl set Fairford Leys' coordinates (51.820265, -0.836716, 100m radius — tighter than the 300m default, phone GPS indoors makes much below ~100m refuse genuine members). Only Aylesbury Berryfields had coordinates before (podHq `0013`); every other gym has no GPS gate, and PDK's API exposes no location (Kisi's does, per place/lock — an unbuilt option for backfilling Kisi gyms). New: when the door system itself fails (not this app's own "blocked:" refusals), the gym's owner(s) + admins get a `staff_unlock_failed` email (member name, mobile, door, slot, the door system's error) — once per booking, not per retry. Not yet seen fire live.
-
-**Email logo not showing**: `https://www.myfitpod.app/icons/icon-512.png` returns 200, `podhq-client.vercel.app/...` 404s — consistent with Vercel's `APP_URL` still pointing at the retired alias (not inspected). `appUrl()` (`notifications/core.ts`) now returns the canonical `PRODUCTION_ORIGIN` in production regardless of `APP_URL`, fixing the logo and every email CTA link at once. Carl to confirm in the next real email.
-
-**Booking emails showed slot times an hour early** — `formatSlot` in `notifications/templates.ts` had no `timeZone`, and Vercel runs UTC; now `Europe/London`.
-
-**Not a bug**: a Brighton "AAL2 session is required to update email or password when MFA is enabled" reset error was the shared Hove podHQ staff login (2FA-enabled) being entered in the member app. Staff logins reset via podHQ; members should use their own email.
-
 
 ## Planned (not built): Wellhub check-in enforcement, Facebook ads sync — 2026-09-25
 
@@ -81,3 +64,7 @@ Hove unlocks all failed on 8 Oct with `PDK group "Booking Access" not found`, be
 ## Apple resubmission: signup email link, Checkout in-app, iOS builds 12–13 — 2026-10-13
 
 Recording Apple's 2.1 walkthrough on an iPhone turned up three bugs. (1) The signup confirmation link (PKCE `?code=`) only works on the device that signed up, but from the app it opens in Gmail/Safari, so it always said "Link expired". The Supabase **Confirm signup** template now links to `/auth/confirm?token_hash=…&type=email` (Carl changed it by hand; Magic Link left alone because podHQ staff use it). `/api/auth/confirm-email` runs `verifyOtp`, syncs the Brevo lead, signs out, and the page goes to `/login?confirmed=1` ("Email confirmed. Sign in to get started."). Old `?code=` links that can't be exchanged go to the same place. (2) The signup "Check your email" screen has an "I've confirmed my email — continue" button, and an unconfirmed login says "Please confirm your email first" instead of "Invalid email or password". (3) Stripe Checkout went to Safari (Capacitor blocks other hosts), so Checkout's X landed on our site with no session and looked like a logout. Fixed with `allowNavigation: ['checkout.stripe.com']` (`168046e`), which needs native builds: **iOS build 13 done (Codemagic); Android not rebuilt yet.** Also: the decorative `PageHero` icon is dropped where it isn't a link, and the delete-account copy says 7 days. Verified live with bogus tokens/codes. A real token_hash confirmation hasn't been seen end to end yet, and Checkout in-app needs checking on build 13. Apple: the new recording (sign-up → email → sign in → Book/Shop → Delete account) was being submitted with build 13 at session end. Demo account member 153 topped up (+10 pod, +5 recovery).
+
+## Locked-out test member: reset links didn't clear the lock — 2026-10-16
+
+Test member 155 (Tom, Hove) got into the app via "Forgot password" without setting a password, and stayed locked. `auth_events`: a password saved 8 Oct 13:59 (`password_reset_completed`); every password sign-in since has failed (10 across 15–16 Oct → `account_locked` 11:53); three reset links used, none saved a password. Ruled out (Carl's SQL on `auth.users`): email typed differently, no password, duplicate account. **Why the 8 Oct password never matched is unproven** — likely an iPhone-suggested strong password or an old saved one; Carl says it wasn't wrong. Three changes: (1) `complete-callback` logs `login_success` (detail `email link`) for the user the link signed in, so any email link clears a hard lock — before, only saving a password did, and there's no admin unlock. (2) Locked message says use "Forgot password?" instead of "Contact support". (3) `/reset-password` boxes start as plain text (`PasswordInput initiallyVisible`), so iOS doesn't offer a random strong password. **Verified on local dev** (Dev Test Member 151, Chrome): boxes render `type=text`; saved a new password → `/book`; signed out; signed in with it → `/`. tsc/eslint/vitest 226 clean. **Not verified:** (1) end to end — needs a real reset link (151's inbox is fake); check via `auth_events` for a `login_success` / `email link` row after Tom's next reset.

@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
     if (lockout.reason === "account_locked") {
       await logAuthEvent({ email, eventType: "account_locked", ipAddress: ip });
       return NextResponse.json(
-        { status: "error", message: "This account is locked. Contact support to reset it." },
+        // Not "contact support": there's no one to contact (unmanned gyms,
+        // no admin unlock in this app). A reset link clears the lock.
+        { status: "error", message: "This account is locked after too many attempts. Use \"Forgot password?\" to get back in." },
         { status: 423 }
       );
     }

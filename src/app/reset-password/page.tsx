@@ -49,10 +49,17 @@ export default function ResetPasswordPage() {
       <div className="flex-1 px-6 pb-10 pt-8">
         <div className="mx-auto w-full max-w-md card-light p-6">
           <form className="space-y-5" onSubmit={handleSubmit}>
+            {/* Shown as plain text from the start: on a password-type box
+                iPhones offer (and can silently fill) a random "strong
+                password", leaving a member with a saved password they never
+                saw. Test member 155 set a password 2026-10-08 that no
+                sign-in has matched since — cause not proven, this rules
+                that route out. They can still tap Hide. */}
             <PasswordInput
               id="password"
               label="New password"
               autoComplete="new-password"
+              initiallyVisible
               value={password}
               onChange={setPassword}
               hint="At least 8 characters, with an uppercase letter, lowercase letter, and a number."
@@ -61,6 +68,7 @@ export default function ResetPasswordPage() {
               id="confirmPassword"
               label="Confirm new password"
               autoComplete="new-password"
+              initiallyVisible
               value={confirmPassword}
               onChange={setConfirmPassword}
             />

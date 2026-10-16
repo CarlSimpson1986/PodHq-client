@@ -15,6 +15,7 @@ export function PasswordInput({
   value,
   onChange,
   hint,
+  initiallyVisible = false,
 }: {
   id: string;
   label: string;
@@ -22,8 +23,10 @@ export function PasswordInput({
   value: string;
   onChange: (value: string) => void;
   hint?: string;
+  // Starts as plain text — see reset-password/page.tsx for why.
+  initiallyVisible?: boolean;
 }) {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(initiallyVisible);
 
   return (
     <div>
