@@ -13,7 +13,24 @@ import { NextResponse, type NextRequest } from "next/server";
 // /delete-account is the same story — Google Play requires a working
 // account-deletion path even for someone who's uninstalled the app or
 // can't sign in (2026-09-09, Play Store submission).
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/callback", "/auth/confirm", "/offline", "/privacy", "/delete-account"];
+// /shop, /buy-membership and /buy-credits are browsable without a session
+// (2026-11-12, Apple guideline 5.1.1(v): registration may only be required
+// for account-based features). Only the pages are public — the checkout
+// API routes they call stay behind this gate, so buying still needs an
+// account.
+const PUBLIC_PATHS = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/auth/callback",
+  "/auth/confirm",
+  "/offline",
+  "/privacy",
+  "/delete-account",
+  "/shop",
+  "/buy-membership",
+  "/buy-credits",
+];
 // /api/webhooks/ is called by Stripe's servers, not a member's browser —
 // there's no session cookie to check, so the auth gate below must not
 // redirect it to /login (the route authenticates via Stripe's own

@@ -17,9 +17,13 @@ function categoryFor(tier: MembershipTier): (typeof CATEGORY_ORDER)[number] {
 export function BuyMembershipList({
   tiers,
   currentTierId,
+  guest = false,
 }: {
   tiers: MembershipTier[];
   currentTierId: string | null;
+  // Signed-out browsing (Apple guideline 5.1.1(v)) — prices only, with a
+  // sign-in link in place of Subscribe; no promo code or booking link.
+  guest?: boolean;
 }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,16 +58,18 @@ export function BuyMembershipList({
 
   return (
     <div className="space-y-3">
-      <div>
-        <label className="mb-1 block text-xs font-medium text-card-light-muted">Have a promo code?</label>
-        <input
-          type="text"
-          value={promoCode}
-          onChange={(e) => setPromoCode(e.target.value)}
-          placeholder="Enter code"
-          className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm uppercase text-card-light-foreground placeholder:normal-case placeholder:text-card-light-muted"
-        />
-      </div>
+      {!guest && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-card-light-muted">Have a promo code?</label>
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder="Enter code"
+            className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm uppercase text-card-light-foreground placeholder:normal-case placeholder:text-card-light-muted"
+          />
+        </div>
+      )}
       {error && <p className="text-sm text-danger">{error}</p>}
       {currentTierId && (
         <p className="text-sm text-card-light-muted">
@@ -101,7 +107,14 @@ export function BuyMembershipList({
               </p>
               <p className="text-sm text-card-light-muted">{tier.label}</p>
             </div>
-            {isCurrent ? (
+            {guest ? (
+              <Link
+                href="/login"
+                className="shrink-0 rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Sign in to buy
+              </Link>
+            ) : isCurrent ? (
               <span className="rounded-lg border border-card-light-border px-4 py-2 text-sm font-semibold text-card-light-muted">
                 Current plan
               </span>
@@ -117,9 +130,11 @@ export function BuyMembershipList({
           </div>
         );
       })}
-      <Link href="/book" className="mt-2 inline-block text-sm text-card-light-muted hover:text-card-light-foreground">
-        Back to booking
-      </Link>
+      {!guest && (
+        <Link href="/book" className="mt-2 inline-block text-sm text-card-light-muted hover:text-card-light-foreground">
+          Back to booking
+        </Link>
+      )}
     </div>
   );
 }

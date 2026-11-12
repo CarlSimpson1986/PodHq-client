@@ -10,6 +10,7 @@ export function BuyCreditsList({
   packages,
   isSubscriber,
   gym,
+  guest = false,
 }: {
   packages: PackageWithClaimStatus[];
   // Whether *this member* is eligible in principle (active membership,
@@ -22,6 +23,9 @@ export function BuyCreditsList({
   // page.tsx) — omitted from the request otherwise, letting the API
   // route's own member.gym default apply exactly as before this change.
   gym?: string;
+  // Signed-out browsing (Apple guideline 5.1.1(v)) — prices only, with a
+  // sign-in link in place of Buy; no promo code or booking link.
+  guest?: boolean;
 }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,16 +60,18 @@ export function BuyCreditsList({
 
   return (
     <div className="space-y-3">
-      <div>
-        <label className="mb-1 block text-xs font-medium text-card-light-muted">Have a promo code?</label>
-        <input
-          type="text"
-          value={promoCode}
-          onChange={(e) => setPromoCode(e.target.value)}
-          placeholder="Enter code"
-          className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm uppercase text-card-light-foreground placeholder:normal-case placeholder:text-card-light-muted"
-        />
-      </div>
+      {!guest && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-card-light-muted">Have a promo code?</label>
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder="Enter code"
+            className="w-full rounded-lg border border-card-light-border px-3 py-2 text-sm uppercase text-card-light-foreground placeholder:normal-case placeholder:text-card-light-muted"
+          />
+        </div>
+      )}
       {isSubscriber && packages.some((pkg) => pkg.networkEligible) && (
         <p className="rounded-lg bg-accent/10 px-3 py-2 text-xs text-card-light-foreground">
           As a member, gym-session credit you buy now is 10% off and works at <strong>any gym</strong> — not just your
@@ -100,6 +106,14 @@ export function BuyCreditsList({
               <p className="text-sm text-card-light-muted">{pkg.label}</p>
               {pkg.alreadyClaimed && <p className="mt-1 text-sm text-card-light-muted">Already claimed — limited to one per member.</p>}
             </div>
+            {guest ? (
+              <Link
+                href="/login"
+                className="shrink-0 rounded-lg bg-card-light-foreground px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Sign in to buy
+              </Link>
+            ) : (
             <button
               onClick={() => buy(pkg.id)}
               disabled={!!pendingId || pkg.alreadyClaimed}
@@ -107,15 +121,18 @@ export function BuyCreditsList({
             >
               {pkg.alreadyClaimed ? "Claimed" : pendingId === pkg.id ? "Redirecting..." : "Buy"}
             </button>
+            )}
           </div>
         );
       })}
-      <Link
-        href={gym ? `/book?gym=${encodeURIComponent(gym)}` : "/book"}
-        className="mt-2 inline-block text-sm text-card-light-muted hover:text-card-light-foreground"
-      >
-        Back to booking
-      </Link>
+      {!guest && (
+        <Link
+          href={gym ? `/book?gym=${encodeURIComponent(gym)}` : "/book"}
+          className="mt-2 inline-block text-sm text-card-light-muted hover:text-card-light-foreground"
+        >
+          Back to booking
+        </Link>
+      )}
     </div>
   );
 }

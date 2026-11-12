@@ -101,6 +101,10 @@ function LoginForm() {
               Forgot password?
             </Link>
           </div>
+          {/* Browsable without an account (Apple guideline 5.1.1(v)). */}
+          <Link href="/shop" className="mt-4 block text-center text-sm text-card-light-foreground hover:underline">
+            Browse memberships and credit packs
+          </Link>
         </div>
       </div>
     </main>

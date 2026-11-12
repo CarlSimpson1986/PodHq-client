@@ -1,9 +1,9 @@
-import { redirect } from "next/navigation";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { getCreditPackages, getClaimedOneTimeItemIds } from "@/lib/data/catalog";
 import { GYM_NAMES } from "@/lib/gym";
 import { BuyCreditsList } from "@/components/buy-credits-list";
+import { GuestGymPicker } from "@/components/guest-gym-picker";
 import { PageHero } from "@/components/page-hero";
 import { CoinIcon } from "@/components/icons";
 import { NoMemberProfile } from "@/components/no-member-profile";
@@ -19,8 +19,33 @@ export default async function BuyCreditsPage({ searchParams }: { searchParams: P
     data: { user },
   } = await session.auth.getUser();
 
+  // Signed-out visitors can browse a gym's credit packs (Apple guideline
+  // 5.1.1(v)); buying still needs an account — the list swaps its Buy
+  // buttons for a sign-in link, and /api/checkout stays behind proxy.ts's
+  // auth gate regardless. No voucher redemption here: that's account-based.
   if (!user) {
-    redirect("/login");
+    const params = await searchParams;
+    const gym = params.gym && isGymName(params.gym) ? params.gym : GYM_NAMES[0];
+    const creditPackages = await getCreditPackages(gym);
+    return (
+      <main className="flex min-h-full flex-1 flex-col">
+        <PageHero title="Credit packs" subtitle="Top up to book pod sessions." />
+        <div className="flex-1 px-6 pb-10 pt-8">
+          <div className="mx-auto w-full max-w-md card-light space-y-4 p-6">
+            <GuestGymPicker gym={gym} />
+            {creditPackages.length === 0 ? (
+              <p className="text-sm text-card-light-muted">No credit packs are available at {gym} yet.</p>
+            ) : (
+              <BuyCreditsList
+                packages={creditPackages.map((pkg) => ({ ...pkg, alreadyClaimed: false }))}
+                isSubscriber={false}
+                guest
+              />
+            )}
+          </div>
+        </div>
+      </main>
+    );
   }
 
   const member = await getMemberByAuthUserId(user.id);
