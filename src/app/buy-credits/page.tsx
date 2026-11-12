@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { getCreditPackages, getClaimedOneTimeItemIds } from "@/lib/data/catalog";
@@ -42,6 +43,10 @@ export default async function BuyCreditsPage({ searchParams }: { searchParams: P
                 guest
               />
             )}
+            {/* The native shell has no back button. */}
+            <Link href="/shop" className="inline-block text-sm text-card-light-muted hover:text-card-light-foreground">
+              Back to shop
+            </Link>
           </div>
         </div>
       </main>
