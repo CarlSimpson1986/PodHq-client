@@ -30,6 +30,9 @@ const PUBLIC_PATHS = [
   "/shop",
   "/buy-membership",
   "/buy-credits",
+  // Exact match only: /gift-voucher/success (shows a purchased code) stays
+  // behind the gate. Added 2026-11-14 for the same 5.1.1(v) reason.
+  "/gift-voucher",
 ];
 // /api/webhooks/ is called by Stripe's servers, not a member's browser —
 // there's no session cookie to check, so the auth gate below must not

@@ -2,9 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { VOUCHER_PRESETS_GBP, VOUCHER_MIN_GBP, VOUCHER_MAX_GBP, creditsForVoucherAmount } from "@/lib/gift-voucher";
+import {
+  VOUCHER_PRESETS_GBP,
+  VOUCHER_MIN_GBP,
+  VOUCHER_MAX_GBP,
+  creditsForVoucherAmount,
+} from "@/lib/gift-voucher";
 
-export function BuyVoucherForm() {
+// `guest`: a signed-out visitor browsing (Apple guideline 5.1.1(v)) — they
+// can pick amounts and see the credits, but buying needs an account, so
+// "Go to Checkout" becomes a sign-in link (/api/checkout-voucher stays
+// behind proxy.ts's auth gate regardless).
+export function BuyVoucherForm({ guest = false }: { guest?: boolean }) {
   const [amount, setAmount] = useState<number | null>(VOUCHER_PRESETS_GBP[0]);
   const [customAmount, setCustomAmount] = useState("");
   const [pending, setPending] = useState(false);
@@ -39,9 +48,12 @@ export function BuyVoucherForm() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm font-semibold text-card-light-muted">Set the voucher amount</p>
+        <p className="text-sm font-semibold text-card-light-muted">
+          Set the voucher amount
+        </p>
         <p className="mt-1 text-sm text-card-light-muted">
-          The code will be shown immediately after payment — save it or pass it on.
+          The code will be shown immediately after payment — save it or pass it
+          on.
         </p>
       </div>
 
@@ -78,20 +90,39 @@ export function BuyVoucherForm() {
       </div>
 
       {selectedAmount ? (
-        <p className="text-sm text-card-light-muted">Redeemable for {credits} credits.</p>
+        <p className="text-sm text-card-light-muted">
+          Redeemable for {credits} credits.
+        </p>
       ) : null}
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <button
-        onClick={buy}
-        disabled={pending || !selectedAmount || selectedAmount < VOUCHER_MIN_GBP || selectedAmount > VOUCHER_MAX_GBP}
-        className="w-full rounded-lg bg-card-light-foreground px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-      >
-        {pending ? "Redirecting..." : "Go to Checkout"}
-      </button>
+      {guest ? (
+        <Link
+          href="/login"
+          className="block w-full rounded-lg bg-card-light-foreground px-4 py-3 text-center text-sm font-semibold text-white hover:opacity-90"
+        >
+          Sign in to buy
+        </Link>
+      ) : (
+        <button
+          onClick={buy}
+          disabled={
+            pending ||
+            !selectedAmount ||
+            selectedAmount < VOUCHER_MIN_GBP ||
+            selectedAmount > VOUCHER_MAX_GBP
+          }
+          className="w-full rounded-lg bg-card-light-foreground px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {pending ? "Redirecting..." : "Go to Checkout"}
+        </button>
+      )}
 
-      <Link href="/shop" className="block text-center text-sm text-card-light-muted hover:text-card-light-foreground">
+      <Link
+        href="/shop"
+        className="block text-center text-sm text-card-light-muted hover:text-card-light-foreground"
+      >
         Back to shop
       </Link>
     </div>

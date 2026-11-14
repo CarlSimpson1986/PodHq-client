@@ -44,9 +44,9 @@ export default async function ShopPage() {
     data: { user },
   } = await session.auth.getUser();
 
-  // Signed-out visitors can browse (Apple guideline 5.1.1(v)) — only
-  // Memberships and Credit Packs, since a gift voucher page is purely a
-  // purchase form. No bottom nav/assistant/tour: those are member-only.
+  // Signed-out visitors can browse (Apple guideline 5.1.1(v)) — all three
+  // products, including Gift Voucher (amounts browsable, "Sign in to buy").
+  // No bottom nav/assistant/tour: those are member-only.
   if (!user) {
     return (
       <main className="flex min-h-full flex-1 flex-col pb-20">
@@ -57,7 +57,7 @@ export default async function ShopPage() {
         </div>
         <div className="flex-1 space-y-3 px-6 pb-10 pt-8">
           <div className="mx-auto w-full max-w-md space-y-3">
-            {SHOP_ITEMS.filter((item) => item.href !== "/gift-voucher").map((item) => (
+            {SHOP_ITEMS.map((item) => (
               <Link key={item.href} href={item.href} className="card-light flex items-start gap-4 p-5 hover:opacity-90">
                 <item.icon className="mt-0.5 h-8 w-8 shrink-0 text-card-light-foreground" />
                 <div>
