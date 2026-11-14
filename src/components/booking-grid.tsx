@@ -421,7 +421,7 @@ export function BookingGrid({
             const inUnlockWindow =
               isMine &&
               !!resource &&
-              isWithinUnlockWindow(now, slot.getTime(), resource.slotDurationMinutes, resource.openHour, resource.closeHour);
+              isWithinUnlockWindow(now, slot.getTime(), resource.slotDurationMinutes, resource.openHour);
             // A slot can have real physical space (not "full") but still be
             // off-limits to everyone except whoever it's currently offered
             // to on the waitlist — create_booking() enforces this server-side

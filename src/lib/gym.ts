@@ -20,7 +20,3 @@ export const GYM_NAMES = [
 ] as const;
 
 export type GymName = (typeof GYM_NAMES)[number];
-
-export function isGymName(value: string): value is GymName {
-  return (GYM_NAMES as readonly string[]).includes(value);
-}

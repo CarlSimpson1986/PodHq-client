@@ -44,19 +44,16 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error || !data.user) {
+    await logAuthEvent({ email, eventType: "login_failure", ipAddress: ip, detail: error?.message });
     // Supabase only reports this once the password has matched, so it says
     // nothing to someone guessing — and a new member who hasn't tapped the
     // confirmation link yet otherwise just sees "Invalid email or password".
-    // Not logged as a login_failure: the password was right, and signup's
-    // "I've confirmed my email — continue" button lands here on every early
-    // tap, so counting them locked brand-new accounts (2026-11-14 review).
     if (error?.code === "email_not_confirmed") {
       return NextResponse.json(
         { status: "error", message: "Please confirm your email first — tap the link we sent you." },
         { status: 401 }
       );
     }
-    await logAuthEvent({ email, eventType: "login_failure", ipAddress: ip, detail: error?.message });
     return NextResponse.json({ status: "error", message: GENERIC_ERROR }, { status: 401 });
   }
 

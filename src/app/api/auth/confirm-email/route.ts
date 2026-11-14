@@ -33,11 +33,8 @@ export async function POST(request: NextRequest) {
 
   // Confirm only — the member signs in on the page this sends them to.
   // Left signed in here, the proxy would bounce /login straight to the
-  // home page in this browser. scope "local": the default ("global") revokes
-  // every session the member has, so if they'd already signed in on the
-  // app while Brevo was syncing above, that sign-out logged them out there
-  // too (2026-11-14 review).
-  await supabase.auth.signOut({ scope: "local" });
+  // home page in this browser.
+  await supabase.auth.signOut();
 
   return NextResponse.json({ status: "ok" });
 }

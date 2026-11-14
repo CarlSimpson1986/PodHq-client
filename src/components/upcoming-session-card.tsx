@@ -22,7 +22,6 @@ export function UpcomingSessionCard({
   accessComplete,
   slotDurationMinutes,
   openHour,
-  closeHour,
   requiresLocation,
   entranceRoomLabel,
 }: {
@@ -31,7 +30,6 @@ export function UpcomingSessionCard({
   slotDurationMinutes: number;
   // Unlock never opens before this (Europe/London) — see unlock-window.ts.
   openHour?: number;
-  closeHour?: number;
   requiresLocation: boolean;
   // Set (to the room's own label) when this booking sits behind a shared
   // main door — the card then shows both doors' buttons instead of one.
@@ -47,7 +45,7 @@ export function UpcomingSessionCard({
   const [message, setMessage] = useState("");
 
   const start = new Date(booking.slot_start).getTime();
-  const inUnlockWindow = isWithinUnlockWindow(now, start, slotDurationMinutes, openHour, closeHour);
+  const inUnlockWindow = isWithinUnlockWindow(now, start, slotDurationMinutes, openHour);
 
   async function unlock() {
     setMessage("");

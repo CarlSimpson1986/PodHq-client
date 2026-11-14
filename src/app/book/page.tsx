@@ -11,10 +11,14 @@ import {
   getActiveReservationsForDate,
   getActiveMembership,
 } from "@/lib/data/member";
-import { isGymName } from "@/lib/gym";
+import { GYM_NAMES } from "@/lib/gym";
 import { parseDateParam, formatDateParam } from "@/lib/booking-dates";
 import { BookingGrid } from "@/components/booking-grid";
 import { NoMemberProfile } from "@/components/no-member-profile";
+
+function isGymName(value: string): value is (typeof GYM_NAMES)[number] {
+  return (GYM_NAMES as readonly string[]).includes(value);
+}
 
 export default async function BookPage({
   searchParams,

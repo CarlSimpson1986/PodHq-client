@@ -1,17 +1,12 @@
 import { z } from "zod";
 import { GYM_NAMES } from "@/lib/gym";
 
-// Trimmed and lowercased everywhere (2026-11-14 review). Login used to take
-// the email exactly as typed, but auth_events lookups are exact matches: a
-// reset link logs its login_success under Supabase's lowercase address, so a
-// member who'd typed "Tom@..." stayed hard-locked after using it. A trailing
-// space from a keyboard suggestion also failed login outright.
-const emailSchema = z.string().trim().toLowerCase().email();
-
 export const loginSchema = z.object({
-  email: emailSchema,
+  email: z.string().email(),
   password: z.string().min(1),
 });
+
+const emailSchema = z.string().trim().toLowerCase().email();
 
 // Lower minimum than podHq's staff-account passwordSchema (12 chars) —
 // decided 2026-08-09 for member accounts specifically, still requires
