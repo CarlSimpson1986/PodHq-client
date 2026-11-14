@@ -3,11 +3,7 @@ import { createSessionClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuthEvent } from "@/lib/audit";
 import { getRequestIp } from "@/lib/request-ip";
-import { GYM_NAMES, type GymName } from "@/lib/gym";
-
-function isGymName(value: string): value is GymName {
-  return (GYM_NAMES as readonly string[]).includes(value);
-}
+import { isGymName } from "@/lib/gym";
 
 /**
  * Completes the account-linking flow: called from /auth/callback right

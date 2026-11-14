@@ -336,7 +336,8 @@ export function BookingsView({
                 now,
                 start,
                 slotDurationFor(resources, booking.resource_id),
-                resources.find((r) => r.id === booking.resource_id)?.openHour
+                resources.find((r) => r.id === booking.resource_id)?.openHour,
+                resources.find((r) => r.id === booking.resource_id)?.closeHour
               );
             const message = unlockMessages[booking.id];
             const entranceResource = entranceResourceFor(resources, booking.resource_id);

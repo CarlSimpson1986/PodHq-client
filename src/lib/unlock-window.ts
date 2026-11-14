@@ -28,14 +28,35 @@ export function unlockWindowAfterMs(slotDurationMinutes: number): number {
 export function unlockWindowOpensAtMs(slotStartMs: number, openHour?: number): number {
   const early = slotStartMs - UNLOCK_WINDOW_BEFORE_MS;
   if (!openHour) return early;
-  return Math.max(early, londonHour(new Date(slotStartMs), openHour).getTime());
+  const opensAt = londonHour(new Date(slotStartMs), openHour).getTime();
+  // Never later than the slot itself: a slot booked before the opening hour
+  // was moved later would otherwise have its window pushed past its own end
+  // and never be unlockable at all (2026-11-14 review).
+  return Math.max(early, Math.min(opensAt, slotStartMs));
+}
+
+// Same clamp at the other end: never after the gym's closing hour on the
+// slot's day, since PDK's access rule ends there too — a 21:00 slot tapping
+// Unlock at 22:02 got through our 5-minute grace and then PDK's 403
+// (2026-11-14 review). closeHour omitted or >= 24 = no clamp. Never earlier
+// than the slot's own end, for the same moved-hours reason as above.
+export function unlockWindowClosesAtMs(slotStartMs: number, slotDurationMinutes: number, closeHour?: number): number {
+  const late = slotStartMs + unlockWindowAfterMs(slotDurationMinutes);
+  if (closeHour === undefined || closeHour >= 24) return late;
+  const closesAt = londonHour(new Date(slotStartMs), closeHour).getTime();
+  const slotEnd = slotStartMs + slotDurationMinutes * 60 * 1000;
+  return Math.min(late, Math.max(closesAt, slotEnd));
 }
 
 export function isWithinUnlockWindow(
   now: number,
   slotStartMs: number,
   slotDurationMinutes: number,
-  openHour?: number
+  openHour?: number,
+  closeHour?: number
 ): boolean {
-  return now >= unlockWindowOpensAtMs(slotStartMs, openHour) && now <= slotStartMs + unlockWindowAfterMs(slotDurationMinutes);
+  return (
+    now >= unlockWindowOpensAtMs(slotStartMs, openHour) &&
+    now <= unlockWindowClosesAtMs(slotStartMs, slotDurationMinutes, closeHour)
+  );
 }

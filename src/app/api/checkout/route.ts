@@ -6,11 +6,7 @@ import { getGymStripeContext } from "@/lib/data/stripe-config";
 import { getCreditPackageById, hasMemberClaimedItem } from "@/lib/data/catalog";
 import { findApplicablePromoCode, redeemPromoCode, applyDiscount } from "@/lib/data/promo-codes";
 import { checkoutSchema } from "@/lib/validation/checkout";
-import { GYM_NAMES } from "@/lib/gym";
-
-function isGymName(value: string): value is (typeof GYM_NAMES)[number] {
-  return (GYM_NAMES as readonly string[]).includes(value);
-}
+import { isGymName } from "@/lib/gym";
 
 export async function POST(request: NextRequest) {
   const session = await createSessionClient();

@@ -6,16 +6,12 @@ import Link from "next/link";
 import { PasswordInput } from "@/components/password-input";
 import { PageHero } from "@/components/page-hero";
 import { UserPlusIcon } from "@/components/icons";
-import { GYM_NAMES, type GymName } from "@/lib/gym";
+import { GYM_NAMES, type GymName, isGymName } from "@/lib/gym";
 
 const inputClass =
   "w-full rounded-lg border border-card-light-border bg-white px-4 py-3 text-base text-card-light-foreground placeholder:text-card-light-muted focus:border-card-light-foreground focus:outline-none";
 const buttonClass =
   "w-full rounded-lg bg-card-light-foreground px-4 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50";
-
-function isGymName(value: string): value is GymName {
-  return (GYM_NAMES as readonly string[]).includes(value);
-}
 
 // useSearchParams needs a Suspense boundary (Next's own requirement), so
 // the actual form lives here and the default export below just wraps it.

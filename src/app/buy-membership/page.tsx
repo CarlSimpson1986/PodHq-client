@@ -2,16 +2,12 @@ import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/server";
 import { getMemberByAuthUserId, getActiveMembership } from "@/lib/data/member";
 import { getMembershipTiers } from "@/lib/data/catalog";
-import { GYM_NAMES } from "@/lib/gym";
+import { GYM_NAMES, isGymName } from "@/lib/gym";
 import { BuyMembershipList } from "@/components/buy-membership-list";
 import { GuestGymPicker } from "@/components/guest-gym-picker";
 import { PageHero } from "@/components/page-hero";
 import { IdCardIcon } from "@/components/icons";
 import { NoMemberProfile } from "@/components/no-member-profile";
-
-function isGymName(value: string): value is (typeof GYM_NAMES)[number] {
-  return (GYM_NAMES as readonly string[]).includes(value);
-}
 
 export default async function BuyMembershipPage({ searchParams }: { searchParams: Promise<{ gym?: string }> }) {
   const session = await createSessionClient();

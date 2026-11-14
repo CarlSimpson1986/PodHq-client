@@ -38,6 +38,13 @@ export function PasswordInput({
           id={id}
           type={visible ? "text" : "password"}
           autoComplete={autoComplete}
+          // When shown as plain text (the reset page starts that way), an
+          // iPhone keyboard would otherwise capitalise/autocorrect it — both
+          // fields the same way, so they'd still match and save a password
+          // the member never meant (2026-11-14 review).
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
           className={inputClass}
           value={value}

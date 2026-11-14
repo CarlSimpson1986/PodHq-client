@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isWithinUnlockWindow, unlockWindowOpensAtMs } from "./unlock-window";
+import { isWithinUnlockWindow, unlockWindowClosesAtMs, unlockWindowOpensAtMs } from "./unlock-window";
 
 const MIN = 60 * 1000;
 
@@ -41,4 +41,42 @@ describe("unlock window opening-hour clamp", () => {
     expect(unlockWindowOpensAtMs(midnight, 0)).toBe(midnight - 5 * MIN);
     expect(isWithinUnlockWindow(midnight - 5 * MIN, midnight, 60, 0)).toBe(true);
   });
+
+  it("never opens later than the slot itself, even if opening hours moved later", () => {
+    // 06:00 BST slot booked before open_hour changed to 7
+    expect(unlockWindowOpensAtMs(sixAmBst, 7)).toBe(sixAmBst);
+    expect(isWithinUnlockWindow(sixAmBst + 10 * MIN, sixAmBst, 30, 7, 22)).toBe(true);
+  });
 });
+
+describe("unlock window closing-hour clamp", () => {
+  const ninePmBst = Date.parse("2026-10-16T20:00:00Z"); // 21:00 BST
+  const tenPmBst = ninePmBst + 60 * MIN;
+
+  it("doesn't stay open past closing for the last slot of the day", () => {
+    expect(unlockWindowClosesAtMs(ninePmBst, 60, 22)).toBe(tenPmBst);
+    expect(isWithinUnlockWindow(tenPmBst, ninePmBst, 60, 6, 22)).toBe(true);
+    expect(isWithinUnlockWindow(tenPmBst + 2 * MIN, ninePmBst, 60, 6, 22)).toBe(false);
+  });
+
+  it("keeps the 5-minute grace for earlier slots", () => {
+    const threePm = Date.parse("2026-10-16T14:00:00Z");
+    expect(isWithinUnlockWindow(threePm + 65 * MIN, threePm, 60, 6, 22)).toBe(true);
+  });
+
+  it("works after the clocks go back (GMT)", () => {
+    const ninePmGmt = Date.parse("2026-11-03T21:00:00Z");
+    expect(isWithinUnlockWindow(ninePmGmt + 62 * MIN, ninePmGmt, 60, 6, 22)).toBe(false);
+    expect(isWithinUnlockWindow(ninePmGmt + 59 * MIN, ninePmGmt, 60, 6, 22)).toBe(true);
+  });
+
+  it("never closes before the slot's own end, even if closing hours moved earlier", () => {
+    expect(unlockWindowClosesAtMs(ninePmBst, 60, 21)).toBe(tenPmBst);
+  });
+
+  it("doesn't clamp with no closing hour or a 24-hour resource", () => {
+    expect(unlockWindowClosesAtMs(ninePmBst, 60)).toBe(tenPmBst + 5 * MIN);
+    expect(unlockWindowClosesAtMs(ninePmBst, 60, 24)).toBe(tenPmBst + 5 * MIN);
+  });
+});
+

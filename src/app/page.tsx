@@ -113,6 +113,7 @@ export default async function HomePage() {
                 accessComplete={isAccessComplete(member)}
                 slotDurationMinutes={upcomingResource?.slotDurationMinutes ?? 60}
                 openHour={upcomingResource?.openHour}
+                closeHour={upcomingResource?.closeHour}
                 requiresLocation={upcomingResource?.requiresLocation ?? true}
                 entranceRoomLabel={upcomingResource?.hasEntranceDoor ? upcomingResource.label : null}
               />
